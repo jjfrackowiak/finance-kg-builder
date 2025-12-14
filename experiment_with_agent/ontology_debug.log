@@ -1,0 +1,1194 @@
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Investor",
+      "properties": [
+        {
+          "name": "id",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "portfolio_value",
+          "type": "FLOAT",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "INVESTS_IN"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Investor",
+      "INVESTS_IN",
+      "Company"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": [],
+  "additional_patterns": []
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Investor",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "investment_type",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "INVESTS_IN"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Investor",
+      "INVESTS_IN",
+      "Company"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": [],
+  "additional_patterns": []
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Author",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "affiliation",
+          "type": "STRING",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "WRITTEN_BY"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Article",
+      "WRITTEN_BY",
+      "Author"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Analyst",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "firm",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "ANALYZES"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Analyst",
+      "ANALYZES",
+      "Article"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Author",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "bio",
+          "type": "STRING",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "WRITTEN_BY"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Article",
+      "WRITTEN_BY",
+      "Author"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Analyst",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "firm",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "ANALYZED_BY"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Article",
+      "ANALYZED_BY",
+      "Analyst"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Reporter",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "email",
+          "type": "STRING",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "WRITTEN_BY"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Article",
+      "WRITTEN_BY",
+      "Reporter"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Author",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "WRITTEN_BY"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Article",
+      "WRITTEN_BY",
+      "Author"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Investor",
+      "properties": [
+        {
+          "name": "investor_id",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "portfolio_value",
+          "type": "FLOAT",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "INVESTS_IN"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Investor",
+      "INVESTS_IN",
+      "Company"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Author",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "email",
+          "type": "STRING",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "WRITTEN_BY"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Article",
+      "WRITTEN_BY",
+      "Author"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Journalist",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "WRITTEN_BY"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Article",
+      "WRITTEN_BY",
+      "Journalist"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Author",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "WRITTEN_BY"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Article",
+      "WRITTEN_BY",
+      "Author"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}
+
+===== DEBUG: Ontology Schema =====
+{
+  "node_types": [
+    {
+      "label": "Company",
+      "properties": [
+        {
+          "name": "symbol",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Article",
+      "properties": [
+        {
+          "name": "headline",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "timestamp",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "source",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Day",
+      "properties": [
+        {
+          "name": "date",
+          "type": "STRING",
+          "required": true
+        }
+      ]
+    },
+    {
+      "label": "Author",
+      "properties": [
+        {
+          "name": "name",
+          "type": "STRING",
+          "required": true
+        },
+        {
+          "name": "email",
+          "type": "STRING",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "relationship_types": [
+    "MENTIONS",
+    "RELATES_TO",
+    "INVOLVES",
+    "PUBLISHED_ON",
+    "WRITTEN_BY"
+  ],
+  "patterns": [
+    [
+      "Article",
+      "MENTIONS",
+      "Company"
+    ],
+    [
+      "Article",
+      "PUBLISHED_ON",
+      "Day"
+    ],
+    [
+      "Article",
+      "WRITTEN_BY",
+      "Author"
+    ]
+  ],
+  "additional_node_types": true,
+  "additional_relationship_types": true,
+  "additional_patterns": true
+}

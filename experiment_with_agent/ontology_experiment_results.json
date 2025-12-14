@@ -1,0 +1,44 @@
+{
+  "results": [
+    {
+      "candidate_name": "base_v1",
+      "description": "Base ontology with Company, Article, Day and MENTIONS/PUBLISHED_ON.",
+      "step_index": 0,
+      "candidate_index": 0,
+      "auc": 0.19999999999999996,
+      "f1": 0.0,
+      "n_train": 13,
+      "n_val": 6
+    },
+    {
+      "candidate_name": "base_v1_step0_variant1",
+      "description": "Ontology evolved using structured OpenAI output",
+      "step_index": 0,
+      "candidate_index": 1,
+      "auc": 0.375,
+      "f1": 0.0,
+      "n_train": 16,
+      "n_val": 10
+    },
+    {
+      "candidate_name": "base_v1_step1_variant0",
+      "description": "Ontology evolved using structured OpenAI output",
+      "step_index": 1,
+      "candidate_index": 0,
+      "auc": 0.5625,
+      "f1": 0.0,
+      "n_train": 20,
+      "n_val": 13
+    },
+    {
+      "candidate_name": "base_v1_step1_variant1",
+      "description": "Ontology evolved using structured OpenAI output",
+      "step_index": 1,
+      "candidate_index": 1,
+      "auc": 0.5125,
+      "f1": 0.42857142857142855,
+      "n_train": 23,
+      "n_val": 18
+    }
+  ]
+}
