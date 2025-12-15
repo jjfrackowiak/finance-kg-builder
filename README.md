@@ -1,6 +1,6 @@
-# KG Builder - Knowledge Graph Evolution with LLM
+# KG Builder - Knowledge Graph Evolution with LLM (Ontology as a Hyperparameter)
 
-A sophisticated system for incrementally building and evolving knowledge graphs using Large Language Models (LLMs). This project combines Neo4j graph databases with LLM-based entity extraction and HOPE embeddings to create dynamic, multi-candidate knowledge graphs optimized for financial sentiment analysis and price prediction.
+System for incrementally building and evolving knowledge graphs using Large Language Models (LLMs). This project combines Neo4j graph databases with LLM-based entity extraction and HOPE embeddings to create dynamic, multi-candidate knowledge graphs optimized for financial sentiment analysis and price prediction.
 
 ## Overview
 
