@@ -2,6 +2,8 @@
 
 System for incrementally building and evolving knowledge graphs using Large Language Models (LLMs). This project combines Neo4j graph databases with LLM-based entity extraction and HOPE embeddings to create dynamic, multi-candidate knowledge graphs optimized for financial sentiment analysis and price prediction.
 
+![alt text](resources/furniture.png)
+
 ## Overview
 
 **KG Builder** implements an innovative approach to knowledge graph construction:
