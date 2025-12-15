@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kg-builder"
+version = "0.1.0"
+description = "Knowledge Graph Builder for Finance with Incremental Mutation Strategy"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Downstream Finance"},
+]
+license = {text = "MIT"}
+
+dependencies = [
+    "neo4j>=5.13",
+    "neo4j-graphrag>=0.1.0",
+    "pandas>=2.0",
+    "pydantic>=2.0",
+    "openai>=1.0",
+    "python-dotenv>=1.0",
+    "xgboost>=2.0",
+    "scikit-learn>=1.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.1",
+    "black>=23.0",
+    "ruff>=0.0.275",
+    "mypy>=1.4",
+]
+
+[project.scripts]
+kg-builder = "kg_builder.main:main"
+
+[tool.uv]
+python-version = "3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-v --cov=kg_builder --cov-report=term-missing"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I"]
+
+[tool.mypy]
+python_version = "3.11"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
