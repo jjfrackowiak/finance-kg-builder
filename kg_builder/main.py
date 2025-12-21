@@ -51,14 +51,14 @@ Examples:
     parser.add_argument(
         "--time-window-days",
         type=int,
-        default=60,
+        default=100,
         help="Number of sequential days to use for training (default: 60)",
     )
 
     parser.add_argument(
         "--articles-per-day",
         type=int,
-        default=None,
+        default=5,
         help="Max articles per day (default: all articles in time window)",
     )
 
