@@ -27,7 +27,12 @@ async def build_kg_simple(
     articles_df: pd.DataFrame,
     candidate_tag: str,
 ) -> None:
-    """Build knowledge graph using SimpleKGPipeline.
+    """DEPRECATED: Build knowledge graph using SimpleKGPipeline.
+    
+    This function is deprecated. The pipeline now builds base structure without LLM calls,
+    then separately extracts entities using incremental mutation.
+    
+    Kept for backward compatibility only.
 
     Args:
         driver: Graph driver
@@ -39,7 +44,9 @@ async def build_kg_simple(
         articles_df: Articles DataFrame
         candidate_tag: Tag for this candidate
     """
-    logger.info("Building KG for candidate: %s", candidate_tag)
+    logger.warning("build_kg_simple() is deprecated. Use build_kg_incremental_candidate() instead.")
+    logger.info("Building KG for candidate: %s (using deprecated SimpleKGPipeline)", candidate_tag)
+    logger.info("Using semaphore limit: %d", exp_cfg.semaphore_limit)
 
     kg_builder = SimpleKGPipeline(
         llm=llm,
@@ -53,7 +60,7 @@ async def build_kg_simple(
 
     # Process each article
     articles_df = articles_df.sort_values("timestamp").reset_index(drop=True)
-    semaphore = asyncio.Semaphore(50)
+    semaphore = asyncio.Semaphore(exp_cfg.semaphore_limit)
 
     async def process_article(text: str, headline: str):
         async with semaphore:
@@ -80,7 +87,7 @@ async def build_kg_simple(
         logger.info("Processing %d articles for candidate: %s", len(tasks), candidate_tag)
         await asyncio.gather(*tasks)
 
-    logger.info("KG built for candidate: %s", candidate_tag)
+    logger.info("KG built for candidate: %s (deprecated)", candidate_tag)
 
     # Log stats
     node_count = driver.get_count()
@@ -120,6 +127,7 @@ async def build_kg_incremental_candidate(
         candidate_tag,
         accepted_tags,
     )
+    logger.info("Using semaphore limit: %d", exp_cfg.semaphore_limit)
     logger.info(
         "Using ontology schema with %d node types and %d relationship types",
         len(ontology.schema.get("node_types", [])),
@@ -137,7 +145,7 @@ async def build_kg_incremental_candidate(
 
     # Process each article
     articles_df = articles_df.sort_values("timestamp").reset_index(drop=True)
-    semaphore = asyncio.Semaphore(50)
+    semaphore = asyncio.Semaphore(exp_cfg.semaphore_limit)
 
     async def process_article(article_id: str, text: str, headline: str, day: str):
         async with semaphore:

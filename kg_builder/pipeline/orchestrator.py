@@ -17,7 +17,7 @@ from kg_builder.core.ontology import OntologyCandidate, create_base_ontology
 from kg_builder.core.ontology_io import save_ontology_candidate, save_ontology_summary
 from kg_builder.core.tagging import tag_candidate_entities
 from kg_builder.ml.modeling import ModelMetrics
-from kg_builder.mutations.base import build_kg_incremental_candidate, build_kg_simple
+from kg_builder.mutations.base import build_kg_incremental_candidate
 from kg_builder.pipeline.evaluator import evaluate_candidate
 from kg_builder.pipeline.ontology_evolution import OntologyEvolutionAgent
 
@@ -86,19 +86,20 @@ class Orchestrator:
         # Create base ontology
         base_ontology = create_base_ontology()
 
-        # STEP 0: Build ONLY base structure using SimpleKGPipeline (no evolution, no evaluation)
+        # STEP 0: Build base structure (minimal infrastructure - no LLM calls)
         logger.info("=== Step 0 (Base Structure) ===")
-        logger.info("Building base structure with SimpleKGPipeline (articles + days only)...")
+        logger.info("Building base structure (articles + days + labels, no LLM calls)...")
         await self._build_base_structure(base_ontology, articles_df)
         logger.info("✓ Base structure ready (step 0 complete)")
 
         # STEP 1+: Evolve and evaluate ontologies using incremental mutation
+        # num_steps=0 means only base, num_steps=1 means base + 1 evolution step, etc.
         best_candidate = base_ontology
-        for step in range(1, self.config.experiment.num_steps):
+        for step in range(1, self.config.experiment.num_steps + 1):
             logger.info(
                 "=== Step %d/%d (Incremental Evolution) ===",
                 step,
-                self.config.experiment.num_steps - 1,
+                self.config.experiment.num_steps,
             )
 
             await self._run_step_incremental_evolution(
@@ -123,7 +124,14 @@ class Orchestrator:
         base_ontology: OntologyCandidate,
         articles_df: pd.DataFrame,
     ) -> None:
-        """Build base ontology structure (just articles + days for context, no evaluation).
+        """Build base ontology structure - minimal infrastructure without LLM calls.
+        
+        Creates only:
+        - Article nodes with metadata
+        - Day nodes with price labels
+        - Article PUBLISHED_ON Day relationships
+        
+        This is everything needed by ML evaluation. Entity extraction happens separately.
 
         Args:
             base_ontology: Base ontology
@@ -132,26 +140,22 @@ class Orchestrator:
         base_candidate_tag = "base_structure"
         base_ontology.candidate_tag = base_candidate_tag
 
-        logger.info("Building base structure with KG: %s", base_candidate_tag)
-
-        await build_kg_simple(
-            self.driver,
-            self.config.neo4j,
-            self.config.experiment,
-            self.llm,
-            self.embedder,
-            base_ontology,
-            articles_df,
-            candidate_tag=base_candidate_tag,
-        )
-
-        # Tag the base structure entities
-        tag_candidate_entities(self.driver, base_candidate_tag)
+        logger.info("Building base structure (articles + days + labels, no LLM)...")
+        logger.info("Articles: %d | Days: %d", len(articles_df), articles_df["day"].nunique())
+        
+        # Infrastructure is already created by orchestrator.run():
+        # - Article nodes
+        # - Day nodes  
+        # - PUBLISHED_ON relationships
+        # - Price labels on Day nodes
+        # All tagged with "base_structure"
+        
+        logger.info("✓ Base structure ready for entity extraction")
 
         # Log base structure size
         base_nodes = self.driver.get_count()
         base_rels = self.driver.get_relationship_count()
-        logger.info("✓ Base structure built: %d nodes, %d relationships", base_nodes, base_rels)
+        logger.info("  Base structure: %d nodes, %d relationships", base_nodes, base_rels)
 
     async def _run_step_incremental_evolution(
         self,

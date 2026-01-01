@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python -m kg_builder.main --data data/articles.csv --steps 2
+  python -m kg_builder.main --data data/articles.csv --steps 4
   python -m kg_builder.main --data data/articles.csv --limit 100
   python -m kg_builder.main --help
         """,
@@ -51,14 +51,14 @@ Examples:
     parser.add_argument(
         "--time-window-days",
         type=int,
-        default=100,
+        default=30,
         help="Number of sequential days to use for training (default: 60)",
     )
 
     parser.add_argument(
         "--articles-per-day",
         type=int,
-        default=5,
+        default=1,
         help="Max articles per day (default: all articles in time window)",
     )
 
@@ -70,11 +70,18 @@ Examples:
     )
 
     parser.add_argument(
-        "--steps", type=int, default=2, help="Number of evolution steps (default: 2)"
+        "--steps", type=int, default=3, help="Number of incremental evolution steps after base structure (0=base only, 1=base+1 evolution step, default: 2)"
     )
 
     parser.add_argument(
-        "--candidates", type=int, default=3, help="Number of candidates per step (default: 3)"
+        "--candidates", type=int, default=2, help="Number of candidates per step (default: 3)"
+    )
+
+    parser.add_argument(
+        "--semaphore-limit",
+        type=int,
+        default=50,
+        help="Max concurrent article processing tasks (default: 50)",
     )
 
     parser.add_argument(
@@ -181,6 +188,7 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
         # Override with command line args
         config.experiment.num_steps = args.steps
         config.experiment.max_candidates_per_step = args.candidates
+        config.experiment.semaphore_limit = args.semaphore_limit
 
         logger.info("✓ Configuration loaded:")
         logger.info(f"  - NEO4J_URI={config.neo4j.uri}")

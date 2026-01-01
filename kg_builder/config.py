@@ -51,6 +51,7 @@ class ExperimentConfig:
     sample_size: int = 10
     max_candidates_per_step: int = 2
     num_steps: int = 2
+    semaphore_limit: int = 50
 
     @classmethod
     def from_env(cls) -> "ExperimentConfig":
@@ -60,6 +61,7 @@ class ExperimentConfig:
             sample_size=int(os.getenv("SAMPLE_SIZE", "10")),
             max_candidates_per_step=int(os.getenv("MAX_CANDIDATES", "2")),
             num_steps=int(os.getenv("NUM_STEPS", "2")),
+            semaphore_limit=int(os.getenv("SEMAPHORE_LIMIT", "50")),
         )
 
 
