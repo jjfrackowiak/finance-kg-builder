@@ -5,6 +5,8 @@ from neo4j import Driver
 from neo4j_graphrag.llm import LLMInterface
 from pydantic import BaseModel
 
+from kg_builder.core.entity_resolution import normalize_key
+
 logger = logging.getLogger(__name__)
 
 
@@ -109,6 +111,9 @@ class IncrementalArticleKGMutator:
 
         The LLM is called with a structured prompt asking for JSON output
         in the format: {"nodes": [...], "relationships": [...]}
+        
+        Key normalization is handled automatically by the system, but LLM is
+        instructed to create consistent, identifier-like keys for better deduplication.
         """
         prompt = f"""Extract entities and relationships as JSON. Return ONLY valid JSON.
 
@@ -118,15 +123,39 @@ Ontology:
 Text:
 {text}
 
+KEY NORMALIZATION GUIDE:
+- For ticker symbols/company codes: Use UPPERCASE identifiers (e.g., "NVDA", "AAPL", "INTC")
+- For person/entity names: Use lowercase with underscores for multi-word (e.g., "nvidia", "apple", "tesla")
+- For documents/articles: Use snake_case (e.g., "article_1", "market_update_august_2021")
+- STRIP LEGAL SUFFIXES: Remove Inc., Corp., LLC., Ltd., Co., Inc, Corporation, Company, etc.
+  * "Apple Inc." → key: "apple"
+  * "Tesla, Inc." → key: "tesla"
+  * "Intel Corporation" → key: "intel"
+- Remove special characters, extra spaces, and non-meaningful words
+- Consistency is KEY: "Nvidia", "nvidia", "NVIDIA Corp" should all produce the same key "nvdia"
+- Avoid generic keys like "1", "article1" without context
+
 Return this JSON structure exactly:
 {{
   "nodes": [
-    {{"label": "Type", "key": "identifier", "properties": {{"name": "Name"}}}},
+    {{"label": "Type", "key": "normalized_identifier", "properties": {{"name": "Full Name"}}}},
     ...
   ],
   "relationships": [
-    {{"type": "REL_TYPE", "from_key": "source_id", "to_key": "target_id", "properties": {{}}}},
+    {{"type": "REL_TYPE", "from_key": "source_key", "to_key": "target_key", "properties": {{}}}},
     ...
+  ]
+}}
+
+Example:
+{{
+  "nodes": [
+    {{"label": "Company", "key": "NVDA", "properties": {{"name": "NVIDIA"}}}},
+    {{"label": "Company", "key": "INTC", "properties": {{"name": "Intel"}}}},
+    {{"label": "Sector", "key": "tech", "properties": {{"name": "Technology"}}}}
+  ],
+  "relationships": [
+    {{"type": "BELONGS_TO", "from_key": "NVDA", "to_key": "tech", "properties": {{}}}}
   ]
 }}
 """
@@ -217,6 +246,9 @@ Return this JSON structure exactly:
         # Create/merge nodes with candidate_tags
         nodes_created = 0
         for node in extraction.nodes:
+            # Normalize the key for consistent entity resolution
+            normalized_key = normalize_key(node.key, node.label)
+            
             query = f"""
                 MERGE (n:{node.label} {{key: $key}})
                 SET n += $props
@@ -233,7 +265,7 @@ Return this JSON structure exactly:
             try:
                 result = tx.run(
                     query,
-                    key=node.key,
+                    key=normalized_key,
                     props=node.properties,
                     candidate_tag=candidate_tag,
                     article_id=text_hash,
@@ -242,8 +274,9 @@ Return this JSON structure exactly:
                 if records.counters.nodes_created > 0:
                     nodes_created += 1
                 logger.info(
-                    "Node: %s{key: %s} with candidate_tag=%s (counters: %s)",
+                    "Node: %s{key: %s} (normalized from %s) with candidate_tag=%s (counters: %s)",
                     node.label,
+                    normalized_key,
                     node.key,
                     candidate_tag,
                     records.counters,
@@ -264,6 +297,10 @@ Return this JSON structure exactly:
         # Create relationships with isolation constraints
         rels_created = 0
         for rel in extraction.relationships:
+            # Normalize keys for relationships
+            normalized_from_key = normalize_key(rel.from_key)
+            normalized_to_key = normalize_key(rel.to_key)
+            
             if accepted_tags is not None:
                 # Constraint: Can only link to entities with accepted_tags OR self's candidate_tag
                 # Use COALESCE to safely handle NULL candidate_tags
@@ -286,8 +323,8 @@ Return this JSON structure exactly:
                 try:
                     result = tx.run(
                         query,
-                        from_key=rel.from_key,
-                        to_key=rel.to_key,
+                        from_key=normalized_from_key,
+                        to_key=normalized_to_key,
                         props=rel.properties,
                         accepted_tags=accepted_tags or [],
                         candidate_tag=candidate_tag,
@@ -296,8 +333,10 @@ Return this JSON structure exactly:
                     if records.counters.relationships_created > 0:
                         rels_created += 1
                     logger.info(
-                        "Relationship (with isolation): %s{%s->%s} with candidate_tag=%s (counters: %s)",
+                        "Relationship (with isolation): %s{%s->%s} (normalized from %s->%s) with candidate_tag=%s (counters: %s)",
                         rel.type,
+                        normalized_from_key,
+                        normalized_to_key,
                         rel.from_key,
                         rel.to_key,
                         candidate_tag,
@@ -329,8 +368,8 @@ Return this JSON structure exactly:
                 try:
                     result = tx.run(
                         query,
-                        from_key=rel.from_key,
-                        to_key=rel.to_key,
+                        from_key=normalized_from_key,
+                        to_key=normalized_to_key,
                         props=rel.properties,
                         candidate_tag=candidate_tag,
                     )
@@ -338,8 +377,10 @@ Return this JSON structure exactly:
                     if records.counters.relationships_created > 0:
                         rels_created += 1
                     logger.info(
-                        "Relationship (no isolation): %s{%s->%s} with candidate_tag=%s (counters: %s)",
+                        "Relationship (no isolation): %s{%s->%s} (normalized from %s->%s) with candidate_tag=%s (counters: %s)",
                         rel.type,
+                        normalized_from_key,
+                        normalized_to_key,
                         rel.from_key,
                         rel.to_key,
                         candidate_tag,
