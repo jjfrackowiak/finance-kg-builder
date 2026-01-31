@@ -100,7 +100,7 @@ def extract_chains_batch(
     
       WITH path, length(path) AS hop_count
       ORDER BY hop_count DESC
-      LIMIT 10
+      LIMIT 20
     
       RETURN path, hop_count
     }

@@ -225,7 +225,7 @@ Variant index: {variant_index}
 
 CRITICAL INSTRUCTIONS FOR EVOLUTION:
 1. MUST ADD NEW entity types that are NOT in {existing_nodes}
-2. Examples of NEW entity types to consider: Market, Sector, Index, Deal, Contract, Regulation, Product, Event, Quarter, Competitor, Analyst, Insider, Executive, Fund, Portfolio
+2. Examples of NEW entity types to consider: Market, Sector, Index, Deal, Contract, Regulation, Product, Event, Quarter, Competitor, Insider, Executive, Fund, Portfolio, Sentiment, PriceDecrease, PriceIncrease
 3. For property types, ONLY use: STRING, INTEGER, FLOAT, BOOLEAN
 4. NEVER use NUMBER - use FLOAT or INTEGER instead
 5. MUST ADD NEW relationships involving the new entity types
