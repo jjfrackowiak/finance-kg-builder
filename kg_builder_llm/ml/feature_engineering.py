@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 
@@ -11,7 +11,6 @@ from kg_builder_llm.ml.embeddings import embed_text_deterministic, get_embedding
 from kg_builder_llm.ml.relationship_chains import (
     aggregate_chain_embeddings,
     embed_relationship_chains,
-    extract_and_embed_chains_for_article,
 )
 from kg_builder_llm.ml.topology_features import (
     aggregate_topology_features,
@@ -151,7 +150,7 @@ def aggregate_embeddings(
     return result
 
 
-async def build_day_feature_vector(
+def build_day_feature_vector(
     driver: GraphDriver,
     eval_date: str,
     lookback_days: int = 2,
@@ -159,20 +158,19 @@ async def build_day_feature_vector(
     api_key: Optional[str] = None,
     allowed_tags: Optional[List[str]] = None,
     chain_agg_method: str = "mean",
-    semaphore: Optional[asyncio.Semaphore] = None,
     embedding_type: str = "local",
     local_model: str = "all-MiniLM-L6-v2",
-) -> np.ndarray:
+) -> Tuple[np.ndarray, int, int]:
     """
     Build combined feature vector for a prediction day (chains + topology only).
     
     Process:
     1. Get articles from [eval_date - lookback_days, eval_date]
-    2. Extract and embed relationship chains per article (with temporal constraint, async)
-    3. Aggregate chain embeddings across articles → chains_agg (1536)
+    2. Extract and embed relationship chains per article (with temporal constraint, batch query)
+    3. Aggregate chain embeddings across articles → chains_agg (embedding_dim)
     4. Compute topology features for entities mentioned in window
     5. Aggregate topology features → topo_agg (8)
-    6. Concatenate: [chains_agg (1536) | topo_agg (8)]
+    6. Concatenate: [chains_agg (embedding_dim) | topo_agg (8)]
     
     Args:
         driver: GraphDriver instance
@@ -182,7 +180,6 @@ async def build_day_feature_vector(
         api_key: OpenAI API key (for chain embedding)
         allowed_tags: Tags to filter relationships for chain extraction
         chain_agg_method: How to aggregate chain embeddings ('mean', 'max', 'weighted_mean')
-        semaphore: Optional asyncio.Semaphore for rate limiting concurrent API calls
     
     Returns:
         Tuple of (feature_vector, total_chains, max_hop_count):
@@ -216,8 +213,14 @@ async def build_day_feature_vector(
         logger.info("✓ allowed_tags is truthy, entering chain extraction block")
         logger.info("Processing %d articles for relationship chain extraction...", len(articles))
         
-        # Create tasks for all articles
-        tasks = []
+        # STEP 1: Build batch jobs for all articles
+        from kg_builder_llm.ml.relationship_chains import extract_chains_batch
+        
+        # Excluded relationship types (uninformative for chains)
+        excluded_rels = ['PUBLISHED_ON', 'WRITTEN_BY', 'MENTIONS', 'MENTIONED_IN', 'REFERENCES']
+        
+        jobs = []
+        article_metadata = []
         for article_idx, article in enumerate(articles, 1):
             article_id = article.get("id", "")
             article_date = article.get("date", "")
@@ -227,41 +230,97 @@ async def build_day_feature_vector(
             elif article_date and not isinstance(article_date, str):
                 article_date = str(article_date)
             
-            logger.info("-" * 80)
-            logger.info("Article %d/%d: %s (date=%s)", article_idx, len(articles), article_id[:8], article_date)
-            logger.info("-" * 80)
+            logger.info("Article %d/%d: %s (date=%s) - adding to batch", article_idx, len(articles), article_id[:8], article_date)
             
-            task = extract_and_embed_chains_for_article(
-                driver,
-                article_id,
-                allowed_tags,
-                max_hops=9,
-                aggregation_method=chain_agg_method,
+            # Create job for this article
+            jobs.append({
+                "job_id": article_idx,
+                "article_id": article_id,
+                "eval_date": article_date,  # Use article_date for temporal isolation
+                "allowed_tags": allowed_tags,
+                "excluded_rels": excluded_rels,
+                "min_level": 5,  # Use fixed path length for consistency
+                "max_level": 5
+            })
+            article_metadata.append((article_idx, article_id))
+        
+        # STEP 2: Execute batch query - ONE roundtrip to Neo4j for all articles!
+        logger.info("Extracting chains from %d articles in batch query...", len(jobs))
+        chains_by_job = extract_chains_batch(driver, jobs)
+        
+        # STEP 3: Collect all chains from all articles
+        all_chains = []
+        article_chain_counts = []  # Track how many chains per article
+        for article_idx, article_id in article_metadata:
+            chains = chains_by_job.get(article_idx, [])
+            num_chains = len(chains)
+            total_chains_extracted += num_chains
+            article_chain_counts.append(num_chains)
+            
+            if num_chains > 0:
+                # Tag chains with article index for later grouping
+                for chain in chains:
+                    chain['_article_idx'] = article_idx
+                all_chains.extend(chains)
+                logger.info("✓ Article %d (%s): Got %d chains from batch", article_idx, article_id[:8], num_chains)
+            else:
+                    logger.warning("✗ Article %d (%s): No chains found", article_idx, article_id[:8])
+        
+        logger.info("Total chains extracted: %d from %d articles", len(all_chains), len(articles))
+        
+        # STEP 3: Batch embed ALL chains at once (local, fast)
+        if all_chains:
+            from kg_builder_llm.ml.relationship_chains import embed_relationship_chains
+            
+            logger.info("Batch embedding %d chains...", len(all_chains))
+            embedded_chains = embed_relationship_chains(
+                all_chains,
                 api_key=api_key,
-                eval_date=article_date,
-                semaphore=semaphore,
                 embedding_type=embedding_type,
                 local_model=local_model,
             )
-            tasks.append((article_idx, task))
-        
-        # Execute all tasks in parallel
-        results = await asyncio.gather(*[task for _, task in tasks], return_exceptions=True)
-        
-        # Process results
-        for (article_idx, _), result in zip(tasks, results):
-            if isinstance(result, Exception):
-                logger.error("✗ Article %d failed: %s", article_idx, str(result))
-            else:
-                chain_emb, num_chains, max_hops = result
-                if num_chains > 0:
-                    chains_embeddings.append(chain_emb)
-                    total_chains_extracted += num_chains
-                    total_chains_embedded += num_chains
-                    max_hop_count_overall = max(max_hop_count_overall, max_hops)
-                    logger.info("✓ Article %d: Added embedding to pool (max_hops=%d)", article_idx, max_hops)
-                else:
-                    logger.warning("✗ Article %d: No chains found", article_idx)
+            total_chains_embedded = len(embedded_chains)
+            logger.info("✓ Embedded %d chains in one batch", total_chains_embedded)
+            
+            # STEP 4: Group embeddings back by article and aggregate per article
+            from kg_builder_llm.ml.relationship_chains import aggregate_chain_embeddings
+            
+            article_embeddings = {}  # article_idx -> list of embedded chains
+            chains_without_idx = 0
+            for embedded_chain in embedded_chains:
+                article_idx = embedded_chain.get('_article_idx')
+                if article_idx is None:
+                    chains_without_idx += 1
+                    logger.debug("Chain missing _article_idx: %s", embedded_chain.get('chain_text', '')[:50])
+                if article_idx not in article_embeddings:
+                    article_embeddings[article_idx] = []
+                article_embeddings[article_idx].append(embedded_chain)
+            
+            if chains_without_idx > 0:
+                logger.warning("WARNING: %d/%d chains missing _article_idx - grouping will fail!", 
+                             chains_without_idx, len(embedded_chains))
+            
+            # Aggregate chains per article (filter out None keys)
+            valid_indices = [idx for idx in article_embeddings.keys() if idx is not None]
+            none_chains = len(article_embeddings.get(None, []))
+            logger.info("Article grouping: %d valid indices, %d chains with None idx. Keys: %s", 
+                       len(valid_indices), none_chains, sorted([k for k in article_embeddings.keys() if k is not None]))
+            
+            for article_idx in sorted(valid_indices):
+                article_chains = article_embeddings[article_idx]
+                if article_chains:
+                    # Aggregate embeddings for this article
+                    article_agg = aggregate_chain_embeddings(article_chains, method=chain_agg_method)
+                    chains_embeddings.append(article_agg)
+                    
+                    # Track max hops
+                    article_max_hops = max(chain.get("hop_count") or 0 for chain in article_chains)
+                    max_hop_count_overall = max(max_hop_count_overall, article_max_hops)
+                    # Safe string formatting
+                    if article_idx is not None:
+                        logger.info("✓ Article %d: Aggregated %d chains (max_hops=%d)", article_idx, len(article_chains), article_max_hops)
+        else:
+            logger.warning("No chains extracted from any article")
         
         logger.info("=" * 80)
         logger.info("CHAIN EXTRACTION SUMMARY")

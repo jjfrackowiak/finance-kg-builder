@@ -108,7 +108,7 @@ def fetch_day_nodes_with_labels(
         return pd.DataFrame()
 
 
-async def evaluate_candidate(
+def evaluate_candidate(
     driver: GraphDriver,
     embedder: Embedder,
     candidate_tags: List[str],
@@ -116,7 +116,6 @@ async def evaluate_candidate(
     price_df: pd.DataFrame,
     allowed_tags: Optional[List[str]] = None,
     api_key: Optional[str] = None,
-    semaphore: Optional[asyncio.Semaphore] = None,
     embedding_type: str = "local",
     local_model: str = "all-MiniLM-L6-v2",
 ) -> ModelMetrics:
@@ -130,7 +129,6 @@ async def evaluate_candidate(
         price_df: Price data (unused, kept for compatibility)
         allowed_tags: Tags to filter relationships for chain extraction (base + previous winners + current candidate)
         api_key: OpenAI API key for text embeddings
-        semaphore: Optional asyncio.Semaphore for rate limiting concurrent API calls
 
     Returns:
         Model metrics
@@ -147,34 +145,24 @@ async def evaluate_candidate(
     feature_vectors = {}
     max_hop_counts = {}  # Track max hop count per day
     
-    # Create tasks for all days
-    tasks = []
+    # Process all days synchronously (batch query handles parallelism)
     for day_date, label in day_labels.items():
-        task = build_day_feature_vector(
-            driver,
-            eval_date=day_date,
-            lookback_days=2,
-            text_agg_method="mean",
-            api_key=api_key,
-            allowed_tags=allowed_tags,
-            chain_agg_method="mean",
-            semaphore=semaphore,
-            embedding_type=embedding_type,
-            local_model=local_model,
-        )
-        tasks.append((day_date, label, task))
-    
-    # Execute all tasks in parallel
-    results = await asyncio.gather(*[task for _, _, task in tasks], return_exceptions=True)
-    
-    # Process results
-    for (day_date, label, _), result in zip(tasks, results):
-        if isinstance(result, Exception):
-            logger.warning("Failed to build features for day %s: %s", day_date, str(result))
-        else:
-            feature_vector, chain_count, max_hops = result
+        try:
+            feature_vector, chain_count, max_hops = build_day_feature_vector(
+                driver,
+                eval_date=day_date,
+                lookback_days=2,
+                text_agg_method="mean",
+                api_key=api_key,
+                allowed_tags=allowed_tags,
+                chain_agg_method="mean",
+                embedding_type=embedding_type,
+                local_model=local_model,
+            )
             feature_vectors[day_date] = (feature_vector, label)
             max_hop_counts[day_date] = max_hops
+        except Exception as e:
+            logger.warning("Failed to build features for day %s: %s", day_date, str(e))
     
     if not feature_vectors:
         logger.warning("No feature vectors built")

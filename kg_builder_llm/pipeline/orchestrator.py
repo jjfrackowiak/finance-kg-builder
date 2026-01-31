@@ -239,18 +239,14 @@ class Orchestrator:
             
             # Build day labels for evaluation
             day_labels = self._extract_day_labels(price_df)
-            
-            # Create semaphore for rate limiting (same as in mutator)
-            semaphore = asyncio.Semaphore(self.config.experiment.semaphore_limit)
 
-            metrics = await evaluate_candidate(
+            metrics = evaluate_candidate(
                 self.driver,
                 self.embedder,
                 [candidate.candidate_tag],
                 day_labels,
                 price_df,
                 allowed_tags=allowed_tags_for_eval,
-                semaphore=semaphore,
                 embedding_type=self.config.experiment.embedding_type,
                 local_model=self.config.experiment.local_model_name,
             )

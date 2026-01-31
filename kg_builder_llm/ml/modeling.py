@@ -212,6 +212,13 @@ def train_classifier_on_embeddings(
         X_train.shape,
         len(val_df),
     )
+    logger.info(
+        "Label distribution — Train: %d positive (%.1f%%), Val: %d positive (%.1f%%)",
+        y_train.sum(),
+        100 * y_train.mean(),
+        y_val.sum(),
+        100 * y_val.mean(),
+    )
 
     model = XGBClassifier(
         objective="binary:logistic",
@@ -232,12 +239,20 @@ def train_classifier_on_embeddings(
     y_proba = model.predict_proba(X_val)[:, 1]
     y_pred = (y_proba >= 0.5).astype(int)
 
+    logger.info(
+        "Predictions — Mean proba: %.4f, Predicted positive: %d/%d (%.1f%%)",
+        y_proba.mean(),
+        y_pred.sum(),
+        len(y_pred),
+        100 * y_pred.mean(),
+    )
+
     # Metrics
     if len(np.unique(y_val)) > 1:
         auc = roc_auc_score(y_val, y_proba)
     else:
         auc = float("nan")
-    f1 = f1_score(y_val, y_pred)
+    f1 = f1_score(y_val, y_pred, zero_division=0.0)
 
     logger.info("Validation metrics — AUC: %.4f, F1 Score: %.4f", auc, f1)
 

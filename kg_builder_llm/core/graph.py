@@ -48,7 +48,7 @@ class GraphDriver:
         logger.debug("Graph cleared")
 
     def run_query(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> List[Dict]:
-        """Run a query and return results.
+        """Run a query and return results with retry logic.
 
         Args:
             query: Cypher query
@@ -57,19 +57,54 @@ class GraphDriver:
         Returns:
             List of result dictionaries
         """
-        with self.driver.session(database=self.database) as session:
-            result = session.run(query, parameters or {})
-            return [record.data() for record in result]
+        import time
+        from neo4j.exceptions import ServiceUnavailable, TransientError
+        
+        max_retries = 3
+        retry_delay = 1.0  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                with self.driver.session(database=self.database) as session:
+                    result = session.run(query, parameters or {})
+                    return [record.data() for record in result]
+            except (ServiceUnavailable, TransientError) as e:
+                if attempt < max_retries - 1:
+                    logger.warning("Neo4j query failed (attempt %d/%d): %s. Retrying in %.1fs...", 
+                                 attempt + 1, max_retries, str(e), retry_delay)
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.error("Neo4j query failed after %d attempts: %s", max_retries, str(e))
+                    raise
 
     def execute_write(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> None:
-        """Execute a write query.
+        """Execute a write query with retry logic.
 
         Args:
             query: Cypher query
             parameters: Query parameters
         """
-        with self.driver.session(database=self.database) as session:
-            session.run(query, parameters or {})
+        import time
+        from neo4j.exceptions import ServiceUnavailable, TransientError
+        
+        max_retries = 3
+        retry_delay = 1.0  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                with self.driver.session(database=self.database) as session:
+                    session.run(query, parameters or {})
+                return
+            except (ServiceUnavailable, TransientError) as e:
+                if attempt < max_retries - 1:
+                    logger.warning("Neo4j write failed (attempt %d/%d): %s. Retrying in %.1fs...", 
+                                 attempt + 1, max_retries, str(e), retry_delay)
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    logger.error("Neo4j write failed after %d attempts: %s", max_retries, str(e))
+                    raise
 
     def get_count(self, label: Optional[str] = None) -> int:
         """Get node count.
