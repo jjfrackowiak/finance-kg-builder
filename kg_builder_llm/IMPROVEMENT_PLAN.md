@@ -17,7 +17,9 @@ The pipeline runs but produces a semantically broken graph:
 
 ---
 
-## Fix 1 — Entity Deduplication (Highest Impact)
+## ~~Fix 1 — Entity Deduplication~~ ✅ DONE (2026-04-07)
+
+**Implemented in commit `dd0a283`.**
 
 **Problem:** `normalize_key()` in `core/entity_resolution.py` is never called during the pipeline write path. The LLM generates different keys for the same entity across articles (ticker vs. slug vs. full name). `MERGE_DUPLICATES_CYPHER` is defined but never executed.
 
@@ -221,14 +223,14 @@ Metapaths are too numerous for a fixed vocab; keep hash-bucketing only for those
 
 ---
 
-## Fix 7 — Minor Bugs (Low Effort)
+## ~~Fix 7 — Minor Bugs~~ ✅ DONE (2026-04-07)
 
-| Bug | File | Fix |
-|-----|------|-----|
-| `"nvdia"` typo in extraction prompt | `mutations/incremental_kg_mutator.py:141` | Fix to `"nvidia"` |
-| `normalize_key()` never called on write path | `mutations/incremental_kg_mutator.py` | Call after LLM parse (see Fix 1A) |
-| `MERGE_DUPLICATES_CYPHER` defined but unused | `core/entity_resolution.py` | Execute after each step (see Fix 1C) |
-| Price fetch uses Stooq (rate-limited) | `main.py` | Switched to yfinance (done) |
+| Bug | Fix |
+|-----|-----|
+| `"nvdia"` typo in extraction prompt | Fixed |
+| `normalize_key()` never called on write path | Replaced by `canonical_key()` |
+| `MERGE_DUPLICATES_CYPHER` defined but unused | Now executed via `_deduplicate_graph()` after each step |
+| Price fetch uses Stooq (rate-limited) | Switched to yfinance |
 
 ---
 
