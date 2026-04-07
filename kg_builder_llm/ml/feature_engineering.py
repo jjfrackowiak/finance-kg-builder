@@ -12,6 +12,7 @@ from kg_builder_llm.ml.relationship_chains import (
     aggregate_chain_embeddings,
     embed_relationship_chains,
 )
+from kg_builder_llm.ml.subgraph_features import build_temporal_subgraph_feature_vector
 from kg_builder_llm.ml.topology_features import (
     aggregate_topology_features,
     compute_topology_features,
@@ -160,17 +161,21 @@ def build_day_feature_vector(
     chain_agg_method: str = "mean",
     embedding_type: str = "local",
     local_model: str = "all-MiniLM-L6-v2",
+    min_chain_hops: int = 5,
+    max_chain_hops: int = 5,
+    path_uniqueness: str = "NODE_PATH",
+    feature_mode: str = "path",
+    max_metapath_hops: int = 2,
 ) -> Tuple[np.ndarray, int, int]:
     """
-    Build combined feature vector for a prediction day (chains + topology only).
+    Build combined feature vector for a prediction day.
     
     Process:
     1. Get articles from [eval_date - lookback_days, eval_date]
-    2. Extract and embed relationship chains per article (with temporal constraint, batch query)
-    3. Aggregate chain embeddings across articles → chains_agg (embedding_dim)
-    4. Compute topology features for entities mentioned in window
-    5. Aggregate topology features → topo_agg (8)
-    6. Concatenate: [chains_agg (embedding_dim) | topo_agg (8)]
+    Modes:
+    - path: current chain-embedding representation + topology
+    - subgraph: fixed-schema temporal subgraph features + topology
+    - hybrid: path features + temporal subgraph features + topology
     
     Args:
         driver: GraphDriver instance
@@ -180,10 +185,17 @@ def build_day_feature_vector(
         api_key: OpenAI API key (for chain embedding)
         allowed_tags: Tags to filter relationships for chain extraction
         chain_agg_method: How to aggregate chain embeddings ('mean', 'max', 'weighted_mean')
+        embedding_type: Type of embedding to use ("local" or "openai")
+        local_model: Local model name for sentence-transformers
+        min_chain_hops: Minimum path length for relationship chains
+        max_chain_hops: Maximum path length for relationship chains
+        path_uniqueness: APOC path uniqueness mode (NODE_PATH, NODE_GLOBAL, RELATIONSHIP_PATH, RELATIONSHIP_GLOBAL)
+        feature_mode: "path", "subgraph", or "hybrid"
+        max_metapath_hops: Maximum hop count for typed metapath features
     
     Returns:
         Tuple of (feature_vector, total_chains, max_hop_count):
-        - feature_vector: np.ndarray (shape depends on embedding type + 8 topology)
+        - feature_vector: np.ndarray (shape depends on feature_mode)
         - total_chains: int, total chains extracted for this day
         - max_hop_count: int, maximum hop count among all chains (longest path)
     """
@@ -199,17 +211,25 @@ def build_day_feature_vector(
         logger.warning("No articles found in window, returning zero vector")
         return np.zeros(embed_dim + 8, dtype=np.float32), 0, 0  # embed_dim chains + 8 topology (no text), 0 chains, 0 max_hops
     
-    # Skip text embedding - we only want chain embeddings
-    logger.info("Skipping text embeddings - using only relationship chains")
-    text_agg = None
-    
+    # Skip text embedding - current representation uses structural signals only.
+    logger.info("Skipping text embeddings - using structural feature blocks")
+
     chains_embeddings = []
     total_chains_extracted = 0
     total_chains_embedded = 0
     max_hop_count_overall = 0  # Track longest path across all articles
-    
-    logger.info("About to check: if allowed_tags=%s", bool(allowed_tags))
-    if allowed_tags:
+
+    use_path_features = feature_mode in {"path", "hybrid"}
+    use_subgraph_features = feature_mode in {"subgraph", "hybrid"}
+
+    logger.info(
+        "Feature mode=%s (use_path=%s, use_subgraph=%s)",
+        feature_mode,
+        use_path_features,
+        use_subgraph_features,
+    )
+
+    if use_path_features and allowed_tags:
         logger.info("✓ allowed_tags is truthy, entering chain extraction block")
         logger.info("Processing %d articles for relationship chain extraction...", len(articles))
         
@@ -232,15 +252,19 @@ def build_day_feature_vector(
             
             logger.info("Article %d/%d: %s (date=%s) - adding to batch", article_idx, len(articles), article_id[:8], article_date)
             
-            # Create job for this article
+            # Create job for this article.
+            # Use the article's own publication date as the temporal boundary so
+            # the chain extractor only sees entities that existed at the time of
+            # this article — no leakage from future articles in the same window.
             jobs.append({
                 "job_id": article_idx,
                 "article_id": article_id,
-                "eval_date": article_date,  # Use article_date for temporal isolation
+                "eval_date": article_date,
                 "allowed_tags": allowed_tags,
                 "excluded_rels": excluded_rels,
-                "min_level": 5,  # Use fixed path length for consistency
-                "max_level": 5
+                "min_level": min_chain_hops,
+                "max_level": max_chain_hops,
+                "uniqueness": path_uniqueness
             })
             article_metadata.append((article_idx, article_id))
         
@@ -347,20 +371,44 @@ def build_day_feature_vector(
             logger.warning("⚠ No chains embedded, using zero vector")
             chains_agg = np.zeros(embed_dim, dtype=np.float32)
     else:
-        logger.warning("⚠ allowed_tags not provided, skipping chain extraction")
+        if use_path_features and not allowed_tags:
+            logger.warning("⚠ allowed_tags not provided, skipping chain extraction")
         chains_agg = np.zeros(embed_dim, dtype=np.float32)
-    
+
+    if use_subgraph_features:
+        subgraph_agg = build_temporal_subgraph_feature_vector(
+            driver,
+            eval_date=eval_date,
+            lookback_days=lookback_days,
+            allowed_tags=allowed_tags,
+            max_metapath_hops=max_metapath_hops,
+        )
+    else:
+        subgraph_agg = np.zeros(0, dtype=np.float32)
+
     # Step 6: Compute topology features
     topo_features_dict = compute_topology_features(driver, eval_date, lookback_days)
-    
+
     # Step 7: Aggregate topology features
     topo_agg = aggregate_topology_features(topo_features_dict, agg_method="mean")
     logger.debug("Topology aggregate shape: %s", topo_agg.shape)
-    
-    # Step 8: Concatenate (chains + topology only, no text)
-    feature_vector = np.concatenate([chains_agg, topo_agg], dtype=np.float32)
-    
-    logger.info("Built feature vector: shape=%s, chains_dims=%d, topo_dims=%d",
-               feature_vector.shape, len(chains_agg), len(topo_agg))
-    
+
+    feature_blocks = []
+    if use_path_features:
+        feature_blocks.append(chains_agg)
+    if use_subgraph_features:
+        feature_blocks.append(subgraph_agg)
+    feature_blocks.append(topo_agg)
+
+    # Step 8: Concatenate enabled feature blocks
+    feature_vector = np.concatenate(feature_blocks, dtype=np.float32)
+
+    logger.info(
+        "Built feature vector: shape=%s, path_dims=%d, subgraph_dims=%d, topo_dims=%d",
+        feature_vector.shape,
+        len(chains_agg) if use_path_features else 0,
+        len(subgraph_agg),
+        len(topo_agg),
+    )
+
     return feature_vector, total_chains_extracted, max_hop_count_overall

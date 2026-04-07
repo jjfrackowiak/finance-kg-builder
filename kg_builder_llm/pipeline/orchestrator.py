@@ -12,6 +12,10 @@ from neo4j_graphrag.llm import OpenAILLM
 from kg_builder_llm.config import Config
 from kg_builder_llm.core.article_linking import create_and_link_article_days
 from kg_builder_llm.core.data import prepare_articles
+from kg_builder_llm.core.entity_resolution import (
+    MERGE_DUPLICATES_BY_KEY_CYPHER,
+    MERGE_DUPLICATES_BY_NAME_CYPHER,
+)
 from kg_builder_llm.core.graph import GraphDriver
 from kg_builder_llm.core.neo4j_io import write_price_labels_to_days
 from kg_builder_llm.core.ontology import OntologyCandidate, create_base_ontology
@@ -47,7 +51,10 @@ class Orchestrator:
         self.driver = driver
         self.llm = llm
         self.embedder = embedder
-        self.evolution_agent = OntologyEvolutionAgent(llm)
+        self.evolution_agent = OntologyEvolutionAgent(
+            llm,
+            prompt_template_path=config.experiment.evolution_prompt_template,
+        )
         self.results = {}
         self.candidates_per_step: Dict[int, List[OntologyCandidate]] = {}
         self.ontologies_dir = Path("results/ontologies")
@@ -225,6 +232,7 @@ class Orchestrator:
             )
 
             tag_candidate_entities(self.driver, candidate.candidate_tag)
+            self._deduplicate_graph(candidate.candidate_tag)
 
             # Build allowed tags for evaluation
             # Step 1+: evaluate with base + current + remaining tagged candidates from previous steps
@@ -249,6 +257,13 @@ class Orchestrator:
                 allowed_tags=allowed_tags_for_eval,
                 embedding_type=self.config.experiment.embedding_type,
                 local_model=self.config.experiment.local_model_name,
+                lookback_days=self.config.experiment.lookback_days,
+                min_chain_hops=self.config.experiment.min_chain_hops,
+                max_chain_hops=self.config.experiment.max_chain_hops,
+                path_uniqueness=self.config.experiment.path_uniqueness,
+                feature_mode=self.config.experiment.feature_mode,
+                max_metapath_hops=self.config.experiment.max_metapath_hops,
+                train_ratio=self.config.experiment.train_ratio,
             )
 
             self.results[candidate.candidate_tag] = metrics
@@ -299,6 +314,35 @@ class Orchestrator:
         )
 
         return best_candidate
+
+    def _deduplicate_graph(self, candidate_tag: str) -> None:
+        """Merge duplicate nodes created during candidate building.
+
+        Runs two passes:
+        1. Name-based merge: same label + same lowercased name → one node.
+        2. Key-based merge: same label + same uppercased key → one node.
+
+        Both passes use APOC refactor.mergeNodes to combine properties and
+        relationships rather than deleting them.
+
+        Args:
+            candidate_tag: Tag of the just-built candidate (used only for logging).
+        """
+        logger.info("Running post-build deduplication for candidate %s …", candidate_tag)
+
+        try:
+            name_results = self.driver.run_query(MERGE_DUPLICATES_BY_NAME_CYPHER)
+            merged_by_name = sum(r.get("merged", 0) for r in (name_results or []))
+            logger.info("  Name-based merge: %d duplicate groups collapsed", merged_by_name)
+        except Exception as e:
+            logger.warning("Name-based deduplication failed (APOC required): %s", e)
+
+        try:
+            key_results = self.driver.run_query(MERGE_DUPLICATES_BY_KEY_CYPHER)
+            merged_by_key = sum(r.get("merged", 0) for r in (key_results or []))
+            logger.info("  Key-based merge: %d duplicate groups collapsed", merged_by_key)
+        except Exception as e:
+            logger.warning("Key-based deduplication failed (APOC required): %s", e)
 
     def _select_best_candidate(self) -> OntologyCandidate:
         """Select best candidate from current step.

@@ -2,6 +2,7 @@
 
 import json
 import logging
+from pathlib import Path
 from typing import Optional
 
 from neo4j_graphrag.llm import OpenAILLM
@@ -63,13 +64,28 @@ class OntologySchemaModel(BaseModel):
 class OntologyEvolutionAgent:
     """Evolves ontologies using LLM based on previous performance metrics."""
 
-    def __init__(self, llm: OpenAILLM):
+    def __init__(self, llm: OpenAILLM, prompt_template_path: str = "default"):
         """Initialize evolution agent.
 
         Args:
             llm: OpenAI LLM instance configured with API key and model
+            prompt_template_path: Path to custom prompt template file or "default"
         """
         self.llm = llm
+        self.prompt_template_path = prompt_template_path
+        self.custom_prompt_template = None
+        
+        # Load custom prompt template if specified
+        if prompt_template_path != "default":
+            try:
+                template_path = Path(prompt_template_path)
+                if template_path.exists():
+                    self.custom_prompt_template = template_path.read_text()
+                    logger.info("Loaded custom prompt template from %s", prompt_template_path)
+                else:
+                    logger.warning("Custom prompt template not found: %s, using default", prompt_template_path)
+            except Exception as e:
+                logger.warning("Failed to load custom prompt template: %s, using default", e)
 
     async def propose_new_candidate(
         self,
@@ -196,6 +212,25 @@ class OntologyEvolutionAgent:
         Returns:
             Prompt string for LLM
         """
+        # If custom prompt template is loaded, use it
+        if self.custom_prompt_template:
+            # Replace placeholders in custom template
+            existing_nodes = [n["label"] for n in previous.schema.get("node_types", [])]
+            existing_rels = previous.schema.get("relationship_types", [])
+            
+            prompt = self.custom_prompt_template.format(
+                schema_json=json.dumps(previous.schema, indent=2),
+                existing_nodes=", ".join(existing_nodes),
+                existing_rels=", ".join(existing_rels),
+                auc=metrics.auc,
+                f1=metrics.f1,
+                max_hops_train=metrics.max_hops_train,
+                max_hops_val=metrics.max_hops_val,
+                variant_index=variant_index,
+            )
+            return prompt
+        
+        # Otherwise use default prompt
         # Extract existing node types and relationships from schema
         existing_nodes = [n["label"] for n in previous.schema.get("node_types", [])]
         existing_rels = previous.schema.get("relationship_types", [])

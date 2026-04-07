@@ -6,7 +6,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -22,103 +22,22 @@ from kg_builder_llm.pipeline.orchestrator import Orchestrator
 logger = get_logger(__name__)
 
 
+# ============================================================================
+# Environment Setup
+# ============================================================================
+
 # Load .env from parent directory
 env_path = Path(__file__).parent.parent.parent / ".env"
 if env_path.exists():
     load_dotenv(env_path)
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="KG Builder - Knowledge Graph Evolution with LLM",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python -m kg_builder.main --data data/articles.csv --steps 4
-  python -m kg_builder.main --data data/articles.csv --limit 100
-  python -m kg_builder.main --help
-        """,
-    )
-
-    parser.add_argument(
-        "--data",
-        type=str,
-        default="data/fnspid_sample_nasdaq_long_text.csv",
-        help="Path to articles CSV file (default: data/fnspid_sample_nasdaq_long_text.csv)",
-    )
-
-    parser.add_argument(
-        "--time-window-days",
-        type=int,
-        default=150,
-        help="Number of sequential days to use for training (default: 150)",
-    )
-
-    parser.add_argument(
-        "--articles-per-day",
-        type=int,
-        default=3,
-        help="Max articles per day (default: all articles in time window)",
-    )
-
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="(DEPRECATED) Use --days instead. Limit number of articles to process",
-    )
-
-    parser.add_argument(
-        "--steps", type=int, default=3, help="Number of incremental evolution steps after base structure (0=base only, 1=base+1 evolution step, default: 2)"
-    )
-
-    parser.add_argument(
-        "--candidates", type=int, default=2, help="Number of candidates per step (default: 3)"
-    )
-
-    parser.add_argument(
-        "--semaphore-limit",
-        type=int,
-        default=50,
-        help="Max concurrent article processing tasks (default: 50)",
-    )
-
-    parser.add_argument(
-        "--embedding-type",
-        type=str,
-        default="local",
-        choices=["local", "openai"],
-        help="Embedding type: 'local' (sentence-transformers, free) or 'openai' (API, paid) (default: local)",
-    )
-
-    parser.add_argument(
-        "--local-model",
-        type=str,
-        default="all-MiniLM-L6-v2",
-        help="Local embedding model name for sentence-transformers (default: all-MiniLM-L6-v2)",
-    )
-
-    parser.add_argument(
-        "--output",
-        type=str,
-        default="results/ontology_experiment_results.json",
-        help="Output path for results (default: results/ontology_experiment_results.json)",
-    )
-
-    parser.add_argument(
-        "--log-level",
-        type=str,
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Logging level (default: INFO)",
-    )
-
-    return parser.parse_args()
-
+# ============================================================================
+# Helper Functions - Data
+# ============================================================================
 
 def fetch_stooq_prices(symbol: str = "TSLA") -> pd.DataFrame:
-    """Fetch daily OHLC data from Stooq.
+    """Fetch daily OHLC data via yfinance.
 
     Args:
         symbol: Stock ticker symbol (default: TSLA)
@@ -126,22 +45,18 @@ def fetch_stooq_prices(symbol: str = "TSLA") -> pd.DataFrame:
     Returns:
         DataFrame with columns: ['day', 'Open', 'High', 'Low', 'Close', 'Volume']
     """
-    logger.info(f"Fetching price data for {symbol} from Stooq...")
-    url = f"https://stooq.com/q/d/l/?s={symbol.lower()}.us&i=d"
+    import yfinance as yf
 
+    logger.info(f"Fetching price data for {symbol} via yfinance...")
     try:
-        df = pd.read_csv(url)
-        df = df.rename(
-            columns={
-                "Date": "day",
-                "Open": "Open",
-                "High": "High",
-                "Low": "Low",
-                "Close": "Close",
-                "Volume": "Volume",
-            }
-        )
-        df = df.dropna()
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period="5y", interval="1d", auto_adjust=True)
+        if df.empty:
+            raise ValueError(f"yfinance returned no data for {symbol}")
+        df = df.reset_index()
+        # yfinance returns 'Date' as a tz-aware datetime column
+        df["day"] = pd.to_datetime(df["Date"]).dt.date.astype(str)
+        df = df[["day", "Open", "High", "Low", "Close", "Volume"]].dropna()
         logger.info(f"✓ Fetched {len(df)} days of price data for {symbol}")
         return df
     except Exception as e:
@@ -175,6 +90,346 @@ def build_return_labels(price_df: pd.DataFrame) -> pd.DataFrame:
     return df_labels
 
 
+# ============================================================================
+# CLI Argument Parsing
+# ============================================================================
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="KG Builder - Knowledge Graph Evolution with LLM",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python -m kg_builder_llm.main --data data/articles.csv --steps 4 --lookback-days 3
+  python -m kg_builder_llm.main --data data/articles.csv --train-ratio 0.8
+  python -m kg_builder_llm.main --help
+        """,
+    )
+
+    # === Data Arguments ===
+    data_group = parser.add_argument_group('data arguments', 'Input data configuration')
+    data_group.add_argument(
+        "--data",
+        type=str,
+        default="data/fnspid_sample_nasdaq_long_text.csv",
+        help="Path to articles CSV file (default: data/fnspid_sample_nasdaq_long_text.csv)",
+    )
+    data_group.add_argument(
+        "--time-window-days",
+        type=int,
+        default=150,
+        help="Number of sequential days to use for training (default: 150)",
+    )
+    data_group.add_argument(
+        "--articles-per-day",
+        type=int,
+        default=3,
+        help="Max articles per day (default: all articles in time window)",
+    )
+    data_group.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="(DEPRECATED) Use --time-window-days instead. Limit number of articles to process",
+    )
+
+    # === Experiment Arguments ===
+    exp_group = parser.add_argument_group('experiment arguments', 'Ontology evolution configuration')
+    exp_group.add_argument(
+        "--steps",
+        type=int,
+        default=3,
+        help="Number of incremental evolution steps after base structure (0=base only, default: 3)",
+    )
+    exp_group.add_argument(
+        "--candidates",
+        type=int,
+        default=2,
+        help="Number of candidates per step (default: 2)",
+    )
+
+    exp_group.add_argument(
+        "--semaphore-limit",
+        type=int,
+        default=50,
+        help="Max concurrent article processing tasks (default: 50)",
+    )
+    exp_group.add_argument(
+        "--evolution-prompt",
+        type=str,
+        default="default",
+        help="Path to custom ontology evolution prompt template file or 'default' (default: default)",
+    )
+
+    # === Embedding Arguments ===
+    embed_group = parser.add_argument_group('embedding arguments', 'Text embedding configuration')
+    embed_group.add_argument(
+        "--embedding-type",
+        type=str,
+        default="local",
+        choices=["local", "openai"],
+        help="Embedding type: 'local' (sentence-transformers, free) or 'openai' (API, paid) (default: local)",
+    )
+    embed_group.add_argument(
+        "--local-model",
+        type=str,
+        default="all-MiniLM-L6-v2",
+        help="Local embedding model name for sentence-transformers (default: all-MiniLM-L6-v2)",
+    )
+
+    # === Feature Engineering Hyperparameters ===
+    feat_group = parser.add_argument_group('feature engineering', 'Feature extraction hyperparameters')
+    feat_group.add_argument(
+        "--lookback-days",
+        type=int,
+        default=2,
+        help="Number of days to look back for article/feature extraction (default: 2)",
+    )
+    feat_group.add_argument(
+        "--min-chain-hops",
+        type=int,
+        default=5,
+        help="Minimum path length for relationship chain extraction (default: 5)",
+    )
+    feat_group.add_argument(
+        "--max-chain-hops",
+        type=int,
+        default=5,
+        help="Maximum path length for relationship chain extraction (default: 5)",
+    )
+    feat_group.add_argument(
+        "--path-uniqueness",
+        type=str,
+        default="NODE_PATH",
+        choices=["NODE_PATH", "NODE_GLOBAL", "RELATIONSHIP_PATH", "RELATIONSHIP_GLOBAL", "NODE_LEVEL", "NONE"],
+        help="APOC path uniqueness mode for chain extraction (default: NODE_PATH)",
+    )
+    feat_group.add_argument(
+        "--feature-mode",
+        type=str,
+        default="path",
+        choices=["path", "subgraph", "hybrid"],
+        help="Day-level feature representation: path, subgraph, or hybrid (default: path)",
+    )
+    feat_group.add_argument(
+        "--max-metapath-hops",
+        type=int,
+        default=2,
+        choices=[2, 3],
+        help="Maximum hop count for temporal subgraph metapath features (default: 2)",
+    )
+    # === Model Training Hyperparameters ===
+    model_group = parser.add_argument_group('model training', 'Model training hyperparameters')
+    model_group.add_argument(
+        "--train-ratio",
+        type=float,
+        default=0.7,
+        help="Fraction of data for training in train/val split (default: 0.7 = 70/30 split)",
+    )
+
+    # === Output Arguments ===
+    output_group = parser.add_argument_group('output arguments', 'Results and logging')
+    output_group.add_argument(
+        "--output",
+        type=str,
+        default="results/ontology_experiment_results.json",
+        help="Output path for results (default: results/ontology_experiment_results.json)",
+    )
+    output_group.add_argument(
+        "--log-level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Logging level (default: INFO)",
+    )
+
+    return parser.parse_args()
+
+
+# ============================================================================
+# Helper Functions - Configuration
+# ============================================================================
+
+def setup_config(args: argparse.Namespace) -> Config:
+    """Load and configure the application configuration.
+    
+    Args:
+        args: Parsed command line arguments
+        
+    Returns:
+        Configured Config object
+    """
+    logger.info("Loading configuration from environment...")
+    config = Config.from_env()
+
+    # Override with command line args
+    config.experiment.num_steps = args.steps
+    config.experiment.max_candidates_per_step = args.candidates
+    config.experiment.semaphore_limit = args.semaphore_limit
+    config.experiment.embedding_type = args.embedding_type
+    config.experiment.local_model_name = args.local_model
+    config.experiment.lookback_days = args.lookback_days
+    config.experiment.min_chain_hops = args.min_chain_hops
+    config.experiment.max_chain_hops = args.max_chain_hops
+    config.experiment.path_uniqueness = args.path_uniqueness
+    config.experiment.feature_mode = args.feature_mode
+    config.experiment.max_metapath_hops = args.max_metapath_hops
+    config.experiment.train_ratio = args.train_ratio
+    config.experiment.evolution_prompt_template = args.evolution_prompt
+
+    logger.info("✓ Configuration loaded:")
+    logger.info(f"  - NEO4J_URI={config.neo4j.uri}")
+    logger.info(f"  - NEO4J_USERNAME={config.neo4j.user}")
+    logger.info(f"  - NEO4J_DATABASE={config.neo4j.database}")
+    logger.info(f"  - OPENAI_MODEL={config.openai.model_name}")
+    logger.info(f"  - EMBEDDING_TYPE={config.experiment.embedding_type}")
+    if config.experiment.embedding_type == "local":
+        logger.info(f"  - LOCAL_MODEL={config.experiment.local_model_name}")
+    logger.info(f"  - LOOKBACK_DAYS={config.experiment.lookback_days}")
+    logger.info(f"  - CHAIN_HOPS={config.experiment.min_chain_hops}-{config.experiment.max_chain_hops}")
+    logger.info(f"  - PATH_UNIQUENESS={config.experiment.path_uniqueness}")
+    logger.info(f"  - FEATURE_MODE={config.experiment.feature_mode}")
+    logger.info(f"  - MAX_METAPATH_HOPS={config.experiment.max_metapath_hops}")
+    logger.info(f"  - TRAIN_RATIO={config.experiment.train_ratio:.2f}")
+    logger.info(f"  - EVOLUTION_PROMPT={config.experiment.evolution_prompt_template}")
+    
+    return config
+
+
+def validate_config(config: Config) -> None:
+    """Validate configuration has required values.
+    
+    Args:
+        config: Configuration to validate
+        
+    Raises:
+        ValueError: If required configuration is missing
+    """
+    if config.experiment.embedding_type == "openai" and not config.openai.api_key:
+        raise ValueError("OPENAI_API_KEY not set in environment (required for openai embedding type)")
+    
+    if not config.neo4j.password:
+        raise ValueError("NEO4J_PASSWORD not set in environment")
+
+
+def initialize_driver(config: Config) -> GraphDriver:
+    """Initialize and test Neo4j driver connection.
+    
+    Args:
+        config: Configuration with Neo4j settings
+        
+    Returns:
+        Connected GraphDriver instance
+        
+    Raises:
+        ConnectionError: If connection to Neo4j fails
+    """
+    logger.info("Connecting to Neo4j...")
+    driver = GraphDriver(
+        uri=config.neo4j.uri,
+        user=config.neo4j.user,
+        password=config.neo4j.password,
+        database=config.neo4j.database,
+    )
+    
+    try:
+        driver.run_query("RETURN 1 as test")
+        logger.info("✓ Connected to Neo4j")
+        return driver
+    except Exception as e:
+        raise ConnectionError(f"Failed to connect to Neo4j: {e}")
+
+
+def load_and_prepare_data(
+    args: argparse.Namespace,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Load and prepare articles and price data.
+    
+    Args:
+        args: Command line arguments with data paths
+        
+    Returns:
+        Tuple of (articles_df, price_df)
+        
+    Raises:
+        FileNotFoundError: If data file not found
+    """
+    # Load articles
+    logger.info(f"Loading articles from {args.data}...")
+    if not Path(args.data).exists():
+        raise FileNotFoundError(f"Data file not found: {args.data}")
+
+    articles_df = load_articles(args.data, limit=args.limit)
+    logger.info(f"✓ Loaded {len(articles_df)} articles")
+
+    # Prepare articles (parse timestamps, add day column)
+    logger.info("Preparing articles...")
+    articles_df = prepare_articles(articles_df)
+    logger.info("✓ Prepared articles")
+
+    # Filter to date window
+    logger.info(
+        f"Filtering to {args.time_window_days} days with max {args.articles_per_day or 'unlimited'} articles/day..."
+    )
+    articles_df = filter_articles_by_date_window(
+        articles_df,
+        num_days=args.time_window_days,
+        articles_per_day=args.articles_per_day,
+    )
+    logger.info(
+        f"✓ Filtered to {len(articles_df)} articles in {args.time_window_days}-day window"
+    )
+
+    # Fetch price data
+    ticker = articles_df["ticker"].iloc[0] if "ticker" in articles_df.columns else "TSLA"
+    price_raw = fetch_stooq_prices(ticker)
+    price_df = build_return_labels(price_raw)
+
+    # Filter price data to match article date window
+    article_start = articles_df["timestamp"].min().date()
+    article_end = articles_df["timestamp"].max().date()
+    logger.info(f"Filtering price data to article window: {article_start} to {article_end}")
+
+    price_df = price_df.reset_index()
+    price_df["date"] = pd.to_datetime(price_df["day"]).dt.date
+    mask = (price_df["date"] >= article_start) & (price_df["date"] <= article_end)
+    price_df = price_df[mask].copy()
+    logger.info(f"✓ Filtered price data to {len(price_df)} trading days")
+    
+    return articles_df, price_df
+
+
+def save_results(results: dict, output_path: Path) -> None:
+    """Save experiment results to JSON file.
+    
+    Args:
+        results: Dictionary of results by candidate tag
+        output_path: Path to save results
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    results_dict = {
+        tag: {
+            "auc": metrics.auc,
+            "f1": metrics.f1,
+            "max_hops_train": metrics.max_hops_train,
+            "max_hops_val": metrics.max_hops_val,
+        }
+        for tag, metrics in results.items()
+    }
+
+    with open(output_path, "w") as f:
+        json.dump(results_dict, f, indent=2)
+
+    logger.info(f"✓ Results saved to {output_path}")
+
+
+# ============================================================================
+# Main Entry Point
+# ============================================================================
+
+
 async def main(args: Optional[argparse.Namespace] = None) -> int:
     """Main entry point.
 
@@ -195,97 +450,19 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
     logger.info("KG Builder - Knowledge Graph Evolution with LLM")
     logger.info("=" * 80)
 
+    driver = None
     try:
-        # Load configuration
-        logger.info("Loading configuration from environment...")
-        config = Config.from_env()
+        # 1. Load and validate configuration
+        config = setup_config(args)
+        validate_config(config)
 
-        # Override with command line args
-        config.experiment.num_steps = args.steps
-        config.experiment.max_candidates_per_step = args.candidates
-        config.experiment.semaphore_limit = args.semaphore_limit
-        config.experiment.embedding_type = args.embedding_type
-        config.experiment.local_model_name = args.local_model
+        # 2. Initialize Neo4j driver
+        driver = initialize_driver(config)
 
-        logger.info("✓ Configuration loaded:")
-        logger.info(f"  - NEO4J_URI={config.neo4j.uri}")
-        logger.info(f"  - NEO4J_USERNAME={config.neo4j.user}")
-        logger.info(f"  - NEO4J_DATABASE={config.neo4j.database}")
-        logger.info(f"  - OPENAI_MODEL={config.openai.model_name}")
-        logger.info(f"  - EMBEDDING_TYPE={config.experiment.embedding_type}")
-        if config.experiment.embedding_type == "local":
-            logger.info(f"  - LOCAL_MODEL={config.experiment.local_model_name}")
+        # 3. Load and prepare data
+        articles_df, price_df = load_and_prepare_data(args)
 
-        # Validate required environment variables
-        if config.experiment.embedding_type == "openai" and not config.openai.api_key:
-            logger.error("✗ OPENAI_API_KEY not set in environment (required for openai embedding type)")
-            return 1
-
-        if not config.neo4j.password:
-            logger.error("✗ NEO4J_PASSWORD not set in environment")
-            return 1
-
-        # Initialize Neo4j driver
-        logger.info("Connecting to Neo4j...")
-        driver = GraphDriver(
-            uri=config.neo4j.uri,
-            user=config.neo4j.user,
-            password=config.neo4j.password,
-            database=config.neo4j.database,
-        )
-
-        try:
-            driver.run_query("RETURN 1 as test")
-            logger.info("✓ Connected to Neo4j")
-        except Exception as e:
-            logger.error(f"✗ Failed to connect to Neo4j: {e}")
-            return 1
-
-        # Load articles
-        logger.info(f"Loading articles from {args.data}...")
-        if not Path(args.data).exists():
-            logger.error(f"✗ Data file not found: {args.data}")
-            return 1
-
-        articles_df = load_articles(args.data, limit=args.limit)
-        logger.info(f"✓ Loaded {len(articles_df)} articles")
-
-        # Prepare articles (parse timestamps, add day column)
-        logger.info("Preparing articles...")
-        articles_df = prepare_articles(articles_df)
-        logger.info("✓ Prepared articles")
-
-        # Filter to date window
-        logger.info(
-            f"Filtering to {args.time_window_days} days with max {args.articles_per_day or 'unlimited'} articles/day..."
-        )
-        articles_df = filter_articles_by_date_window(
-            articles_df,
-            num_days=args.time_window_days,
-            articles_per_day=args.articles_per_day,
-        )
-        logger.info(
-            f"✓ Filtered to {len(articles_df)} articles in {args.time_window_days}-day window"
-        )
-
-        # Fetch real price data from Stooq
-        ticker = articles_df["ticker"].iloc[0] if "ticker" in articles_df.columns else "TSLA"
-        price_raw = fetch_stooq_prices(ticker)
-        price_df = build_return_labels(price_raw)
-
-        # Filter price data to match article date window
-        article_start = articles_df["timestamp"].min().date()
-        article_end = articles_df["timestamp"].max().date()
-        logger.info(f"Filtering price data to article window: {article_start} to {article_end}")
-
-        # Reset index to make 'day' a column for filtering
-        price_df = price_df.reset_index()
-        price_df["date"] = pd.to_datetime(price_df["day"]).dt.date
-        mask = (price_df["date"] >= article_start) & (price_df["date"] <= article_end)
-        price_df = price_df[mask].copy()
-        logger.info(f"✓ Filtered price data to {len(price_df)} trading days")
-
-        # Initialize LLM and embedder
+        # 4. Initialize LLM and embedder
         logger.info("Initializing LLM and embedder...")
         llm = OpenAILLM(
             api_key=config.openai.api_key,
@@ -297,12 +474,11 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
         )
         logger.info("✓ LLM and embedder initialized")
 
-        # Create orchestrator
+        # 5. Create orchestrator and run experiment
         logger.info("Creating orchestrator...")
         orchestrator = Orchestrator(config, driver, llm, embedder)
         logger.info("✓ Orchestrator created")
 
-        # Run experiment
         logger.info("=" * 80)
         logger.info(f"Starting experiment: {args.steps} steps, {args.candidates} candidates/step")
         logger.info("=" * 80)
@@ -313,7 +489,7 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
         logger.info("✓ Experiment completed!")
         logger.info("=" * 80)
 
-        # Display results
+        # 6. Display and save results
         logger.info("\nResults by candidate:")
         for candidate_tag in sorted(results.keys()):
             metrics = results[candidate_tag]
@@ -322,24 +498,7 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
                 f"max_hops_train={metrics.max_hops_train}, max_hops_val={metrics.max_hops_val}"
             )
 
-        # Save results
-        output_path = Path(args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-
-        results_dict = {
-            tag: {
-                "auc": metrics.auc,
-                "f1": metrics.f1,
-                "max_hops_train": metrics.max_hops_train,
-                "max_hops_val": metrics.max_hops_val,
-            }
-            for tag, metrics in results.items()
-        }
-
-        with open(output_path, "w") as f:
-            json.dump(results_dict, f, indent=2)
-
-        logger.info(f"\n✓ Results saved to {output_path}")
+        save_results(results, Path(args.output))
 
         return 0
 
@@ -347,12 +506,25 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
         logger.warning("\n✗ Pipeline interrupted by user")
         return 130
 
+    except ValueError as e:
+        logger.error(f"✗ Configuration error: {e}")
+        return 1
+
+    except ConnectionError as e:
+        logger.error(f"✗ Connection error: {e}")
+        return 1
+
+    except FileNotFoundError as e:
+        logger.error(f"✗ File not found: {e}")
+        return 1
+
     except Exception as e:
         logger.error(f"✗ Pipeline failed: {e}", exc_info=True)
         return 1
 
     finally:
-        driver.close()
+        if driver:
+            driver.close()
 
 
 if __name__ == "__main__":
@@ -360,15 +532,13 @@ if __name__ == "__main__":
     sys.exit(exit_code)
 
 
-# 2026-01-01 15:45:17 [INFO] __main__: ✓ Experiment completed!
-# 2026-01-01 15:45:17 [INFO] __main__: ================================================================================
-# 2026-01-01 15:45:17 [INFO] __main__: 
+# 2026-02-22 22:40:44 [INFO] __main__: ================================================================================
+# 2026-02-22 22:40:44 [INFO] __main__: 
 # Results by candidate:
-# 2026-01-01 15:45:17 [INFO] __main__:   step_1_candidate_0: AUC=0.8889, F1=0.6667, n_train=215, n_val=215
-# 2026-01-01 15:45:17 [INFO] __main__:   step_1_candidate_1: AUC=0.6667, F1=0.7500, n_train=250, n_val=250
-# 2026-01-01 15:45:17 [INFO] __main__:   step_2_candidate_0: AUC=0.5556, F1=0.5714, n_train=301, n_val=301
-# 2026-01-01 15:45:17 [INFO] __main__:   step_2_candidate_1: AUC=0.8889, F1=0.8000, n_train=334, n_val=334
-# 2026-01-01 15:45:17 [INFO] __main__:   step_3_candidate_0: AUC=0.8889, F1=0.8571, n_train=388, n_val=388
-# 2026-01-01 15:45:17 [INFO] __main__:   step_3_candidate_1: AUC=0.8889, F1=0.8000, n_train=414, n_val=414
-# 2026-01-01 15:45:17 [INFO] __main__: 
-# ✓ Results saved to results/ontology_experiment_results.json
+# 2026-02-22 22:40:44 [INFO] __main__:   step_1_candidate_0: AUC=0.6019, F1=0.5714, max_hops_train=6, max_hops_val=6
+# 2026-02-22 22:40:44 [INFO] __main__:   step_1_candidate_1: AUC=0.4815, F1=0.5714, max_hops_train=6, max_hops_val=6
+# 2026-02-22 22:40:44 [INFO] __main__:   step_2_candidate_0: AUC=0.5648, F1=0.5714, max_hops_train=6, max_hops_val=6
+# 2026-02-22 22:40:44 [INFO] __main__:   step_2_candidate_1: AUC=0.6204, F1=0.4286, max_hops_train=6, max_hops_val=6
+# 2026-02-22 22:40:44 [INFO] __main__:   step_3_candidate_0: AUC=0.5556, F1=0.5714, max_hops_train=6, max_hops_val=6
+# 2026-02-22 22:40:44 [INFO] __main__:   step_3_candidate_1: AUC=0.6852, F1=0.5714, max_hops_train=6, max_hops_val=6
+# 2026-02-22 22:40:44 [INFO] __main__: ✓ Results saved to results/experiment_100days_unique_paths.json

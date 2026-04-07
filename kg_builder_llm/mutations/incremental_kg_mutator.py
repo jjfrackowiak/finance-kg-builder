@@ -5,7 +5,7 @@ from neo4j import Driver
 from neo4j_graphrag.llm import LLMInterface
 from pydantic import BaseModel
 
-from kg_builder_llm.core.entity_resolution import normalize_key
+from kg_builder_llm.core.entity_resolution import canonical_key, normalize_key
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +96,25 @@ class IncrementalArticleKGMutator:
         if len(extraction.relationships) == 0:
             logger.warning("⚠️  NO RELATIONSHIPS EXTRACTED from article %s", article_id)
 
+        # Normalize all node keys using canonical_key (ticker lookup + name-slug)
+        # and build a mapping llm_key -> canonical_key so that relationship
+        # from_key/to_key references stay consistent.
+        key_map: dict[str, str] = {}
+        for node in extraction.nodes:
+            name = node.properties.get("name", "")
+            ck = canonical_key(node.key, name, node.label)
+            if ck != node.key:
+                logger.debug(
+                    "Key normalised [%s]: %r -> %r (name=%r)",
+                    node.label, node.key, ck, name,
+                )
+            key_map[node.key] = ck
+            node.key = ck
+
+        for rel in extraction.relationships:
+            rel.from_key = key_map.get(rel.from_key, canonical_key(rel.from_key, "", ""))
+            rel.to_key = key_map.get(rel.to_key, canonical_key(rel.to_key, "", ""))
+
         # Apply mutation with isolation constraints
         with self.driver.session() as session:
             session.execute_write(
@@ -138,7 +157,7 @@ KEY NORMALIZATION GUIDE:
   * "Tesla, Inc." → key: "tesla"
   * "Intel Corporation" → key: "intel"
 - Remove special characters, extra spaces, and non-meaningful words
-- Consistency is KEY: "Nvidia", "nvidia", "NVIDIA Corp" should all produce the same key "nvdia"
+- Consistency is KEY: "Nvidia", "nvidia", "NVIDIA Corp" should all produce the same key "nvidia"
 - Avoid generic keys like "1", "article1" without context
 
 Return this JSON structure exactly:
@@ -272,9 +291,9 @@ Example:
                 )
                 continue
             
-            # Normalize the key for consistent entity resolution
-            normalized_key = normalize_key(node.key, node.label)
-            
+            # Key is already canonical (normalised in mutate_article before this call)
+            normalized_key = node.key
+
             query = f"""
                 MERGE (n:{node.label} {{key: $key}})
                 SET n += $props
@@ -329,9 +348,9 @@ Example:
         # Create relationships with isolation constraints
         rels_created = 0
         for rel in extraction.relationships:
-            # Normalize keys for relationships
-            normalized_from_key = normalize_key(rel.from_key)
-            normalized_to_key = normalize_key(rel.to_key)
+            # Keys are already canonical (normalised in mutate_article)
+            normalized_from_key = rel.from_key
+            normalized_to_key = rel.to_key
             
             if accepted_tags is not None:
                 # Constraint: Can only link to entities with accepted_tags OR self's candidate_tag

@@ -54,6 +54,20 @@ class ExperimentConfig:
     semaphore_limit: int = 50
     embedding_type: str = "local"  # "local" or "openai"
     local_model_name: str = "all-MiniLM-L6-v2"  # sentence-transformers model
+    
+    # Feature engineering hyperparameters
+    lookback_days: int = 2  # Days to look back for article/feature extraction
+    min_chain_hops: int = 5  # Minimum path length for relationship chains
+    max_chain_hops: int = 5  # Maximum path length for relationship chains
+    path_uniqueness: str = "NODE_PATH"  # APOC path uniqueness: NODE_PATH, NODE_GLOBAL, RELATIONSHIP_PATH, RELATIONSHIP_GLOBAL
+    feature_mode: str = "path"  # "path", "subgraph", or "hybrid"
+    max_metapath_hops: int = 2  # Maximum hop count for typed metapath features
+    
+    # Model training hyperparameters
+    train_ratio: float = 0.7  # Fraction of data for training (0.7 = 70/30 split)
+    
+    # Ontology evolution
+    evolution_prompt_template: str = "default"  # Path to custom prompt template or "default"
 
     @classmethod
     def from_env(cls) -> "ExperimentConfig":
@@ -66,6 +80,14 @@ class ExperimentConfig:
             semaphore_limit=int(os.getenv("SEMAPHORE_LIMIT", "50")),
             embedding_type=os.getenv("EMBEDDING_TYPE", "local"),
             local_model_name=os.getenv("LOCAL_MODEL_NAME", "all-MiniLM-L6-v2"),
+            lookback_days=int(os.getenv("LOOKBACK_DAYS", "2")),
+            min_chain_hops=int(os.getenv("MIN_CHAIN_HOPS", "5")),
+            max_chain_hops=int(os.getenv("MAX_CHAIN_HOPS", "5")),
+            path_uniqueness=os.getenv("PATH_UNIQUENESS", "NODE_PATH"),
+            feature_mode=os.getenv("FEATURE_MODE", "path"),
+            max_metapath_hops=int(os.getenv("MAX_METAPATH_HOPS", "2")),
+            train_ratio=float(os.getenv("TRAIN_RATIO", "0.7")),
+            evolution_prompt_template=os.getenv("EVOLUTION_PROMPT_TEMPLATE", "default"),
         )
 
 

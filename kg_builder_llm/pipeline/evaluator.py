@@ -118,6 +118,13 @@ def evaluate_candidate(
     api_key: Optional[str] = None,
     embedding_type: str = "local",
     local_model: str = "all-MiniLM-L6-v2",
+    lookback_days: int = 2,
+    min_chain_hops: int = 5,
+    max_chain_hops: int = 5,
+    path_uniqueness: str = "NODE_PATH",
+    feature_mode: str = "path",
+    max_metapath_hops: int = 2,
+    train_ratio: float = 0.7,
 ) -> ModelMetrics:
     """Evaluate a candidate ontology using text embeddings + relationship chains + topology features.
 
@@ -129,6 +136,15 @@ def evaluate_candidate(
         price_df: Price data (unused, kept for compatibility)
         allowed_tags: Tags to filter relationships for chain extraction (base + previous winners + current candidate)
         api_key: OpenAI API key for text embeddings
+        embedding_type: Type of embedding to use ("local" or "openai")
+        local_model: Local model name for sentence-transformers
+        lookback_days: Number of days to look back for article/feature extraction
+        min_chain_hops: Minimum path length for relationship chains
+        max_chain_hops: Maximum path length for relationship chains
+        path_uniqueness: APOC path uniqueness mode (NODE_PATH, NODE_GLOBAL, RELATIONSHIP_PATH, RELATIONSHIP_GLOBAL)
+        feature_mode: Feature representation mode ("path", "subgraph", or "hybrid")
+        max_metapath_hops: Maximum hop count for metapath features in subgraph modes
+        train_ratio: Fraction of data for training (0.7 = 70/30 split)
 
     Returns:
         Model metrics
@@ -151,13 +167,17 @@ def evaluate_candidate(
             feature_vector, chain_count, max_hops = build_day_feature_vector(
                 driver,
                 eval_date=day_date,
-                lookback_days=2,
+                lookback_days=lookback_days,
                 text_agg_method="mean",
                 api_key=api_key,
                 allowed_tags=allowed_tags,
                 chain_agg_method="mean",
                 embedding_type=embedding_type,
                 local_model=local_model,
+                min_chain_hops=min_chain_hops,
+                max_chain_hops=max_chain_hops,
+                feature_mode=feature_mode,
+                max_metapath_hops=max_metapath_hops,
             )
             feature_vectors[day_date] = (feature_vector, label)
             max_hop_counts[day_date] = max_hops
@@ -185,7 +205,7 @@ def evaluate_candidate(
     try:
         train_idx, val_idx = temporal_train_val_split(
             list(feature_vectors.keys()),
-            train_ratio=0.7,
+            train_ratio=train_ratio,
         )
     except Exception as e:
         logger.error("Failed to split train/val: %s", str(e))
@@ -239,4 +259,3 @@ def evaluate_candidate(
         return ModelMetrics(auc=0.0, f1=0.0, max_hops_train=train_max_hops, max_hops_val=val_max_hops)
     
     return metrics
-

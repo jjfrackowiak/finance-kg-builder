@@ -47,6 +47,7 @@ def extract_chains_batch(
             - excluded_rels: List of relationship types to exclude (list)
             - min_level: Minimum path length (int)
             - max_level: Maximum path length (int)
+            - uniqueness: APOC path uniqueness mode (str, default: "NODE_PATH")
     
     Returns:
         Dict mapping job_id -> list of chain dicts, each containing:
@@ -83,10 +84,11 @@ def extract_chains_batch(
       CALL apoc.path.expandConfig(s, {
         minLevel: job.min_level,
         maxLevel: job.max_level,
-        uniqueness: "NODE_PATH",
+        uniqueness: job.uniqueness,
         labelFilter: "-Article|-Day",
         relationshipFilter: ">",
-        limit: 30
+        limit: 50,
+        bfs: false
       }) YIELD path
     
       WITH path, eval_date, allowed_tags, excluded_rels
@@ -98,8 +100,9 @@ def extract_chains_batch(
           AND n.first_seen <= eval_date
         )
     
-      WITH path, length(path) AS hop_count
-      ORDER BY hop_count DESC
+      WITH path, length(path) AS hop_count,
+           [r IN relationships(path) | type(r)] AS rel_pattern
+      ORDER BY hop_count DESC, rel_pattern
       LIMIT 20
     
       RETURN path, hop_count
