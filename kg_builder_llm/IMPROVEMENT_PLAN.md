@@ -58,7 +58,7 @@ After `build_kg_incremental_candidate()` completes for a step, execute the merge
 
 ---
 
-## Fix 2 — Extraction Prompt: Key Consistency
+## ~~Fix 2 — Extraction Prompt: Key Consistency~~ ✅ DONE (2026-04-08)
 
 **Problem:** The extraction prompt gives contradictory key examples. It says:
 - "For person/entity names: Use lowercase with underscores (e.g., `nvidia`, `apple`)"
@@ -86,7 +86,7 @@ Remove the contradictory examples. Fix the `"nvdia"` typo.
 
 ---
 
-## Fix 3 — Ontology Evolution Prompt: Stop Proposing Existing Types
+## ~~Fix 3 — Ontology Evolution Prompt: Stop Proposing Existing Types~~ ✅ DONE (2026-04-08)
 
 **Problem:** The evolution prompt includes a static suggestion list:
 ```

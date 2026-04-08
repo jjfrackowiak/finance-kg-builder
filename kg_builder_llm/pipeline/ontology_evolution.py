@@ -114,7 +114,7 @@ class OntologyEvolutionAgent:
         )
 
         # Create prompt for LLM
-        prompt = self._create_evolution_prompt(previous, metrics, variant_index)
+        prompt = self._create_evolution_prompt(previous, metrics, step_index, variant_index)
 
         # Call LLM to generate new schema
         logger.debug("Calling LLM for ontology evolution...")
@@ -196,28 +196,54 @@ class OntologyEvolutionAgent:
     # Private Helper Methods
     # ========================================================================
 
+    # All candidate entity types the system knows about.
+    # Used to filter out suggestions that are already in the schema.
+    _ALL_CANDIDATE_NODE_TYPES = [
+        "Market", "Sector", "Index", "Deal", "Contract", "Regulation",
+        "Product", "Event", "Quarter", "Insider", "Executive", "Fund",
+        "Portfolio", "Sentiment", "Analyst", "Competitor", "ETF",
+    ]
+
+    # Generic relationship types that should be specialised in later steps.
+    _GENERIC_RELS = ["RELATES_TO", "INVOLVES", "ASSOCIATED_WITH"]
+
+    # Concrete specialisations the LLM can propose to replace generic rels.
+    _REL_SPECIALISATIONS = {
+        "RELATES_TO": [
+            "COMPETES_WITH", "PARTNERS_WITH", "SUPPLIES_TO", "ACQUIRES",
+            "INVESTED_IN", "SPUN_OFF_FROM",
+        ],
+        "INVOLVES": [
+            "ACQUIRES", "MERGES_WITH", "INVESTS_IN", "ISSUES", "UNDERWRITES",
+        ],
+        "ASSOCIATED_WITH": [
+            "CORRELATED_WITH", "BENCHMARKED_AGAINST", "HEDGES",
+        ],
+    }
+
     def _create_evolution_prompt(
         self,
         previous: OntologyCandidate,
         metrics: ModelMetrics,
+        step_index: int,
         variant_index: int,
     ) -> str:
         """Create prompt for LLM to evolve ontology.
 
         Args:
             previous: Previous ontology candidate
-            metrics: Performance metrics
-            variant_index: Which variant to create
+            metrics: Performance metrics of the previous winner
+            step_index: Current pipeline step (1-based)
+            variant_index: Which variant to create within this step
 
         Returns:
             Prompt string for LLM
         """
+        existing_nodes = [n["label"] for n in previous.schema.get("node_types", [])]
+        existing_rels = previous.schema.get("relationship_types", [])
+
         # If custom prompt template is loaded, use it
         if self.custom_prompt_template:
-            # Replace placeholders in custom template
-            existing_nodes = [n["label"] for n in previous.schema.get("node_types", [])]
-            existing_rels = previous.schema.get("relationship_types", [])
-            
             prompt = self.custom_prompt_template.format(
                 schema_json=json.dumps(previous.schema, indent=2),
                 existing_nodes=", ".join(existing_nodes),
@@ -226,52 +252,67 @@ class OntologyEvolutionAgent:
                 f1=metrics.f1,
                 max_hops_train=metrics.max_hops_train,
                 max_hops_val=metrics.max_hops_val,
+                step_index=step_index,
                 variant_index=variant_index,
             )
             return prompt
-        
-        # Otherwise use default prompt
-        # Extract existing node types and relationships from schema
-        existing_nodes = [n["label"] for n in previous.schema.get("node_types", [])]
-        existing_rels = previous.schema.get("relationship_types", [])
+
+        # --- dynamic suggestion list: exclude types already in schema ---
+        existing_set = set(existing_nodes)
+        new_type_suggestions = [t for t in self._ALL_CANDIDATE_NODE_TYPES if t not in existing_set]
+
+        # --- identify generic rels still present that could be specialised ---
+        generic_present = [r for r in self._GENERIC_RELS if r in existing_rels]
+        specialisation_lines = []
+        for rel in generic_present:
+            options = ", ".join(self._REL_SPECIALISATIONS.get(rel, []))
+            specialisation_lines.append(f"  - {rel}  →  consider: {options}")
+        specialisation_block = "\n".join(specialisation_lines) if specialisation_lines else "  (none — all generic rels already specialised)"
+
+        # --- step-aware task description ---
+        if step_index <= 1 and new_type_suggestions:
+            task_description = f"""TASK — NEW ENTITY TYPES (step {step_index}):
+Add entity types from this list that are NOT yet in the schema: {', '.join(new_type_suggestions)}.
+For each new type, add at least one semantically specific relationship connecting it to existing types.
+Keep all existing node_types and relationship_types unchanged."""
+        else:
+            task_description = f"""TASK — RELATIONSHIP SPECIALISATION (step {step_index}):
+The node vocabulary is now rich enough. Your primary goal is to REPLACE generic relationship types
+with semantically specific ones that better describe the actual connection.
+
+Generic relationships still in schema that should be specialised:
+{specialisation_block}
+
+You MAY also add new entity types from this list if genuinely needed: {', '.join(new_type_suggestions) or '(all covered)'}.
+Keep all existing node_types and relationship_types unchanged."""
+
+        auc_signal = (
+            f"AUC improved to {metrics.auc:.4f} (+{metrics.auc - 0.5:.4f} above random)"
+            if metrics.auc > 0.5
+            else f"AUC is {metrics.auc:.4f} (at or below random — relationships may be too generic)"
+        )
 
         return f"""You are a knowledge graph ontology designer optimizing for financial news analysis.
 
-TASK: Evolve the following ontology by ADDING NEW entity types and relationships not present in the current schema.
+{task_description}
 
-Previous ontology:
+Current schema:
 ```json
 {json.dumps(previous.schema, indent=2)}
 ```
 
-EXISTING ENTITY TYPES IN CURRENT SCHEMA:
-{', '.join(existing_nodes)}
+EXISTING ENTITY TYPES (do NOT re-add these): {', '.join(existing_nodes)}
+EXISTING RELATIONSHIP TYPES: {', '.join(existing_rels)}
 
-EXISTING RELATIONSHIP TYPES:
-{', '.join(existing_rels)}
+Performance signal: {auc_signal}
+Max relationship-chain hops found — train: {metrics.max_hops_train}, val: {metrics.max_hops_val}
+Variant: {variant_index}
 
-Performance metrics:
-- AUC: {metrics.auc:.4f}
-- F1: {metrics.f1:.4f}
-- Max hops in training period: {metrics.max_hops_train}
-- Max hops in validation period: {metrics.max_hops_val}
-
-Variant index: {variant_index}
-
-CRITICAL INSTRUCTIONS FOR EVOLUTION:
-1. MUST ADD NEW entity types that are NOT in {existing_nodes}
-2. Examples of NEW entity types to consider: Market, Sector, Index, Deal, Contract, Regulation, Product, Event, Quarter, Competitor, Insider, Executive, Fund, Portfolio, Sentiment, PriceDecrease, PriceIncrease
-3. For property types, ONLY use: STRING, INTEGER, FLOAT, BOOLEAN
-4. NEVER use NUMBER - use FLOAT or INTEGER instead
-5. MUST ADD NEW relationships involving the new entity types
-6. Keep all existing node_types and relationship_types
-7. Patterns MUST be formatted as ["NodeA", "RELATIONSHIP", "NodeB"]
-8. Return ONLY valid JSON with all required fields
-
-For variant {variant_index}:
-- If metrics.auc < 0.55: Focus on financial domain entities (Market, Sector, Index, Deal)
-- If 0.55 <= metrics.auc < 0.60: Add analyst/market-related entities (Analyst, Fund, Quarter)
-- Otherwise: Add competitive intelligence entities (Competitor, Product, Regulation)
+RULES:
+1. For property types use only: STRING, INTEGER, FLOAT, BOOLEAN
+2. Patterns MUST be formatted as ["NodeA", "RELATIONSHIP", "NodeB"]
+3. Keep all existing node_types and relationship_types
+4. Return ONLY valid JSON with keys: node_types, relationship_types, patterns
 
 Return ONLY valid JSON, no prose."""
 

@@ -140,30 +140,33 @@ class IncrementalArticleKGMutator:
         Key normalization is handled automatically by the system, but LLM is
         instructed to create consistent, identifier-like keys for better deduplication.
         """
-        prompt = f"""Extract entities and relationships as JSON. Return ONLY valid JSON.
+        prompt = f"""Extract entities and relationships from the text below using the provided ontology. Return ONLY valid JSON — no prose, no markdown.
 
-Ontology:
+ONTOLOGY:
 {ontology}
 
-Text:
+TEXT:
 {text}
 
-KEY NORMALIZATION GUIDE:
-- For ticker symbols/company codes: Use UPPERCASE identifiers (e.g., "NVDA", "AAPL", "INTC")
-- For person/entity names: Use lowercase with underscores for multi-word (e.g., "nvidia", "apple", "tesla")
-- For documents/articles: Use snake_case (e.g., "article_1", "market_update_august_2021")
-- STRIP LEGAL SUFFIXES: Remove Inc., Corp., LLC., Ltd., Co., Inc, Corporation, Company, etc.
-  * "Apple Inc." → key: "apple"
-  * "Tesla, Inc." → key: "tesla"
-  * "Intel Corporation" → key: "intel"
-- Remove special characters, extra spaces, and non-meaningful words
-- Consistency is KEY: "Nvidia", "nvidia", "NVIDIA Corp" should all produce the same key "nvidia"
-- Avoid generic keys like "1", "article1" without context
+KEY RULES — follow exactly, one rule per label:
+- Company   → stock ticker in UPPERCASE, no suffixes  (e.g., "NVDA", "AAPL", "INTC", "TSLA", "TSM")
+              If ticker unknown, use lowercase slug of the name: "taiwan_semiconductor"
+- Sector    → lowercase slug of the sector name       (e.g., "technology", "semiconductors", "healthcare")
+- Market    → lowercase slug of the market name       (e.g., "us_equity_market", "crypto_market")
+- Index     → lowercase slug of the index name        (e.g., "sp500", "nasdaq_composite", "dow_jones")
+- Author / Insider / Executive → lowercase slug of full name (e.g., "jensen_huang", "lisa_su")
+- Deal / Event / Regulation   → short lowercase slug describing the event (e.g., "arm_acquisition_2023", "gdpr")
+- Fund      → lowercase slug of the fund name         (e.g., "ark_innovation_etf")
 
-Return this JSON structure exactly:
+STRICT PROHIBITIONS:
+- NEVER output nodes with label "Article" or "Day" — these are managed by the system
+- NEVER use generic keys like "company_1", "deal_1", "market_1", "article_1", "publication_date"
+- NEVER invent relationship types not in the ontology
+
+Return this exact JSON structure:
 {{
   "nodes": [
-    {{"label": "Type", "key": "normalized_identifier", "properties": {{"name": "Full Name"}}}},
+    {{"label": "Type", "key": "canonical_key", "properties": {{"name": "Full Name"}}}},
     ...
   ],
   "relationships": [
@@ -177,10 +180,13 @@ Example:
   "nodes": [
     {{"label": "Company", "key": "NVDA", "properties": {{"name": "NVIDIA"}}}},
     {{"label": "Company", "key": "INTC", "properties": {{"name": "Intel"}}}},
-    {{"label": "Sector", "key": "tech", "properties": {{"name": "Technology"}}}}
+    {{"label": "Sector",  "key": "semiconductors", "properties": {{"name": "Semiconductors"}}}},
+    {{"label": "Index",   "key": "sp500", "properties": {{"name": "S&P 500"}}}}
   ],
   "relationships": [
-    {{"type": "BELONGS_TO", "from_key": "NVDA", "to_key": "tech", "properties": {{}}}}
+    {{"type": "PART_OF", "from_key": "NVDA", "to_key": "semiconductors", "properties": {{}}}},
+    {{"type": "PART_OF", "from_key": "INTC", "to_key": "semiconductors", "properties": {{}}}},
+    {{"type": "TRACKS",  "from_key": "semiconductors", "to_key": "sp500", "properties": {{}}}}
   ]
 }}
 """
