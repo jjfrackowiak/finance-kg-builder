@@ -1,0 +1,10 @@
+\contentsline {section}{\numberline {1}Introduction}{3}{section.1}%
+\contentsline {paragraph}{Contributions.}{4}{section*.2}%
+\contentsline {paragraph}{Paper organisation.}{4}{section*.3}%
+\contentsline {section}{\numberline {2}Related Work}{4}{section.2}%
+\contentsline {section}{\numberline {3}Research Hypotheses}{6}{section.3}%
+\contentsline {section}{\numberline {4}Methodology}{7}{section.4}%
+\contentsline {section}{\numberline {5}Experimental Setup}{7}{section.5}%
+\contentsline {section}{\numberline {6}Results}{7}{section.6}%
+\contentsline {section}{\numberline {7}Discussion}{7}{section.7}%
+\contentsline {section}{\numberline {8}Conclusion}{7}{section.8}%

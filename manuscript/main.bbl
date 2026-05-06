@@ -1,0 +1,135 @@
+\begin{thebibliography}{18}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[aks()]{aksw2024llmkgbench}
+
+
+\bibitem[cho()]{choi2020geval}
+
+
+\bibitem[Arun et~al.(2025)Arun, Dimino, Agarwal, Sarmah, and
+  Pasquali]{arun2025finreflectkg}
+Abhinav Arun, Fabrizio Dimino, Tejas~Prakash Agarwal, Bhaskarjit Sarmah, and
+  Stefano Pasquali.
+\newblock {FinReflectKG}: Agentic construction and evaluation of financial
+  knowledge graphs.
+\newblock In \emph{Proceedings of the 6th {ACM} International Conference on
+  {AI} in Finance}, 2025.
+\newblock URL \url{https://arxiv.org/abs/2508.17906}.
+
+\bibitem[Bloem et~al.(2021)Bloem, Wilcke, van Berkel, and
+  de~Boer]{bloem2021kgbench}
+Peter Bloem, Xander Wilcke, Lucas van Berkel, and Victor de~Boer.
+\newblock kgbench: A collection of knowledge graph datasets for evaluating
+  relational and multimodal machine learning.
+\newblock In \emph{The Semantic Web -- 18th International Conference, {ESWC}
+  2021}, Lecture Notes in Computer Science. Springer, 2021.
+\newblock \doi{10.1007/978-3-030-77385-4_37}.
+
+\bibitem[Cucumides and Geerts(2025)]{cucumides2025augraph}
+Tamara Cucumides and Floris Geerts.
+\newblock From features to structure: Task-aware graph construction for
+  relational and tabular learning with {GNN}s.
+\newblock In \emph{3rd International Workshop on Tabular Data Analysis ({TaDA})
+  at {VLDB} 2025}, 2025.
+\newblock URL
+  \url{https://www.vldb.org/2025/Workshops/VLDB-Workshops-2025/TaDA/TaDA25_5.pdf}.
+
+\bibitem[Dong et~al.(2017)Dong, Chawla, and Swami]{dong2017metapath2vec}
+Yuxiao Dong, Nitesh~V. Chawla, and Ananthram Swami.
+\newblock metapath2vec: Scalable representation learning for heterogeneous
+  networks.
+\newblock In \emph{KDD}, 2017.
+
+\bibitem[Dong et~al.(2024)Dong, Fan, and Peng]{dong2024fnspid}
+Zihan Dong, Xinyu Fan, and Zhiyuan Peng.
+\newblock {FNSPID}: A comprehensive financial news dataset in time series.
+\newblock In \emph{Proceedings of the 30th {ACM SIGKDD} Conference on Knowledge
+  Discovery and Data Mining}, 2024.
+\newblock \doi{10.1145/3637528.3671629}.
+\newblock URL \url{https://dl.acm.org/doi/10.1145/3637528.3671629}.
+
+\bibitem[Heist et~al.(2023)Heist, Hertling, and Paulheim]{heist2023kgreat}
+Nicolas Heist, Sven Hertling, and Heiko Paulheim.
+\newblock {KGrEaT}: A framework to evaluate knowledge graphs via downstream
+  tasks.
+\newblock In \emph{Proceedings of the 32nd {ACM} International Conference on
+  Information and Knowledge Management ({CIKM})}, 2023.
+\newblock \doi{10.1145/3583780.3615241}.
+\newblock URL \url{https://arxiv.org/abs/2308.10537}.
+
+\bibitem[Hogan et~al.(2021)Hogan, Blomqvist, Cochez, d'Amato, de~Melo,
+  Gutierrez, Kirrane, Gayo, Navigli, Neumaier, et~al.]{hogan2021kgsurvey}
+Aidan Hogan, Eva Blomqvist, Michael Cochez, Claudia d'Amato, Gerard de~Melo,
+  Claudio Gutierrez, Sabrina Kirrane, Jose Emilio~Labra Gayo, Roberto Navigli,
+  Sebastian Neumaier, et~al.
+\newblock Knowledge graphs.
+\newblock \emph{ACM Computing Surveys}, 54\penalty0 (4):\penalty0 1--37, 2021.
+
+\bibitem[Ji et~al.(2021)Ji, Pan, Cambria, Marttinen, and
+  Yu]{ji2021kgcompletion}
+Shaoxiong Ji, Shirui Pan, Erik Cambria, Pekka Marttinen, and Philip~S. Yu.
+\newblock A survey on knowledge graph embedding: Approaches and applications.
+\newblock \emph{IEEE Transactions on Knowledge and Data Engineering},
+  33\penalty0 (4):\penalty0 1--19, 2021.
+
+\bibitem[Mo et~al.(2025)Mo, Yu, Kazdan, Cabezas, Mpala, Yu, Cundy, Kanatsoulis,
+  and Koyejo]{mo2025kggen}
+Belinda Mo, Kyssen Yu, Joshua Kazdan, Joan Cabezas, Proud Mpala, Lisa Yu, Chris
+  Cundy, Charilaos Kanatsoulis, and Sanmi Koyejo.
+\newblock {KGGen}: Extracting knowledge graphs from plain text with language
+  models, 2025.
+\newblock URL \url{https://openreview.net/forum?id=YyhRJXxbpi}.
+
+\bibitem[Mynarz and Hanikov{\'a}(2023)]{mynarz2023testdriven}
+Jind{\v{r}}ich Mynarz and Kate{\v{r}}ina Hanikov{\'a}.
+\newblock Test-driven knowledge graph construction.
+\newblock In \emph{Proceedings of the Knowledge Graph Construction Workshop
+  ({KGC} 2023)}, volume 3471 of \emph{{CEUR} Workshop Proceedings}, 2023.
+\newblock URL \url{https://ceur-ws.org/Vol-3471/paper4.pdf}.
+
+\bibitem[Paulheim(2017)]{paulheim2017kgquality}
+Heiko Paulheim.
+\newblock Knowledge graph refinement: A survey of approaches and evaluation
+  methods.
+\newblock \emph{Semantic Web}, 8\penalty0 (3):\penalty0 489--508, 2017.
+
+\bibitem[Paulheim(2024)]{paulheim2024structuralquality}
+Heiko Paulheim.
+\newblock Structural quality metrics for knowledge graphs.
+\newblock In \emph{Knowledge Graphs: Methodology, Tools and Selected Use
+  Cases}. Springer, 2024.
+\newblock TODO: verify exact chapter/pages.
+
+\bibitem[Schlichtkrull et~al.(2018)Schlichtkrull, Kipf, Bloem, van~den Berg,
+  Titov, and Welling]{schlichtkrull2018rgcn}
+Michael Schlichtkrull, Thomas~N. Kipf, Peter Bloem, Rianne van~den Berg, Ivan
+  Titov, and Max Welling.
+\newblock Modeling relational data with graph convolutional networks.
+\newblock In \emph{ESWC}, 2018.
+
+\bibitem[Sun et~al.(2011)Sun, Han, Yan, Yu, and Wu]{sun2011pathsim}
+Yizhou Sun, Jiawei Han, Xifeng Yan, Philip~S. Yu, and Tianyi Wu.
+\newblock Pathsim: Meta path-based top-k similarity search in heterogeneous
+  information networks.
+\newblock In \emph{VLDB}, 2011.
+
+\bibitem[Tsang et~al.(2025)Tsang, Bai, Huang, Xiao, Zheng, Xu, Liu, and
+  Song]{tsang2025autographr1}
+Hong~Ting Tsang, Jiaxin Bai, Haoyu Huang, Qiao Xiao, Tianshi Zheng, Baixuan Xu,
+  Shujie Liu, and Yangqiu Song.
+\newblock {AutoGraph-R1}: End-to-end reinforcement learning for knowledge graph
+  construction, 2025.
+\newblock URL \url{https://arxiv.org/abs/2510.15339}.
+
+\bibitem[Wang et~al.(2017)Wang, Mao, Wang, and Guo]{wang2017kgsurvey}
+Quan Wang, Zhendong Mao, Bin Wang, and Li~Guo.
+\newblock Knowledge graph embedding: A survey of approaches and applications.
+\newblock \emph{IEEE Transactions on Knowledge and Data Engineering},
+  29\penalty0 (12):\penalty0 2724--2743, 2017.
+
+\end{thebibliography}

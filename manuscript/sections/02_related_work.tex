@@ -27,7 +27,7 @@ The evaluation of knowledge graphs has historically been conducted through intri
 structural quality metrics. \citet{paulheim2017kgquality} survey a broad class of such
 metrics, covering completeness, consistency, and conciseness. More recently,
 \citet{paulheim2024structuralquality} draw an explicit distinction between this intrinsic
-mode of evaluation and \emph{task-based} evaluation --- assessing a KG by its utility on
+mode of evaluation and task-based evaluation --- assessing a KG by its utility on
 a concrete downstream application. This distinction is central to the motivation of the
 present work: a graph may score well on structural criteria while failing to support a
 specific predictive task.
@@ -72,7 +72,7 @@ These methods share the assumption that the knowledge graph is given and fixed; 
 engineering, embedding, or message-passing then operates over the resulting structure. In
 our framework we draw on metapath counting and relation type histograms as components of
 the feature vector, but the graph from which these features are derived is itself adapted
-in response to the downstream task. Rather than learning better \emph{from} a fixed
+in response to the downstream task. Rather than learning better from a fixed
 graph, we ask what graph structure produces the most learnable features.
 
 Taken together, the literature reveals a consistent gap. Evaluation frameworks demonstrate

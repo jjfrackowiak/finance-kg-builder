@@ -10,10 +10,11 @@ persists in KG construction: ontology and graph structure are typically specifie
 \emph{a priori} and evaluated independently of the tasks for which the graph is
 ultimately used.
 
-Existing KG construction tools --- from manual ontology engineering to LLM-driven
+Existing KG 
+construction tools --- from manual ontology engineering to LLM-driven
 frameworks such as LlamaIndex and LangChain --- treat the ontology as a fixed design
 choice established before construction begins and unchanged throughout.
-Evaluation of the resulting graph is typically conducted through \emph{structural}
+Evaluation of the resulting graph is typically conducted through structural
 quality metrics: completeness, consistency, and redundancy~\cite{paulheim2017kgquality}.
 \citet{paulheim2024structuralquality} draw a sharp distinction between this
 intrinsic mode of evaluation and task-based evaluation --- assessing a
@@ -22,20 +23,20 @@ KGrEaT~\cite{heist2023kgreat} and KGBench~\cite{bloem2021kgbench} try to formali
 As \citet{heist2023kgreat} observe: \textit{``Performance indicators may
 be used to make an informed decision when picking a KG for a given task\ldots\ and to
 compare different versions of a KG during its life cycle.''} Yet despite this insight,
-no existing work closes the loop \emph{at construction time}: no lightweight,
+no existing work closes the loop at construction time: no lightweight,
 node-level predictor has been used to directly steer KG ontology evolution during the
-building process itself.
+building process itself
 
 This paper addresses the gap between graph construction and downstream task
-performance by introducing a \emph{feedback-driven} framework in which the KG
+performance by introducing a feedback-driven framework in which the KG
 ontology is treated as a tunable hyperparameter. Rather than fixing the schema in
-advance, we propose a closed-loop system in which: (i)~an \emph{Ontology Agent}
-proposes candidate ontology configurations; (ii)~a \emph{KG Builder Agent} constructs
+advance, we propose a closed-loop system in which: (i)~an Ontology Agent
+proposes candidate ontology configurations; (ii)~a KG Builder Agent constructs
 knowledge graphs from text under each configuration; (iii)~graph-derived features are
 computed over temporal subgraphs and fed into a lightweight downstream predictor;
 and (iv)~predictor performance --- measured by AUC and F1-score --- is returned as a
 feedback signal to guide the next ontology revision. This loop repeats until
-performance converges or a computational budget is exhausted. Figure~\ref{fig:architecture}
+performance converges. Figure~\ref{fig:architecture}
 illustrates the overall system.
 
 We instantiate this framework on the task of next-day stock price movement prediction

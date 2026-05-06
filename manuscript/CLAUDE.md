@@ -158,6 +158,25 @@ The **immovable sections** (Related Work, Hypotheses, Methodology) do not depend
 - Figures preferred over tables for trends; tables for precise numbers
 - No placeholder text left in submitted draft — mark incomplete sections with `% TODO: ...` comments
 
+### Citation format — author-year (natbib)
+
+`main.tex` uses `\usepackage[authoryear, round]{natbib}` with `\bibliographystyle{plainnat}`.
+
+| Command | Output | When to use |
+|---------|--------|-------------|
+| `\citet{key}` | `Author (Year)` | Inline: "As \citet{heist2023kgreat} show..." |
+| `\citep{key}` | `(Author, Year)` | Parenthetical: "...has been shown \citep{heist2023kgreat}." |
+| `\cite{key}` | same as `\citet` | Avoid — prefer explicit `\citet`/`\citep` |
+
+**Never use numeric `\cite` style.** Do not switch back to `[numbers, sort&compress]`.
+
+### Emphasis (`\emph`) rules
+
+- **Use** `\emph{}` only for Latin phrases: `\emph{a priori}`, `\emph{in vivo}`, `\emph{et al.}` etc.
+- **Do not use** `\emph{}` on English key terms, component names, or single words for stress — this is non-standard in CS/ML papers.
+- For direct quotations: `\textit{``...''}` is acceptable.
+- Citations are never italicised or highlighted. `main.tex` uses `\usepackage[hidelinks]{hyperref}` — no colored links.
+
 ---
 
 ## Key Literature (for `references.bib`)
