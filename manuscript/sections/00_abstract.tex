@@ -1,0 +1,27 @@
+This project investigates the construction of task-aware knowledge graphs (KGs) from text,
+treating graph structure as an optimization target rather than a fixed representation.
+Existing frameworks such as Neo4j-based pipelines and LLM-driven tools (e.g., LlamaIndex)
+focus on constructing large, general-purpose graphs without incorporating feedback from
+downstream tasks, despite evidence from evaluation frameworks (e.g., KGrEaT, GEval, KGBench)
+that KG utility is task-dependent. The research addresses this gap by proposing a
+feedback-driven approach in which ontology is treated as a tunable component influencing
+predictive performance. The study uses document-based datasets linking text to measurable
+outcomes, including financial news (FNSPID) paired with stock price movements. LLM agents
+are employed for ontology evolution and triple extraction, enabling scalable generation of
+multiple KG variants. Graph-derived features are then computed over temporal windows and
+used in predictive models, whose performance is fed back to the agents to refine ontology
+design, closing the loop between graph construction and downstream task. Preliminary results
+indicate that graph structure strongly influences predictive outcomes, with adaptive ontology
+updates leading to significant improvements.
+
+% Short version (for submission systems with word limits):
+% This project explores building task-aware knowledge graphs (KGs) from text by treating
+% graph structure as an optimization target rather than a fixed design. Unlike existing
+% approaches that generate large, general-purpose graphs, it introduces a feedback-driven
+% framework where ontology is iteratively refined based on downstream task performance.
+% Using document-based datasets (e.g., financial news linked to stock movements), LLM agents
+% generate and evolve ontologies and extract triples to produce multiple KG variants. Features
+% derived from these graphs are used in predictive models, and their performance is fed back
+% to guide further ontology updates. Preliminary results show that graph structure
+% significantly impacts predictive performance, with adaptive ontology refinement leading to
+% measurable improvements.

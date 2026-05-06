@@ -1,0 +1,94 @@
+\documentclass[12pt, a4paper]{article}
+
+% Encoding & fonts
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% Page layout
+\usepackage[margin=2.5cm]{geometry}
+
+% Math
+\usepackage{amsmath, amssymb, amsthm}
+
+% Graphics & tables
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{float}
+
+% Hyperlinks & references
+\usepackage[colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue]{hyperref}
+\usepackage[numbers, sort&compress]{natbib}
+
+% Algorithms
+\usepackage{algorithm}
+\usepackage{algorithmic}
+
+% Misc
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage{setspace}
+\onehalfspacing
+
+% Hypothesis environment
+\newtheorem{hypothesis}{Hypothesis}
+
+% TODO marker
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+
+% -------------------------------------------------------
+\title{Ontology as a Hyperparameter: Task-Aware Knowledge Graph Construction Using LLMs}
+
+\author{
+  Jan Fr\k{a}ckowiak\textsuperscript{1} \and
+  Piotr W\'{o}jcik, PhD\textsuperscript{1} \and
+  Micha\l{} Sierakowski, PhD\textsuperscript{2} \\[0.5em]
+  \textsuperscript{1}Faculty of Economic Sciences, University of Warsaw \\[0.3em]
+  \textsuperscript{2}Faculty of Mathematics, Informatics, and Mechanics,\\
+  University of Warsaw
+}
+
+\date{}
+% -------------------------------------------------------
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+\input{sections/00_abstract}
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Introduction}
+\input{sections/01_introduction}
+
+\section{Related Work}\label{sec:related}
+\input{sections/02_related_work}
+
+\section{Research Hypotheses}\label{sec:hypotheses}
+\input{sections/03_hypotheses}
+
+\section{Methodology}\label{sec:methodology}
+\input{sections/04_methodology}
+
+\section{Experimental Setup}\label{sec:experiments}
+\input{sections/05_experiments}
+
+\section{Results}\label{sec:results}
+\input{sections/06_results}
+
+\section{Discussion}\label{sec:discussion}
+\input{sections/07_discussion}
+
+\section{Conclusion}\label{sec:conclusion}
+\input{sections/08_conclusion}
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

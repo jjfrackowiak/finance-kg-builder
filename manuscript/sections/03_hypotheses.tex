@@ -1,0 +1,42 @@
+The proposed framework rests on the premise that knowledge graph ontology is not a
+neutral design choice but an active determinant of downstream predictive performance.
+If this is true, then iteratively adapting the ontology in response to task feedback
+should yield measurable improvements --- both in accuracy and in the structural
+properties of the resulting graph. We formalise this premise through three testable
+hypotheses, each targeting a distinct dimension of the expected benefit: predictive
+accuracy, graph efficiency, and structural informativeness.
+
+\begin{hypothesis}\label{hyp:accuracy}
+Task-aware knowledge graph construction improves prediction accuracy in node-level
+price movement classification compared to static graph construction approaches.
+\end{hypothesis}
+
+Ontology configurations that are better aligned with the prediction objective should
+produce graph-derived features with higher discriminative power. H\ref{hyp:accuracy}
+is evaluated by comparing AUC and F1-score of the downstream classifier trained on
+features extracted from task-aware KG variants against a static baseline in which the
+ontology is fixed throughout (Section~\ref{sec:results}).
+
+\begin{hypothesis}\label{hyp:efficiency}
+Task-aware optimization enables smaller knowledge graphs while maintaining or
+improving downstream task performance.
+\end{hypothesis}
+
+By discarding ontology elements that do not contribute to predictive performance, the
+feedback loop should converge on more compact representations. H\ref{hyp:efficiency}
+is evaluated by tracking the number of nodes and edges per iteration alongside
+classifier AUC, testing whether the task-aware variant achieves a favourable
+size--performance tradeoff relative to the unconstrained baseline
+(Section~\ref{sec:results}).
+
+\begin{hypothesis}\label{hyp:structure}
+Iterative, task-driven knowledge graph construction produces more informative graph
+structures and facilitates the identification of effective ontology configurations.
+\end{hypothesis}
+
+Successive ontology revisions guided by performance feedback should increase the
+diversity and predictive relevance of extracted relation types. H\ref{hyp:structure}
+is evaluated by examining the ontology evolution trace --- which relation types are
+added, retained, or removed across iterations --- and by measuring feature entropy
+and metapath diversity over successive construction steps
+(Section~\ref{sec:results}).

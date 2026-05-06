@@ -1,0 +1,72 @@
+Representing knowledge in structured forms that intelligent systems can query and reason
+over is a foundational challenge of artificial intelligence. Knowledge graphs (KGs) have
+become the attractive medium for this purpose, encoding entities, relationships, and semantic
+descriptions extracted from text to support applications from question answering and
+recommendation to predictive modelling~\cite{ji2021kgcompletion}. The ability to
+construct KGs from unstructured text at scale has been substantially advanced by large
+language models (LLMs), which enable flexible extraction of entities and relations without
+hand-crafted rules~\cite{mo2025kggen}. Despite this progress, a fundamental tension
+persists in KG construction: ontology and graph structure are typically specified
+\emph{a priori} and evaluated independently of the tasks for which the graph is
+ultimately used.
+
+Existing KG construction tools --- from manual ontology engineering to LLM-driven
+frameworks such as LlamaIndex and LangChain --- treat the ontology as a fixed design
+choice established before construction begins and unchanged throughout.
+Evaluation of the resulting graph is typically conducted through \emph{structural}
+quality metrics: completeness, consistency, and redundancy~\cite{paulheim2017kgquality}.
+\citet{paulheim2024structuralquality} draw a sharp distinction between this
+intrinsic mode of evaluation and task-based evaluation --- assessing a
+KG by its utility on a concrete downstream application. Frameworks such as
+KGrEaT~\cite{heist2023kgreat} and KGBench~\cite{bloem2021kgbench} try to formalise the approach to such evaluations.
+As \citet{heist2023kgreat} observe: \textit{``Performance indicators may
+be used to make an informed decision when picking a KG for a given task\ldots\ and to
+compare different versions of a KG during its life cycle.''} Yet despite this insight,
+no existing work closes the loop \emph{at construction time}: no lightweight,
+node-level predictor has been used to directly steer KG ontology evolution during the
+building process itself.
+
+This paper addresses the gap between graph construction and downstream task
+performance by introducing a \emph{feedback-driven} framework in which the KG
+ontology is treated as a tunable hyperparameter. Rather than fixing the schema in
+advance, we propose a closed-loop system in which: (i)~an \emph{Ontology Agent}
+proposes candidate ontology configurations; (ii)~a \emph{KG Builder Agent} constructs
+knowledge graphs from text under each configuration; (iii)~graph-derived features are
+computed over temporal subgraphs and fed into a lightweight downstream predictor;
+and (iv)~predictor performance --- measured by AUC and F1-score --- is returned as a
+feedback signal to guide the next ontology revision. This loop repeats until
+performance converges or a computational budget is exhausted. Figure~\ref{fig:architecture}
+illustrates the overall system.
+
+We instantiate this framework on the task of next-day stock price movement prediction
+using the FNSPID financial news dataset~\cite{dong2024fnspid}, a corpus of financial
+news articles linked to NASDAQ price time series. This domain offers a clear and
+measurable downstream objective, dense entity interactions, and a natural temporal
+structure that motivates subgraph-based feature extraction. The framework is
+designed to be domain-agnostic and is extensible to other settings, such as biomedical
+literature linked to adverse drug reactions.
+
+\paragraph{Contributions.} This paper makes the following contributions:
+\begin{enumerate}
+    \item We propose a feedback-driven KG construction framework that treats ontology
+    as a hyperparameter optimized for downstream task performance, closing the loop
+    between graph construction and prediction.
+
+    \item We introduce a structured feature representation for temporal KG subgraphs
+    --- comprising node type histograms, relation type histograms, metapath counts,
+    temporal novelty statistics, and topology features --- that supports lightweight
+    node-level classification without requiring graph neural networks.
+
+    \item We provide empirical evidence on the FNSPID dataset that task-aware ontology
+    adaptation improves predictive accuracy, enables more compact graph representations
+    without sacrificing performance, and produces more informative graph structures
+    over successive iterations.
+\end{enumerate}
+
+\paragraph{Paper organisation.} Section~\ref{sec:related} reviews related work on KG
+construction, task-based KG evaluation, and task-aware graph learning.
+Section~\ref{sec:hypotheses} states the research hypotheses formally.
+Section~\ref{sec:methodology} describes the proposed framework in detail.
+Section~\ref{sec:experiments} presents the experimental setup, and
+Section~\ref{sec:results} reports results. Section~\ref{sec:discussion} discusses
+findings and limitations, and Section~\ref{sec:conclusion} concludes.
