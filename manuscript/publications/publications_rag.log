@@ -1,0 +1,100 @@
+2026-05-10 19:51:53 INFO     publications-rag MCP server initialised
+2026-05-10 19:53:51 INFO     publications-rag MCP server initialised
+2026-05-10 19:54:12 INFO     publications-rag MCP server initialised
+2026-05-10 19:55:21 INFO     publications-rag MCP server initialised
+2026-05-10 19:56:37 INFO     publications-rag MCP server initialised
+2026-05-10 20:18:18 INFO     publications-rag MCP server initialised
+2026-05-10 20:18:56 INFO     sync() started
+2026-05-10 20:18:56 INFO     Found 31 PDFs on disk, 31 sources in index
+2026-05-10 20:18:57 DEBUG    No pending chunks to embed
+2026-05-10 20:18:57 INFO     sync() done — added=0 reindexed=0 removed=0 unchanged=31 embedded=0
+2026-05-10 20:19:09 INFO     search() query='task-aware knowledge graph construction from text' files=None n=5
+2026-05-10 20:19:13 INFO     search() returned 5 hits via cosine
+2026-05-10 20:29:44 INFO     search() query='lexico-syntactic patterns hyponymy acquisition concept hierarchies' files=['hearst_1992_hyponyms.pdf'] n=4
+2026-05-10 20:29:44 INFO     search() returned 4 hits via cosine
+2026-05-10 20:29:45 INFO     search() query='KG construction population enrichment rule-based distant supervision embedding' files=['hogan_2021_kg_survey.pdf'] n=4
+2026-05-10 20:29:47 INFO     search() returned 4 hits via cosine
+2026-05-10 20:29:47 INFO     search() query='ontology learning concept hierarchy induction from text corpora linguistic stati' files=None n=5
+2026-05-10 20:29:48 INFO     search() returned 5 hits via cosine
+2026-05-10 20:36:28 INFO     search() query='LLM KG construction fixed ontology schema entity relation extraction pipeline' files=['pan_2024_llm_kg.pdf', 'mo_2025_kggen.pdf', 'zhang_2022_generative_kg.pdf'] n=4
+2026-05-10 20:36:29 INFO     search() returned 4 hits via cosine
+2026-05-10 20:36:29 INFO     search() query='ontology maintenance evaluation downstream task performance open direction LLM o' files=['li_2025_llm_oe_review.pdf'] n=5
+2026-05-10 20:36:30 INFO     search() returned 5 hits via cosine
+2026-05-10 20:36:31 INFO     search() query='knowledge graph quality intrinsic evaluation completeness consistency concisenes' files=['paulheim_2017_kg_refinement.pdf', 'seo_2023_structural_quality.pdf'] n=4
+2026-05-10 20:36:31 INFO     search() returned 4 hits via cosine
+2026-05-10 20:36:32 INFO     search() query='task-based KG evaluation downstream performance benchmark KG variants lifecycle ' files=['heist_2023_kgreat.pdf', 'bloem_2021_kgbench.pdf', 'mynarz_2023_testdriven.pdf'] n=5
+2026-05-10 20:36:32 INFO     search() returned 5 hits via cosine
+2026-05-10 20:36:33 INFO     search() query='task-aware graph construction GNN performance topology optimisation downstream l' files=['cucumides_2025_augraph.pdf', 'arun_2025_finreflectkg.pdf'] n=4
+2026-05-10 20:36:33 INFO     search() returned 4 hits via cosine
+2026-05-10 20:36:34 INFO     search() query='metapath heterogeneous graph typed paths relational semantics PathSim similarity' files=['sun_2011_pathsim.pdf', 'dong_2017_metapath2vec.pdf', 'schlichtkrull_2018_rgcn.pdf'] n=4
+2026-05-10 20:36:35 INFO     search() returned 4 hits via cosine
+2026-05-10 20:36:39 INFO     search() query='FinReflectKG financial knowledge graph agentic evaluation qualitative feedback l' files=['arun_2025_finreflectkg.pdf'] n=4
+2026-05-10 20:36:39 INFO     search() returned 4 hits via cosine
+2026-05-10 20:36:40 INFO     search() query='R-GCN relational graph convolutional network multi-relational link prediction en' files=['schlichtkrull_2018_rgcn.pdf'] n=4
+2026-05-10 20:36:40 INFO     search() returned 4 hits via cosine
+2026-05-10 20:37:57 INFO     search() query='KGGen entity disambiguation improved extraction language model knowledge graph' files=['mo_2025_kggen.pdf'] n=4
+2026-05-10 20:37:58 INFO     search() returned 4 hits via cosine
+2026-05-10 20:37:58 INFO     search() query='reinforcement learning KG construction reward graph quality signal end-to-end' files=['tsang_2025_autograph_r1.pdf'] n=4
+2026-05-10 20:37:59 INFO     search() returned 4 hits via cosine
+2026-05-10 20:37:59 INFO     search() query='competency questions test-driven knowledge graph extraction task specification' files=['mynarz_2023_testdriven.pdf'] n=4
+2026-05-10 20:37:59 INFO     search() returned 4 hits via cosine
+2026-05-10 21:02:00 INFO     search() query='heterogeneous information network schema node type edge type multiple relation t' files=['shi_2017_hin_survey.pdf'] n=4
+2026-05-10 21:02:02 INFO     search() returned 4 hits via cosine
+2026-05-10 21:02:02 INFO     search() query='temporal knowledge graph evolution dynamic facts over time entity relation time-' files=['trivedi_2017_know_evolve.pdf'] n=4
+2026-05-10 21:02:02 INFO     search() returned 4 hits via cosine
+2026-05-10 21:02:02 INFO     search() query='knowledge graph financial news stock price prediction event extraction sentiment' files=['ding_2015_stock_pred.pdf', 'dong_2024_fnspid.pdf'] n=5
+2026-05-10 21:02:03 INFO     search() returned 5 hits via cosine
+2026-05-10 21:02:04 INFO     search() query='graph neural network survey node classification link prediction message passing ' files=['wu_2021_gnn_survey.pdf', 'hamilton_2017_graphsage.pdf'] n=4
+2026-05-10 21:02:04 INFO     search() returned 4 hits via cosine
+2026-05-11 22:02:57 INFO     publications-rag MCP server initialised
+2026-05-11 22:28:13 INFO     search() query='classifying LLM KG construction methods entity discovery relation extraction end' files=['pan_2024_llm_kg.pdf'] n=5
+2026-05-11 22:28:16 INFO     search() returned 5 hits via cosine
+2026-05-11 22:32:20 INFO     search() query='ontology maintenance definition lifecycle stage what it means' files=['li_2025_llm_oe_review.pdf'] n=4
+2026-05-11 22:32:22 INFO     search() returned 4 hits via cosine
+2026-05-11 22:32:22 INFO     search() query='63.4 percent implementation maintenance 2.4 percent single study imbalance exper' files=['li_2025_llm_oe_review.pdf'] n=4
+2026-05-11 22:32:22 INFO     search() returned 4 hits via cosine
+2026-05-11 22:36:55 INFO     search() query='Kholmska maintenance human feedback bug detection improvement suggestions expert' files=['li_2025_llm_oe_review.pdf'] n=4
+2026-05-11 22:36:55 INFO     search() returned 4 hits via cosine
+2026-05-11 22:43:31 INFO     search() query='downstream task performance evaluation ontology quality no study automated signa' files=['li_2025_llm_oe_review.pdf'] n=5
+2026-05-11 22:43:32 INFO     search() returned 5 hits via cosine
+2026-05-11 22:43:32 INFO     search() query='structural properties axiom consistency competency questions evaluation metrics ' files=['li_2025_llm_oe_review.pdf'] n=4
+2026-05-11 22:43:32 INFO     search() returned 4 hits via cosine
+2026-05-11 22:43:45 INFO     search() query='all evaluation structural intrinsic none downstream task performance no approach' files=['li_2025_llm_oe_review.pdf'] n=4
+2026-05-11 22:43:45 INFO     search() returned 4 hits via cosine
+2026-05-11 22:49:21 INFO     search() query='evaluation metrics ontology quality all studies structural no downstream task pe' files=['li_2025_llm_oe_review.pdf'] n=6
+2026-05-11 22:49:21 INFO     search() returned 6 hits via cosine
+2026-05-11 22:49:22 INFO     search() query='open challenge gap future work performance feedback loop automated ontology revi' files=['li_2025_llm_oe_review.pdf'] n=6
+2026-05-11 22:49:22 INFO     search() returned 6 hits via cosine
+2026-05-11 23:36:37 INFO     search() query='precision recall F1 applied gold standard ontology matching OAEI evaluation intr' files=['li_2025_llm_oe_review.pdf'] n=5
+2026-05-11 23:36:39 INFO     search() returned 5 hits via cosine
+2026-05-11 23:47:33 DEBUG    get_page() li_2025_llm_oe_review.pdf p25
+2026-05-11 23:58:35 INFO     search() query='completeness consistency conciseness quality dimensions knowledge graph definiti' files=['paulheim_2017_kg_refinement.pdf'] n=4
+2026-05-11 23:58:37 INFO     search() returned 4 hits via cosine
+2026-05-11 23:58:44 INFO     search() query='completeness consistency conciseness three dimensions quality metrics survey' files=['paulheim_2017_kg_refinement.pdf'] n=3
+2026-05-11 23:58:44 INFO     search() returned 3 hits via cosine
+2026-05-12 00:04:24 INFO     search() query='AutoGraph-R1 reinforcement learning reward signal schema fixed construction poli' files=['tsang_2025_autograph_r1.pdf'] n=5
+2026-05-12 00:04:24 INFO     search() returned 5 hits via cosine
+2026-05-12 00:04:28 INFO     search() query='graph schema ontology entity types relation types fixed predefined extraction' files=['tsang_2025_autograph_r1.pdf'] n=4
+2026-05-12 00:04:30 INFO     search() returned 4 hits via cosine
+2026-05-12 00:08:52 INFO     search() query='financial news primary driver market dynamics price movement' files=['dong_2024_fnspid.pdf'] n=4
+2026-05-12 00:08:52 INFO     search() returned 4 hits via cosine
+2026-05-12 00:08:52 INFO     search() query='event-driven subject predicate object triples stock price prediction deep neural' files=['ding_2015_stock_pred.pdf'] n=4
+2026-05-12 00:08:53 INFO     search() returned 4 hits via cosine
+2026-05-12 00:14:37 INFO     search() query='FinReflectKG reflection component iteration stopping criterion evaluation financ' files=['arun_2025_finreflectkg.pdf'] n=5
+2026-05-12 00:14:38 INFO     search() returned 5 hits via cosine
+2026-05-12 00:14:41 INFO     search() query='schema fixed predefined node types relationship types financial SEC filings extr' files=['arun_2025_finreflectkg.pdf'] n=4
+2026-05-12 00:14:41 INFO     search() returned 4 hits via cosine
+2026-05-12 00:41:55 INFO     sync() started
+2026-05-12 00:41:55 INFO     Found 34 PDFs on disk, 31 sources in index
+2026-05-12 00:41:55 DEBUG    Indexing ding_2016_kg_event_stock.pdf (bib_key=ding2016kgeventstock)
+2026-05-12 00:41:55 INFO     Indexed ding_2016_kg_event_stock.pdf — 64 chunks
+2026-05-12 00:41:55 DEBUG    Indexing hu_2018_chaotic_whispers.pdf (bib_key=hu2018chaoticwhispers)
+2026-05-12 00:41:55 INFO     Indexed hu_2018_chaotic_whispers.pdf — 84 chunks
+2026-05-12 00:41:55 DEBUG    Indexing xu_2018_stock_tweets.pdf (bib_key=xu2018stocktweets)
+2026-05-12 00:41:55 INFO     Indexed xu_2018_stock_tweets.pdf — 66 chunks
+2026-05-12 00:41:56 INFO     Embedding 214 chunks in batches of 100
+2026-05-12 00:41:58 DEBUG    Embedded batch 0–99
+2026-05-12 00:41:58 DEBUG    Embedded batch 100–199
+2026-05-12 00:42:00 DEBUG    Embedded batch 200–213
+2026-05-12 00:42:00 INFO     Finished embedding 214 chunks
+2026-05-12 00:42:00 INFO     sync() done — added=3 reindexed=0 removed=0 unchanged=31 embedded=214

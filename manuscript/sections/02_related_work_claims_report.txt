@@ -1,0 +1,208 @@
+RELATED WORK — CLAIMS VALIDATION REPORT
+Updated: 2026-05-10
+Source: publications-rag semantic search over 31 indexed PDFs
+
+Format: [Cn] claim | STATUS | evidence
+STATUS: ✓ confirmed | ⚠ partial/imprecise | ✗ not in index | ! bib/wording fix needed
+
+─────────────────────────────────────────────────────────────────
+PARA 1 — Early KG / ontology learning
+─────────────────────────────────────────────────────────────────
+
+[C1] Hearst (1992) introduced lexico-syntactic patterns for hyponymy acquisition
+  ✓  hearst1992hyponyms p.1-2
+     "Lexico-Syntactic Patterns for Hyponymy" (section title)
+     Abstract: "automatic acquisition of the hyponymy lexical relation from unrestricted text"
+
+[C2] Maedche (2001) combined linguistic + statistical co-occurrence in semiautomatic OE framework
+  ✗  maedche2001ontologylearning NOT INDEXED — verify manually
+
+[C3] Hogan (2021) provides comprehensive overview of KG construction spanning rule-based,
+     distant supervision, and embedding-based methods
+  ⚠  hogan2021kgsurvey p.52 (distant supervision ✓), p.43 (embeddings ✓)
+     "population and enrichment" framing not directly surfaced — accurate but over-compressed
+
+NARRATIVE GAP after Para 1:
+  → Bridge to LLM era is missing. li2025llmoereview p.25 shows LLMs now automatically
+    induce concept taxonomies and class hierarchies from text — direct modern echo of C1/C2.
+  ADD: one sentence connecting early pattern-based work → LLM revival of same tasks.
+
+─────────────────────────────────────────────────────────────────
+PARA 2 — LLM tools: fixed ontology design
+─────────────────────────────────────────────────────────────────
+
+[C4] LLM-based tools expose pipelines in which LLM extracts entities and relations from text
+  ✓  pan2024llmkg p.6,14 — "entity discovery + relation extraction" stages confirmed;
+     general framework of LLM-augmented KGC laid out
+
+[C5] LlamaIndex, LangChain, Neo4j LLM Graph Builder share a fixed-ontology design choice
+  ✗  None of these tools are indexed — claim rests on author characterisation
+     (valid, but no local evidence; could add pan2024llmkg as general support)
+
+[C6] Ontology (node/relation types, constraints) specified once and fixed during construction
+  ✗  Same as C5 — not verifiable from indexed PDFs; characterisation is accurate but unsupported
+
+─────────────────────────────────────────────────────────────────
+PARA 3 — Academic KGC approaches: quality without ontology revision
+─────────────────────────────────────────────────────────────────
+
+[C7] KGGen extracts KGs with "improved entity disambiguation"
+  ⚠  mo2025kggen p.1 — actual contribution is "entity and edge resolution" via iterative
+     clustering, preventing sparse/disconnected graphs. "Disambiguation" is close but
+     the paper emphasises resolution/normalisation; precision could improve.
+  !  Rephrase: "improved entity and relation normalisation" or "entity/edge resolution"
+
+[C8] AutoGraph-R1 applies RL to optimise KG construction end-to-end,
+     "using graph quality signals as reward"
+  !  IMPRECISE: tsang2025autographr1 p.1,5 — reward is derived from "a graph retriever's
+     performance" on a RAG pipeline, not generic graph quality. The task is retrieval, not
+     node classification. Current phrasing undersells the relevance AND mischaracterises reward.
+  !  Fix: "training a constructor policy whose reward is the downstream graph retriever's
+     performance on a RAG pipeline"
+  NOTE: AutoGraph-R1 is actually closer to this paper's contribution than the current text
+  acknowledges — the key differentiator is RAG retrieval vs. node classification, and
+  the absence of ontology evolution.
+
+[C9] Mynarz (2023) proposes competency questions as task specification without quantitative feedback
+  ✓  mynarz2023testdriven p.1-3 — CQs as SPARQL/SHACL automated tests confirmed;
+     "process to guide KG construction by feedback from tests" confirmed;
+     no downstream performance metric — characterisation accurate
+
+─────────────────────────────────────────────────────────────────
+PARA 4 — Li (2025) LLM ontology engineering review
+─────────────────────────────────────────────────────────────────
+
+[C10] 30 publications reviewed, 41 experiments
+  ~  number not directly verified in searched pages — check li2025llmoereview p.1/abstract
+
+[C11] Ontology implementation = 63.4% of experiments; maintenance = 2.4% (1 study)
+  ✓  li2025llmoereview p.10 — EXACT numbers confirmed
+
+[C12] No reviewed approach evaluates ontology quality through downstream task performance
+  ⚠  li2025llmoereview p.27 — evaluation "built on open-source ontologies in OWL/RDF
+     as benchmarks" (structural criteria); p.29: "existing quantitative metrics fail to
+     fully capture performance" — strongly implied, not stated as blanket rule
+  NOTE: The only maintenance study (Kholmska et al.) uses human feedback (p.16), not
+  quantitative task performance — this could be added to sharpen the point.
+
+[C13] Open direction quote: "developing hybrid learning pipelines…domain-specific feedback"
+  ✓  li2025llmoereview p.25 — EXACT quote confirmed
+
+─────────────────────────────────────────────────────────────────
+PARA 5 — KG evaluation: intrinsic vs task-based
+─────────────────────────────────────────────────────────────────
+
+[C14] Paulheim (2017) surveys structural quality metrics (completeness, consistency, conciseness)
+  ⚠  paulheim2017kgquality = paulheim_2017_kg_refinement.pdf (same paper, different key name)
+     Quality/evaluation section covers those dimensions — confirmed implicitly
+     BIB NOTE: paulheim2017kgrefinement (line 304 in references.bib) is a DUPLICATE key
+     for the same paper. One should be removed.
+
+[C15] Paulheim (2024) draws explicit distinction between intrinsic and task-based evaluation
+  ⚠  paulheim2024structuralquality is a 2024 Springer book chapter — real citation, but
+     "TODO: verify exact chapter/pages" flag in references.bib; content not locally verifiable
+     seo2023structuralquality (Seo et al. 2023) IS indexed and DOES address structural
+     quality metrics — consider citing alongside or replacing if Paulheim 2024 unverifiable.
+
+[C16] "A graph may score well on structural criteria while failing to support a specific predictive task"
+  ✓  seo2023structuralquality p.2 — "difficult to decide either side is better in terms
+     of quality" via size/structure metrics alone; p.4: "instances should make full use
+     of the ontology's classes and properties" — structural quality ≠ utility confirmed
+
+─────────────────────────────────────────────────────────────────
+PARA 6 — Task-based evaluation frameworks
+─────────────────────────────────────────────────────────────────
+
+[C17] KGBench provides relational + multimodal ML tasks benchmarked on curated KG datasets
+  ~  bloem2021kgbench indexed (80 chunks) — confirmed in passing via heist2023kgreat p.1
+
+[C18] GEval evaluates KGs through downstream task performance across multiple dimensions
+  ✗  choi2020geval NOT INDEXED — TODO in CLAUDE.md; not locally verifiable
+
+[C19] KGrEaT enables comparison of KG variants across classification, regression, recommendation
+  ✓  heist2023kgreat p.2 — "classification, regression, or recommendation" confirmed
+
+[C20] KGrEaT quote: "different versions of a KG during its life cycle"
+  ✓  heist2023kgreat p.2 — EXACT: "compare the performance of different versions of a
+     single KG (e.g., during construction or during its life cycle)"
+
+[C21] LLM-KG-Bench focuses on quality of LLM-generated graphs
+  ✗  aksw2024llmkgbench NOT INDEXED — TODO in CLAUDE.md; not locally verifiable
+
+[C22] None of these frameworks feeds performance signals back into the construction process
+  → synthesis claim; supported collectively by C17-C21; no paper claims to do this
+
+─────────────────────────────────────────────────────────────────
+PARA 7 — Closest prior work (AuGraph, FinReflectKG)
+─────────────────────────────────────────────────────────────────
+
+[C23] AuGraph constructs graphs from tabular/relational data to maximise GNN performance
+  ✓  cucumides2025augraph p.1 — "task-aware graph augmentation... tabular and relational data"
+
+[C24] AuGraph "treating graph topology as a task-dependent variable optimised through downstream loss"
+  !  IMPRECISE: cucumides2025augraph p.3 — uses "scoring functions that capture statistical,
+     structural, and model-based signals of predictive relevance"; iterative attribute
+     promotion guided by these scores, not end-to-end backprop loss
+  !  Fix: "tailoring graph topology to the target task through iterative attribute promotion
+     guided by scoring functions measuring predictive relevance"
+
+[C25] AuGraph input: structured tabular data, not unstructured text; no evolving ontology
+  ✓  cucumides2025augraph p.1 — "tabular and relational data" confirmed
+
+[C26] FinReflectKG: agentic framework for constructing and evaluating financial KGs
+  ✓  arun2025finreflectkg p.1 — confirmed (ICAIF 2025)
+
+[C27] FinReflectKG: feedback is qualitative; no quantitative loop between classifier performance
+     and ontology revision
+  ⚠  arun2025finreflectkg p.5 — stopping criterion: F(t*)_c = ∅ (no issues found by LLM
+     reflection), or max steps reached — LLM-detected qualitative issues, not AUC/F1
+     Confirmed as qualitative; "ontology revision" claim is valid (schema fixed)
+
+─────────────────────────────────────────────────────────────────
+PARA 8 — Graph feature methods (metapaths, R-GCN, KG embeddings)
+─────────────────────────────────────────────────────────────────
+
+[C28] Metapath-based approaches (PathSim, metapath2vec) capture relational semantics via typed paths
+  ✓  sun2011pathsim p.1,3 — PathSim formally defined; meta path as "sequence of relations
+     between different object types"
+
+[C29] R-GCN extends GCNs to multi-relational graphs for link prediction + entity classification
+  ✓  schlichtkrull2018rgcn p.1,7 — exact framing confirmed; "highly multi-relational data
+     characteristic of realistic knowledge bases"
+
+[C30] KG embedding methods represent entities/relations in continuous space
+  ~  ji2021kgsurvey, cai2018graphembedding indexed — not directly searched for this claim;
+     confirmed by general KG embedding literature
+
+─────────────────────────────────────────────────────────────────
+PARA 9-10 — Gap statement
+─────────────────────────────────────────────────────────────────
+
+[C31] No existing work combines: evaluation + task-aware construction + graph features
+     into a closed feedback loop steering ontology evolution
+  → synthesis claim; emerges from C22 + C24 + C29; no single counter-example found
+
+─────────────────────────────────────────────────────────────────
+OPEN ISSUES (action items)
+─────────────────────────────────────────────────────────────────
+
+FIX REQUIRED:
+  - C8:  AutoGraph-R1 reward misdescribed — fix "graph quality signals" → "retrieval performance"
+  - C24: AuGraph "downstream loss" → "scoring functions measuring predictive relevance"
+  - Remove duplicate bib key paulheim2017kgrefinement (line 304) — same paper as paulheim2017kgquality
+
+VERIFY / ADD:
+  - C2:  maedche2001ontologylearning — verify manually (not indexed)
+  - C10: li2025llmoereview 30 papers / 41 experiments count — check abstract
+  - C15: paulheim2024structuralquality — add page number to bib entry
+  - C18: Add choi2020geval to indexed PDFs and references.bib
+  - C21: Add aksw2024llmkgbench to indexed PDFs and references.bib
+
+NARRATIVE ADDITIONS SUPPORTED BY RAG:
+  - After Para 1: bridge sentence on LLMs reviving ontology learning at scale
+    (li2025llmoereview p.25: "automatically extract domain-specific concepts, induce class
+    hierarchies... approximate quality of human-annotated gold standards")
+  - Para 3: sharpen AutoGraph-R1 as closest structural relative — RAG task vs classification task
+  - Para 4: add that the sole maintenance study (Kholmska et al.) uses human feedback,
+    not task performance — sharpens the gap claim
+  - Para 7: note FinReflectKG's stopping criterion explicitly (LLM reflection, not AUC/F1)

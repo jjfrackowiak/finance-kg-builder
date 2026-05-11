@@ -37,7 +37,16 @@ manuscript/
     07_discussion.tex
     08_conclusion.tex
   figures/              ← PDF/PNG exports of plots and diagrams
-  *.pdf / *.docx        ← reference materials (do not edit)
+  publications/         ← PDFs indexed by publications-rag MCP; add papers here
+    publications_rag.py    ← MCP server + CLI for semantic search
+    publications_rag.log   ← runtime log (INFO/DEBUG ops, WARNING/ERROR to stderr)
+    .rag_index.db          ← SQLite index (auto-managed, do not edit)
+  resources/            ← read-only reference materials (do not edit)
+    Abstract.docx                          ← early abstract draft
+    Graph Ideas.docx                       ← ontology/graph design notes
+    Research Project Description.pdf       ← PhD project proposal
+    WNE-Seminar-QFRG-DSLAB-13-04-26.pptx  ← seminar slides (hypotheses, framing)
+    WRITING_PLAN.md                        ← section-by-section writing plan
 ```
 
 ---
@@ -88,6 +97,28 @@ MATCH (n) WHERE n.step = 2 RETURN labels(n)[0] AS type, count(*) AS cnt ORDER BY
 MATCH ()-[r]->() WHERE 'step_2_candidate_1' IN coalesce(r.candidate_tags, [])
 RETURN type(r), count(*) AS cnt
 ```
+
+---
+
+### `publications-rag` — semantic search over local PDFs
+
+Indexes every PDF in `manuscript/publications/` by page. Storage: SQLite at `publications/.rag_index.db`. Search: OpenAI `text-embedding-3-small` cosine similarity (reads `OPENAI_API_KEY` from project root `.env`); falls back to BM25 if no key. The index persists across sessions — embeddings are stored as BLOBs and only re-generated for new/modified files.
+
+**Filename → bib key convention** (auto-derived, no config needed):
+`heist_2023_kgreat.pdf` → `heist2023kgreat` — strips underscores and merges parts.
+
+**Adding a paper:** drop the PDF into `publications/` following the `lastname_year_shortname.pdf` convention, then call `sync()`. That's it.
+
+**Removing a paper:** delete the file from `publications/`, then call `sync()`. All chunks are purged from the index.
+
+**When to call `sync()`:** once at the start of any session where you've added or removed PDFs since last time. The index is persistent so existing papers don't need re-indexing.
+
+**Typical workflow when writing a section:**
+1. `search("task-based evaluation downstream feedback", files=["heist_2023_kgreat.pdf", "cucumides_2025_augraph.pdf"])` — find relevant passages
+2. `get_page("heist_2023_kgreat.pdf", 4)` — verify exact wording before writing it into `.tex`
+3. Cite using the `bib_key` field returned in search results
+
+Server script: `manuscript/publications/publications_rag.py` (self-contained via `uv run`, dependencies declared inline). Logs go to `manuscript/publications/publications_rag.log`.
 
 ---
 
@@ -157,6 +188,20 @@ The **immovable sections** (Related Work, Hypotheses, Methodology) do not depend
 - All claims backed by either: (a) citation, (b) Neo4j query result, or (c) codebase reference
 - Figures preferred over tables for trends; tables for precise numbers
 - No placeholder text left in submitted draft — mark incomplete sections with `% TODO: ...` comments
+
+### Citation quality rule
+
+Every citation must be backed by a specific claim, result, or method from that paper — not just topical overlap. Before adding a `\citet`/`\citep`, verify:
+
+1. The cited paper actually states or demonstrates what the sentence claims.
+2. The venue is recognised (peer-reviewed conference, journal, or established arXiv preprint with clear authorship).
+3. The sentence text reflects what the paper does — not a paraphrase of a survey that describes it.
+
+**Example of what not to do:** citing an edited survey volume for "methods for inducing concept hierarchies using linguistic patterns" — the survey describes those methods but did not introduce them. Cite the paper that introduced the specific method (e.g. Hearst 1992 for lexico-syntactic hyponymy patterns).
+
+When adding a new reference, use WebSearch with `site:aclanthology.org`, `site:dblp.org`, or `site:semanticscholar.org` to find the canonical source and its exact BibTeX.
+
+---
 
 ### Citation format — author-year (natbib)
 

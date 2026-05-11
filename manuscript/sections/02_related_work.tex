@@ -1,38 +1,72 @@
-Knowledge graphs have become a central representation for structured knowledge extracted
-from text. Early work on ontology learning~\cite{buitelaar2005ontologylearning} established
-methods for inducing concept hierarchies and relations from corpora using linguistic
-patterns and statistical co-occurrence. \citet{hogan2021kgsurvey} provide a comprehensive
-overview of KG construction, population, and enrichment approaches spanning rule-based
-systems, distant supervision, and embedding-based methods.
-
 The advent of large language models has substantially lowered the barrier to KG
-construction at scale. Tools such as LlamaIndex~\cite{liu2022llamaindex},
-LangChain~\cite{chase2022langchain}, and the Neo4j LLM Knowledge Graph
-Builder~\cite{neo4j2024llmgraphbuilder} expose pipelines in which an LLM is prompted to
-extract entities and relations from text, optionally constrained by a user-supplied schema.
-These tools have seen wide adoption but share a fundamental design choice: the ontology
---- node types, relation types, and constraints --- is specified once and remains fixed for
-the duration of construction.
+construction at scale, and the popularity of this approach has led to a proliferation of tools and frameworks for LLM-augmented KG construction.
+\citet{pan2024llmkg} survey this landscape, classifying LLM-augmented construction methods
+by the role of the LLM --- entity discovery, relation extraction, end-to-end generation, or
+knowledge distillation. In knowledge graph building three dominant open source providers are LlamaIndex, LangChain, and Neo4j. 
+LlamaIndex~\citep{liu2022llamaindex} offers three extraction strategies for property graph
+construction~\citep{llamaindex2024propertygraph}: a schema-free extractor in which the LLM
+assigns entity and relation types freely (\texttt{SimpleLLMPathExtractor}); a strict schema
+extractor that enforces a user-defined list of allowed types
+(\texttt{SchemaLLMPathExtractor}); and a guided extractor that accepts an initial type list
+as non-binding hints while permitting the LLM to introduce novel types
+(\texttt{DynamicLLMPathExtractor}).
+LangChain's \texttt{LLMGraphTransformer}~\citep{chase2022langchain,
+bratanic2024llmgraphtransformer} follows a similar pattern.
+In both modes users may supply \texttt{allowed\_nodes} and \texttt{allowed\_relationships}
+as schema constraints, with a strict flag that discards extractions violating the schema.
+The Neo4j LLM Knowledge Graph Builder~\citep{neo4j2024llmgraphbuilder,
+neo4jdocs2024kgbuilder} offers three schema modes: a user-supplied schema of node types,
+relationship types, and valid source--relation--target triples; an auto-extracted schema
+inferred from the input text in a single upfront LLM call and held fixed thereafter; and a
+free mode with no schema.
 
-More recent academic approaches address extraction quality without revisiting the ontology
-question. \citet{mo2025kggen} propose KGGen, which extracts KGs from plain text using
-language models with improved entity disambiguation. \citet{tsang2025autographr1} apply
-reinforcement learning to optimise KG construction end-to-end, using graph quality signals
-as reward. \citet{mynarz2023testdriven} propose a test-driven approach in which competency
-questions drive extraction, providing a form of task specification without a quantitative
-feedback loop. In all these methods, ontology design remains a pre-construction decision
-rather than an adaptive variable.
+These tools have seen wide adoption but share a fundamental design choice: the ontology
+--- node types, relation types, and constraints --- is specified arbitrarily and remains fixed for
+the duration of construction or even sometimes is built ad hoc by the LLM without an explicit schema.
+
+Several academic approaches try to bridge triple extraction quality and task specification.
+\citet{mo2025kggen} propose KGGen, which extracts KGs from plain text using language models
+with improved entity and relation normalisation: an iterative clustering step collapses the
+near-duplicate relation types that open extraction produces, yielding denser and more
+connected graphs.
+\citet{mynarz2023testdriven} propose a test-driven approach in which competency questions,
+formalised as SPARQL queries, drive extraction --- providing a
+form of task specification without a quantitative feedback loop.
+
+\citet{li2025llmontologyreview} provide the most comprehensive survey to date of LLMs
+across the ontology engineering lifecycle, reviewing 30 publications and 41 experiments
+spanning requirements specification, conceptualisation, encoding, ontology matching, and
+maintenance.
+The distribution of effort is stark: ontology implementation accounts for 63.4\% of studied
+experiments, while ontology revision and maintenance has been
+addressed by a single study (2.4\%).
+The survey names the consequences directly: ``support across the ontology lifecycle is
+uneven, with maintenance particularly underexplored,'' and finds that ``evaluation practices
+are fragmented, as existing quantitative metrics fail to fully capture
+performance''~\citep{li2025llmontologyreview}.
+
+Across all reviewed studies, evaluation targets the ontology directly: the metrics in every
+case --- precision, recall, F1 --- are applied against ontology benchmarks such as the
+Ontology Alignment Evaluation Initiative (OAEI) rather than against a downstream
+application.
+
+The survey closes by identifying ontology revision and maintenance as an open direction: 
+``Future research directions may include developing hybrid learning
+pipelines that allow LLMs to continuously integrate domain updates \ldots\ thereby supporting
+ongoing validation and refinement based on domain-specific
+feedback''~\citep{li2025llmontologyreview}.
 
 The evaluation of knowledge graphs has historically been conducted through intrinsic,
-structural quality metrics. \citet{paulheim2017kgquality} survey a broad class of such
-metrics, covering completeness, consistency, and conciseness. More recently,
+structural quality metrics. \citet{paulheim2017kgquality} survey methods for KG completion
+and error detection, evaluating them against structural criteria such as precision and recall
+on missing type and relation assertions. More recently,
 \citet{paulheim2024structuralquality} draw an explicit distinction between this intrinsic
 mode of evaluation and task-based evaluation --- assessing a KG by its utility on
 a concrete downstream application. This distinction is central to the motivation of the
 present work: a graph may score well on structural criteria while failing to support a
 specific predictive task.
 
-Several frameworks have operationalised task-based KG evaluation. KGBench~\cite{bloem2021kgbench}
+Several frameworks try to standardise task-based KG evaluation. KGBench~\cite{bloem2021kgbench}
 provides a suite of relational and multimodal machine learning tasks benchmarked on
 curated KG datasets. GEval~\cite{choi2020geval} offers a software framework for evaluating
 KGs through downstream task performance across multiple dimensions.
@@ -45,42 +79,61 @@ confirm that task utility cannot be inferred from structural properties alone --
 of them feeds performance signals back into the construction process itself.
 
 The closest prior work to our approach concerns task-aware graph construction.
+\citet{tsang2025autographr1} introduce AutoGraph-R1, the first framework to directly
+optimise KG construction for task performance using reinforcement learning: an LLM
+constructor is trained as a policy whose reward derives from the graph's functional utility
+in a downstream RAG retrieval pipeline.
+AutoGraph-R1 shares with our approach the core principle of aligning construction with a
+downstream objective; the critical differences are that its reward derives from retrieval
+performance in a RAG pipeline rather than a node-level classifier, the RL policy optimises
+extraction density and triple relevance within an open-schema setting rather than selecting
+among ontology configurations, and there is no mechanism for explicit schema evolution.
+
 \citet{cucumides2025augraph} propose constructing graphs from tabular and relational data
-to maximise GNN performance on a target task, treating graph topology as a
-task-dependent variable optimised through downstream loss. However, their setting
-involves structured tabular input rather than unstructured text, and the construction is
-not driven by an evolving ontology.
+to maximise GNN performance on a target task, tailoring graph topology through iterative
+process where each attribute's predictive
+relevance is assessed. However, their setting involves structured tabular input rather than unstructured
+text, and the construction is not driven by an evolving ontology.
 
-In the financial domain, \citet{arun2025finreflectkg} introduce FinReflectKG, an agentic
-framework for constructing and evaluating financial knowledge graphs. Their system includes
-an evaluation component that scores the extracted KG, but feedback is qualitative and does
-not close a quantitative loop between classifier performance and ontology revision. Both
-works share the recognition that graph structure should be task-conditioned; neither
-implements an automated, iterative feedback mechanism of the kind we propose.
+The financial domain chosen for this study provides a natural testbed for task-conditioned KG construction.
+Financial news significantly influences market dynamics~\citep{dong2024fnspid}, and a long
+line of work has explored how to represent its informational content as structured graphs
+for downstream prediction.
+\citet{ding2015stockpred} demonstrate that event-driven representations of financial
+news --- structured as subject--predicate--object triples capturing who did what to whom
+--- yield strong signals for short- and medium-term stock price movement when combined with deep neural
+networks.
+Subsequent work confirms and extends this finding: \citet{ding2016kgeventstock} show that
+enriching event representations with knowledge graph embeddings further improves prediction
+accuracy, and attention-based models over news sequences~\citep{hu2018chaoticwhispers} and
+financial social media text~\citep{xu2018stocktweets} demonstrate the breadth of the
+predictive signal across sources and markets.
 
-A complementary body of work addresses how to derive informative features from knowledge
-graphs for downstream prediction. Metapath-based approaches~\cite{sun2011pathsim,
-dong2017metapath2vec} exploit typed paths in heterogeneous graphs to capture relational
-semantics between node pairs. Relational Graph Convolutional Networks
-(R-GCN)~\cite{schlichtkrull2018rgcn} extend GCNs to multi-relational graphs, learning
-embeddings that respect relation type. Knowledge graph embedding methods survey a broad
-class of techniques for representing entities and relations in continuous
-space~\cite{wang2017kgsurvey, ji2021kgcompletion}, supporting link prediction and
-node-level classification.
+The key design question such approaches leave open is how to define the event schema:
+which entity types and relation types should be extracted from news to maximise
+predictive utility.
 
-These methods share the assumption that the knowledge graph is given and fixed; feature
-engineering, embedding, or message-passing then operates over the resulting structure. In
-our framework we draw on metapath counting and relation type histograms as components of
-the feature vector, but the graph from which these features are derived is itself adapted
-in response to the downstream task. Rather than learning better from a fixed
-graph, we ask what graph structure produces the most learnable features.
+\citet{arun2025finreflectkg} introduce FinReflectKG, a pipeline for constructing financial
+KGs from SEC 10-K filings using a pre-configured schema of entity and relationship types
+specific to financial regulatory documents.
+An LLM-based reflection component iterates to correct extraction errors within this fixed
+schema until no issues are detected or a step budget is exhausted.
 
-Taken together, the literature reveals a consistent gap. Evaluation frameworks demonstrate
-that KG utility is task-dependent~\cite{heist2023kgreat, bloem2021kgbench}; task-aware
-construction methods show that graph structure can be conditioned on downstream
-objectives~\cite{cucumides2025augraph}; and graph feature methods show how to extract
-predictive signal from heterogeneous graphs~\cite{sun2011pathsim, schlichtkrull2018rgcn}.
-Yet no existing work combines these strands into a closed feedback loop in which a
-lightweight node-level predictor directly steers ontology evolution at construction time.
-The present paper addresses this gap by treating the KG ontology as a hyperparameter
-and iteratively refining it based on quantitative downstream performance signals.
+Taken together, the literature reveals a consistent gap.
+Evaluation frameworks confirm that KG utility is task-dependent and cannot be inferred
+from structural properties alone~\citep{heist2023kgreat, bloem2021kgbench}.
+Task-aware construction methods demonstrate that graph structure can be aligned with
+downstream objectives~\citep{cucumides2025augraph, tsang2025autographr1}, and
+many researchers assume that event-driven representations of financial news carry
+strong predictive signals for market classification~\citep{ding2015stockpred, ding2016kgeventstock,
+hu2018chaoticwhispers, xu2018stocktweets}.
+Yet no existing work closes the loop: temporal KG methods evolve facts within a fixed
+schema~\citep{trivedi2017knowevolve}; task-aware methods adapt topology or extraction reward
+without revising the ontology~\citep{cucumides2025augraph, tsang2025autographr1};
+financial KG systems such as FinReflectKG~\citep{arun2025finreflectkg} iterate within a
+pre-configured schema; and ontology engineering surveys identify schema maintenance as the
+most underexplored stage of the lifecycle~\citep{li2025llmontologyreview}.
+No existing method treats the KG ontology --- the choice of node types, relation types,
+and constraints --- as a hyperparameter to be optimised through a closed feedback loop
+between a downstream classifier and the construction process.
+The present paper addresses this gap directly.

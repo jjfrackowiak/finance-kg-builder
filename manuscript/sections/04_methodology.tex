@@ -1,2 +1,28 @@
 % 04_methodology — stub
 \TODO{Write this section}
+
+% --- moved from Related Work: feature engineering context ---
+% Place this block in the Feature Engineering subsection when drafting.
+
+A complementary body of work addresses how to derive informative features from knowledge
+graphs for downstream prediction.
+Selected methods operate on heterogeneous information networks (HINs) --- networks whose nodes
+and edges carry type labels defined by an explicit network schema~\citep{shi2017hinsurvey}.
+Metapath-based approaches~\cite{sun2011pathsim, dong2017metapath2vec} exploit typed paths
+in such networks to capture relational semantics between node pairs.
+Knowledge graph embedding methods survey a broad class of techniques for representing
+entities and relations in continuous space~\cite{wang2017kgsurvey, ji2021kgcompletion},
+supporting link prediction and node-level classification.
+Temporal extensions of this family, such as Know-Evolve~\citep{trivedi2017knowevolve},
+model facts and entity representations evolving over time within a fixed schema.
+
+All these methods share the assumption that the HIN schema --- the set of node types and
+relation types --- is given and fixed; feature engineering, embedding, or message-passing
+then operates over the resulting structure.
+Even temporal extensions model what changes within a fixed schema, not how the schema
+itself should be designed.
+In our framework we draw on metapath counting and relation type histograms as components
+of the feature vector, but the network schema from which these features are derived is
+itself adapted in response to the downstream task.
+Rather than learning better representations from a fixed graph, we ask what schema
+produces the most predictively useful structure.
