@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "neo4j": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["mcp-neo4j-cypher"]
+    },
+    "publications-rag": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "/Users/mac/Desktop/Research and Study/Doktorat/downstream-finance-graph/finance-kg-builder/manuscript/publications/publications_rag.py"
+      ]
+    },
+    "arxiv-latex-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["arxiv-latex-mcp"]
+    },
+    "drawio": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@drawio/mcp"]
+    }
+  }
+}
