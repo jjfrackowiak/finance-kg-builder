@@ -2,7 +2,7 @@ The advent of large language models has substantially lowered the barrier to KG
 construction at scale, and the popularity of this approach has led to a proliferation of tools and frameworks for LLM-augmented KG construction.
 \citet{pan2024llmkg} survey this landscape, classifying LLM-augmented construction methods
 by the role of the LLM --- entity discovery, relation extraction, end-to-end generation, or
-knowledge distillation. In knowledge graph building three dominant open source providers are LlamaIndex, LangChain, and Neo4j. 
+knowledge distillation. Among open-source frameworks, LlamaIndex, LangChain, and Neo4j are the dominant providers.
 LlamaIndex~\citep{liu2022llamaindex} offers three extraction strategies for property graph
 construction~\citep{llamaindex2024propertygraph}: a schema-free extractor in which the LLM
 assigns entity and relation types freely (\texttt{SimpleLLMPathExtractor}); a strict schema
@@ -43,12 +43,9 @@ addressed by a single study (2.4\%).
 The survey names the consequences directly: ``support across the ontology lifecycle is
 uneven, with maintenance particularly underexplored,'' and finds that ``evaluation practices
 are fragmented, as existing quantitative metrics fail to fully capture
-performance''~\citep{li2025llmontologyreview}.
-
-Across all reviewed studies, evaluation targets the ontology directly: the metrics in every
-case --- precision, recall, F1 --- are applied against ontology benchmarks such as the
-Ontology Alignment Evaluation Initiative (OAEI) rather than against a downstream
-application.
+performance''~\citep{li2025llmontologyreview}; across all reviewed studies, precision,
+recall, and F1 are applied against ontology benchmarks such as the Ontology Alignment
+Evaluation Initiative (OAEI), not against a downstream application.
 
 The survey closes by identifying ontology revision and maintenance as an open direction: 
 ``Future research directions may include developing hybrid learning
@@ -68,8 +65,7 @@ specific predictive task.
 
 Several frameworks try to standardise task-based KG evaluation. KGBench~\cite{bloem2021kgbench}
 provides a suite of relational and multimodal machine learning tasks benchmarked on
-curated KG datasets. GEval~\cite{choi2020geval} offers a software framework for evaluating
-KGs through downstream task performance across multiple dimensions.
+curated KG datasets.
 KGrEaT~\cite{heist2023kgreat} enables systematic comparison of KG variants across
 classification, regression, and recommendation tasks; the framework explicitly supports
 comparison of ``different versions of a KG during its life cycle,'' precisely the kind of
@@ -108,10 +104,6 @@ enriching event representations with knowledge graph embeddings further improves
 accuracy, and attention-based models over news sequences~\citep{hu2018chaoticwhispers} and
 financial social media text~\citep{xu2018stocktweets} demonstrate the breadth of the
 predictive signal across sources and markets.
-
-The key design question such approaches leave open is how to define the event schema:
-which entity types and relation types should be extracted from news to maximise
-predictive utility.
 
 \citet{arun2025finreflectkg} introduce FinReflectKG, a pipeline for constructing financial
 KGs from SEC 10-K filings using a pre-configured schema of entity and relationship types

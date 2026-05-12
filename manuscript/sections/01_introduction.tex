@@ -13,17 +13,12 @@ ultimately used.
 Existing KG construction tools --- from manual ontology engineering to LLM-driven
 frameworks such as LlamaIndex and LangChain --- treat the ontology as a fixed design
 choice established before construction begins and unchanged throughout.
-Evaluation of the resulting graph is typically conducted through structural
-quality metrics: completeness, consistency, and redundancy~\cite{paulheim2017kgquality}.
-\citet{paulheim2024structuralquality} draw a sharp distinction between this
-intrinsic mode of evaluation and task-based evaluation --- assessing a
-KG by its utility on a concrete downstream application. Frameworks such as
-KGrEaT~\cite{heist2023kgreat} and KGBench~\cite{bloem2021kgbench} try to formalise the approach to such evaluations.
-As \citet{heist2023kgreat} observe: \textit{``Performance indicators may
-be used to make an informed decision when picking a KG for a given task\ldots\ and to
-compare different versions of a KG during its life cycle.''} Yet despite this insight,
-no existing work closes the loop at construction time: no downstream evaluation signal has been used to directly steer KG ontology evolution during the
-building process itself
+Evaluation has historically relied on structural quality metrics independent of any
+downstream task~\citep{paulheim2017kgquality}, and while frameworks such as
+KGrEaT~\citep{heist2023kgreat} and KGBench~\citep{bloem2021kgbench} demonstrate that
+task-based evaluation is feasible, no existing work closes the loop at construction time:
+no downstream performance signal has been used to steer KG ontology evolution during the
+construction process itself.
 
 This paper aims to address the gap between graph construction and downstream task
 performance by introducing a feedback-driven framework in which the KG

@@ -1,28 +1,228 @@
-% 04_methodology — stub
-\TODO{Write this section}
+\subsection{Framework Overview}
+\label{sec:framework}
 
-% --- moved from Related Work: feature engineering context ---
-% Place this block in the Feature Engineering subsection when drafting.
+We treat the KG ontology as a hyperparameter optimised for downstream task performance through
+a closed feedback loop.
+An ontology $\mathcal{O}$ specifies the permitted node types, relationship types, and valid
+source--relation--target patterns used to extract a typed knowledge graph $\mathcal{G}(\mathcal{O})$
+from a text corpus.
+Given a feature extractor $f$ and a downstream classifier $\mathcal{M}$, the loop iterates:
 
-A complementary body of work addresses how to derive informative features from knowledge
-graphs for downstream prediction.
-Selected methods operate on heterogeneous information networks (HINs) --- networks whose nodes
-and edges carry type labels defined by an explicit network schema~\citep{shi2017hinsurvey}.
-Metapath-based approaches~\cite{sun2011pathsim, dong2017metapath2vec} exploit typed paths
-in such networks to capture relational semantics between node pairs.
-Knowledge graph embedding methods survey a broad class of techniques for representing
-entities and relations in continuous space~\cite{wang2017kgsurvey, ji2021kgcompletion},
-supporting link prediction and node-level classification.
-Temporal extensions of this family, such as Know-Evolve~\citep{trivedi2017knowevolve},
-model facts and entity representations evolving over time within a fixed schema.
+\begin{equation}
+\mathcal{O}^{(t+1)} = \mathrm{EvolveAgent}\!\left(
+  \mathcal{O}^{(t)},\;
+  \mathrm{AUC}\!\left(\mathcal{M}\!\left(f\!\left(\mathcal{G}\!\left(\mathcal{O}^{(t)}\right)\right)\right)\right)
+\right)
+\label{eq:loop}
+\end{equation}
 
-All these methods share the assumption that the HIN schema --- the set of node types and
-relation types --- is given and fixed; feature engineering, embedding, or message-passing
-then operates over the resulting structure.
-Even temporal extensions model what changes within a fixed schema, not how the schema
-itself should be designed.
-In our framework we draw on metapath counting and relation type histograms as components
-of the feature vector, but the network schema from which these features are derived is
-itself adapted in response to the downstream task.
-Rather than learning better representations from a fixed graph, we ask what schema
-produces the most predictively useful structure.
+At each step $t$, the Evolution Agent proposes $K$ candidate ontologies derived from the current
+best.
+For each candidate, a graph is constructed from the input corpus, structural features are computed
+per trading day, and an XGBoost classifier is trained and evaluated on a downstream prediction task.
+The candidate with the highest validation AUC is selected as the seed for the next step; the loop
+terminates when the step budget is exhausted.
+
+\subsection{Ontology Representation and Base Schema}
+\label{sec:ontology-repr}
+
+An ontology candidate $\mathcal{O}$ is represented as a triple $(\mathcal{T}_N, \mathcal{T}_R,
+\mathcal{C})$, where $\mathcal{T}_N$ is a set of typed node definitions (label plus property
+schema), $\mathcal{T}_R$ is a set of relationship type strings, and $\mathcal{C}$ is a set of
+valid (source, relation, target) triple patterns.
+Additional boolean flags (\texttt{additional\_node\_types}, \texttt{additional\_relationship\_types},
+\texttt{additional\_patterns}) permit the LLM extractor to propose types beyond the explicit schema
+when warranted by the text.
+
+The base ontology $\mathcal{O}^{(0)}$ is fixed and minimal:
+$\mathcal{T}_N = \{\texttt{Company},\allowbreak\,\texttt{Article},\allowbreak\,\texttt{Author},\allowbreak\,\texttt{Day}\}$;
+$\mathcal{T}_R = \{\texttt{MENTIONS},\allowbreak\,\texttt{RELATES\_TO},\allowbreak\,\texttt{WRITTEN\_BY},\allowbreak\,\texttt{PUBLISHED\_ON}\}$;
+and three base patterns: Article$\to$MENTIONS$\to$Company, Article$\to$WRITTEN\_BY$\to$Author,
+Article$\to$PUBLISHED\_ON$\to$Day.
+This base structure is built once without LLM extraction and shared by all subsequent candidates.
+
+\paragraph{Dataset and storage.}
+The framework is instantiated on the FNSPID dataset~\citep{dong2024fnspid}, a corpus of financial
+news articles linked to NASDAQ stock price time series.
+Each trading day receives a binary label $y_d = \mathbf{1}[\text{next-day return} > 0]$ stored as
+a property on the corresponding \texttt{Day} node.
+All graph data are stored in a Neo4j AuraDB instance.
+
+\subsection{KG Construction and Candidate Isolation}
+\label{sec:construction}
+
+\paragraph{LLM extraction.}
+For each article, an \texttt{IncrementalArticleKGMutator} invokes an LLM with a structured prompt
+specifying the candidate ontology and requesting a JSON response of the form
+\texttt{\{"nodes":\,[...],\,"relationships":\,[...]\}}.
+Extracted nodes carry a label, a canonical key, and a property dictionary; relationships carry a
+type, source key, and target key.
+Company nodes are keyed by stock ticker (\texttt{NVDA}, \texttt{AAPL}); all other types are keyed
+by a lowercase name slug to promote cross-article deduplication.
+Infrastructure labels (\texttt{Article}, \texttt{Day}) are managed by the orchestrator and silently
+discarded if the LLM produces them.
+
+\paragraph{Candidate isolation.}
+Multiple ontology candidates are evaluated within a single shared Neo4j database to avoid redundant
+storage.
+Isolation is enforced through a \texttt{candidate\_tags} list property on every node and
+relationship.
+When building candidate $c$, newly extracted entities may link only to entities whose
+\texttt{candidate\_tags} intersect with the accepted set --- comprising the base structure and the
+winners of all previous steps.
+Entities from sibling candidates at the same step cannot be cross-linked.
+After evaluation, the tags of losing candidates are pruned from the graph; nodes and relationships
+are retained because they may be shared across candidates.
+
+\paragraph{Entity deduplication.}
+After each candidate build, a two-pass APOC \texttt{mergeNodes} procedure collapses duplicates:
+first by matching label and lowercased name, then by matching label and uppercased canonical key.
+Properties and relationships are merged rather than deleted, so no extracted information is lost.
+
+\paragraph{Temporal integrity.}
+To prevent look-ahead, each article's chain extraction uses the article's own publication date as
+the upper temporal boundary.
+A \texttt{first\_seen} property records the earliest article date at which an entity appeared;
+feature queries exclude entities whose \texttt{first\_seen} postdates the evaluation day.
+
+\subsection{Ontology Evolution Agent}
+\label{sec:evolution}
+
+The Evolution Agent is an LLM (OpenAI GPT-4o) prompted to propose a modified ontology schema given
+the current best schema and its downstream performance metrics.
+The agent operates in two phases determined by the step index.
+
+\paragraph{Phase 1 --- entity vocabulary expansion.}
+In early steps, the agent selects new entity types from a predefined candidate pool:
+\texttt{Market}, \texttt{Sector}, \texttt{Index}, \texttt{Deal}, \texttt{Contract},
+\texttt{Regulation}, \texttt{Product}, \texttt{Event}, \texttt{Fund}, \texttt{Insider},
+\texttt{Executive}, \texttt{Analyst}, and others.
+For each type added, the agent must propose at least one semantically specific relationship
+connecting it to existing types; existing node and relationship types are preserved.
+
+\paragraph{Phase 2 --- relationship specialisation.}
+Once the entity vocabulary is sufficiently rich, the agent replaces generic relationship types with
+semantically specific alternatives.
+For example, \texttt{RELATES\_TO} may be specialised to \texttt{COMPETES\_WITH},
+\texttt{PARTNERS\_WITH}, \texttt{ACQUIRES}, or \texttt{INVESTED\_IN}.
+Specific relationship types produce more informative metapaths and denser subgraph feature signals.
+
+\paragraph{Prompt and feedback signal.}
+The prompt provides the current schema as JSON, the AUC and F1 scores of the previous best
+candidate, and the maximum relationship-chain depth found during feature extraction --- a proxy for
+graph connectivity.
+The performance signal is interpreted directionally: AUC at or below 0.5 indicates that current
+relationships are likely too generic to discriminate price movements.
+If the LLM response fails to parse as valid JSON, the agent falls back to a deterministic variant
+schema.
+
+At each step $t$, $K$ candidates are proposed independently, built and evaluated in sequence, and
+ranked by validation AUC; the winner seeds step $t+1$ and losing candidates have their tags pruned.
+
+\subsection{Feature Engineering}
+\label{sec:features}
+
+Prior work on heterogeneous information networks (HINs)~\citep{shi2017surveyhin} shows that typed
+paths --- metapaths~\citep{sun2011pathsim, dong2017metapath2vec} --- capture relational semantics
+between node pairs and support downstream classification.
+Knowledge graph embedding methods~\citep{wang2017kgsurvey, ji2021kgcompletion} and temporal
+extensions such as Know-Evolve~\citep{trivedi2017knowledevolution} operate under the assumption
+that the HIN schema is given and fixed: feature engineering, embedding, or message-passing then
+operates over the resulting typed structure.
+In our framework the schema is the object being optimised, so the feature representation must be
+schema-agnostic and directly comparable across candidates with different ontologies.
+
+\paragraph{Why not learned embeddings.}
+Graph neural network and knowledge graph embedding methods are ill-suited for this evaluation
+setting for three interconnected reasons.
+
+\textit{Temporal look-ahead.}
+Computing node embeddings on a temporal graph without information leakage requires evaluating the
+model on graph snapshots taken at each day in the training set, because a GNN or KGE model trained
+on the full graph encodes future edges into past node representations.
+Producing leak-free embeddings for $K \times T$ candidate--step combinations at every evaluation
+day would be computationally prohibitive.
+
+\textit{Schema instability across candidates.}
+Each ontology candidate introduces a different set of node types and relationship types.
+A relational GNN~\citep{schlichtkrull2018rgcn} or embedding model trained on one candidate's type
+vocabulary cannot be applied to another: relation-type parameters are semantically tied to the
+schema under which they were fitted.
+Retraining a separate model per candidate multiplies cost by $K \times T$ and reintroduces the
+temporal look-ahead problem.
+
+\textit{Evaluation noise.}
+Independent model fitting per candidate introduces stochastic training variance --- from random
+initialisation and mini-batch ordering --- that confounds the AUC comparison between candidates
+and corrupts the ontology selection signal.
+
+Hash-bucketed structural histograms avoid all three problems: they are computed locally within each
+day's lookback window, require no model fitting, are deterministic given the graph state, and
+produce vectors of fixed dimension regardless of the ontology.
+
+\paragraph{Feature vector.}
+For each trading day $d$, a feature vector is extracted over a lookback window of $k$ days.
+The framework supports three modes, selected via the \texttt{feature\_mode} parameter.
+
+\textit{Subgraph mode} constructs a fixed-size structural representation:
+
+\begin{equation}
+\mathbf{x}_{d}^{\text{sub}}
+= \bigl[\,\mathbf{h}_{\text{node}} \;\|\; \mathbf{h}_{\text{rel}} \;\|\;
+         \mathbf{h}_{\text{meta}} \;\|\; \mathbf{h}_{\text{nov}}\,\bigr]
+\;\in\; \mathbb{R}^{96}
+\label{eq:subgraph}
+\end{equation}
+
+Each component is a normalised hash-bucketed histogram: a token string (e.g.\ a relationship type
+label) is mapped deterministically to a bucket index via MD5 modulo the bucket count, and the
+resulting histogram is $\ell_1$-normalised.
+
+\begin{itemize}
+\item $\mathbf{h}_{\text{node}} \in \mathbb{R}^{16}$: histogram of node type labels for entities
+  mentioned by articles in the lookback window.
+\item $\mathbf{h}_{\text{rel}} \in \mathbb{R}^{24}$: histogram of candidate-filtered relationship
+  types incident to mentioned entities; infrastructure edges (\texttt{PUBLISHED\_ON},
+  \texttt{WRITTEN\_BY}, \texttt{MENTIONS}) are excluded.
+\item $\mathbf{h}_{\text{meta}} \in \mathbb{R}^{48}$: histogram of 2-hop and 3-hop typed
+  metapaths anchored at mentioned entities, limited to 400 and 300 sampled paths respectively to
+  bound query cost.
+\item $\mathbf{h}_{\text{nov}} \in \mathbb{R}^{8}$: temporal novelty statistics --- article count,
+  mentioned entity count, new entity count (first seen within the window), recurring entity count,
+  undated entity count, novelty ratio, recurring ratio, and entities per article.
+\end{itemize}
+
+\textit{Path mode} instead encodes relationship chains of depth 5--6 hops extracted from entities
+mentioned in recent articles: each chain's sequence of node and relation type labels is serialised
+as a text string and encoded with a sentence encoder~\citep{reimers2019sentencebert} (default:
+\texttt{all-MiniLM-L6-v2}), mean-aggregated per article, then mean-aggregated across articles in
+the window.
+
+\textit{Hybrid mode} concatenates the subgraph and path feature blocks.
+
+Topology features --- node degree and mention counts, computed independently of the ontology ---
+are appended to the feature vector in all modes.
+
+\subsection{Downstream Classifier and Evaluation Protocol}
+\label{sec:eval-protocol}
+
+\paragraph{Temporal split.}
+Days are sorted in chronological order and partitioned 70/30: the first 70\,\% form the training
+set and the remaining 30\,\% the validation set.
+The partition is applied by day and never shuffled, ensuring that no future information enters the
+training set.
+
+\paragraph{Classifier.}
+An XGBoost classifier~\citep{chen2016xgboost} is trained on the stacked day-level feature vectors
+with the following hyperparameters: 100 trees, \texttt{max\_depth}$\,=\,3$, learning rate $0.1$,
+row and column subsampling rates $0.9$.
+Validation AUC-ROC is the primary selection metric returned to the Evolution Agent; F1 at
+threshold $0.5$ is reported alongside it.
+
+\paragraph{Text-only baseline.}
+Before any LLM-driven candidate is evaluated, a text-only baseline is established: mean-pooled
+article text embeddings over the lookback window, with no graph structure.
+The same day set and temporal split are used, isolating the contribution of KG construction and
+ontology design from the predictive content of raw article text.
+The baseline AUC is the reference against which all KG-based candidates are compared, and against
+which the hypotheses in Section~\ref{sec:hypotheses} are tested.
