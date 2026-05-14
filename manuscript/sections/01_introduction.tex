@@ -2,10 +2,10 @@ Representing knowledge in structured forms that intelligent systems can query an
 over is a foundational challenge of artificial intelligence. Knowledge graphs (KGs) have
 become the attractive medium for this purpose, encoding entities, relationships, and semantic
 descriptions extracted from text to support applications from question answering and
-recommendation to predictive modelling~\cite{ji2021kgcompletion}. The ability to
+recommendation to predictive modelling~\citep{ji2021kgcompletion}. The ability to
 construct KGs from unstructured text at scale has been substantially advanced by large
 language models (LLMs), which enable flexible extraction of entities and relations without
-hand-crafted rules~\cite{mo2025kggen}. Despite this progress, a fundamental tension
+hand-crafted rules~\citep{mo2025kggen}. Despite this progress, a fundamental tension
 persists in KG construction: ontology and graph structure are typically specified
 \emph{a priori} and evaluated independently of the tasks for which the graph is
 ultimately used.
@@ -16,8 +16,8 @@ choice established before construction begins and unchanged throughout.
 Evaluation has historically relied on structural quality metrics independent of any
 downstream task~\citep{paulheim2017kgquality}, and while frameworks such as
 KGrEaT~\citep{heist2023kgreat} and KGBench~\citep{bloem2021kgbench} demonstrate that
-task-based evaluation is feasible, no existing work closes the loop at construction time:
-no downstream performance signal has been used to steer KG ontology evolution during the
+task-based evaluation is feasible, we could not find work
+demonstratating use of downstream performance signal to steer KG ontology evolution during the
 construction process itself.
 
 This paper aims to address the gap between graph construction and downstream task
@@ -28,7 +28,7 @@ advance, we propose a closed-loop system:
     \item[\textit{(i)}] An Ontology Agent proposes candidate ontology configurations.
     \item[\textit{(ii)}] A KG Builder Agent constructs knowledge graphs from text under each configuration.
     \item[\textit{(iii)}] Graph-derived features are computed and evaluated on a downstream task.
-    \item[\textit{(iv)}] The resulting task performance score is returned as a feedback signal to guide the next ontology revision.
+    \item[\textit{(iv)}] The resulting task performance score is returned as a feedback signal to choose the best candidate graphs and guide the next ontology revision.
 \end{enumerate}
 This loop repeats until performance converges.
 
@@ -62,4 +62,4 @@ Section~\ref{sec:hypotheses} states the research hypotheses formally.
 Section~\ref{sec:methodology} describes the proposed framework in detail.
 Section~\ref{sec:experiments} presents the experimental setup, and
 Section~\ref{sec:results} reports results. Section~\ref{sec:discussion} discusses
-findings and limitations, and Section~\ref{sec:conclusion} concludes.
+findings and limitations, and Section~\ref{sec:conclusion} recapitulates findings.
