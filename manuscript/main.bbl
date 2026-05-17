@@ -1,15 +1,9 @@
-\begin{thebibliography}{18}
+\begin{thebibliography}{30}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
   \providecommand{\doi}[1]{doi: #1}\else
   \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
-
-\bibitem[aks()]{aksw2024llmkgbench}
-
-
-\bibitem[cho()]{choi2020geval}
-
 
 \bibitem[Arun et~al.(2025)Arun, Dimino, Agarwal, Sarmah, and
   Pasquali]{arun2025finreflectkg}
@@ -30,6 +24,24 @@ Peter Bloem, Xander Wilcke, Lucas van Berkel, and Victor de~Boer.
   2021}, Lecture Notes in Computer Science. Springer, 2021.
 \newblock \doi{10.1007/978-3-030-77385-4_37}.
 
+\bibitem[Bratanic(2024)]{bratanic2024llmgraphtransformer}
+Tomaz Bratanic.
+\newblock Building knowledge graphs with {LLM} graph transformer, 2024.
+\newblock URL
+  \url{https://medium.com/data-science/building-knowledge-graphs-with-llm-graph-transformer-a91045c49b59}.
+
+\bibitem[Chase(2022)]{chase2022langchain}
+Harrison Chase.
+\newblock {LangChain}, 2022.
+\newblock URL \url{https://github.com/langchain-ai/langchain}.
+
+\bibitem[Chen and Guestrin(2016)]{chen2016xgboost}
+Tianqi Chen and Carlos Guestrin.
+\newblock {XGBoost}: A scalable tree boosting system.
+\newblock In \emph{Proceedings of the 22nd {ACM} {SIGKDD} International
+  Conference on Knowledge Discovery and Data Mining}, pages 785--794, 2016.
+\newblock URL \url{https://arxiv.org/abs/1603.02754}.
+
 \bibitem[Cucumides and Geerts(2025)]{cucumides2025augraph}
 Tamara Cucumides and Floris Geerts.
 \newblock From features to structure: Task-aware graph construction for
@@ -38,6 +50,13 @@ Tamara Cucumides and Floris Geerts.
   at {VLDB} 2025}, 2025.
 \newblock URL
   \url{https://www.vldb.org/2025/Workshops/VLDB-Workshops-2025/TaDA/TaDA25_5.pdf}.
+
+\bibitem[Ding et~al.(2016)Ding, Zhang, Liu, and Duan]{ding2016kgeventstock}
+Xiao Ding, Yue Zhang, Ting Liu, and Junwen Duan.
+\newblock Knowledge-driven event embedding for stock prediction.
+\newblock In \emph{Proceedings of the 26th International Conference on
+  Computational Linguistics ({COLING})}, pages 2133--2142, 2016.
+\newblock URL \url{https://aclanthology.org/C16-1201/}.
 
 \bibitem[Dong et~al.(2017)Dong, Chawla, and Swami]{dong2017metapath2vec}
 Yuxiao Dong, Nitesh~V. Chawla, and Ananthram Swami.
@@ -62,13 +81,13 @@ Nicolas Heist, Sven Hertling, and Heiko Paulheim.
 \newblock \doi{10.1145/3583780.3615241}.
 \newblock URL \url{https://arxiv.org/abs/2308.10537}.
 
-\bibitem[Hogan et~al.(2021)Hogan, Blomqvist, Cochez, d'Amato, de~Melo,
-  Gutierrez, Kirrane, Gayo, Navigli, Neumaier, et~al.]{hogan2021kgsurvey}
-Aidan Hogan, Eva Blomqvist, Michael Cochez, Claudia d'Amato, Gerard de~Melo,
-  Claudio Gutierrez, Sabrina Kirrane, Jose Emilio~Labra Gayo, Roberto Navigli,
-  Sebastian Neumaier, et~al.
-\newblock Knowledge graphs.
-\newblock \emph{ACM Computing Surveys}, 54\penalty0 (4):\penalty0 1--37, 2021.
+\bibitem[Hu et~al.(2018)Hu, Liu, Bian, Liu, and Liu]{hu2018chaoticwhispers}
+Ziniu Hu, Weiqing Liu, Jiang Bian, Xuanzhe Liu, and Tie-Yan Liu.
+\newblock Listening to chaotic whispers: A deep learning framework for
+  news-oriented stock trend prediction.
+\newblock In \emph{Proceedings of the Eleventh {ACM} International Conference
+  on Web Search and Data Mining ({WSDM})}, pages 261--269, 2018.
+\newblock URL \url{https://arxiv.org/abs/1712.02136}.
 
 \bibitem[Ji et~al.(2021)Ji, Pan, Cambria, Marttinen, and
   Yu]{ji2021kgcompletion}
@@ -76,6 +95,26 @@ Shaoxiong Ji, Shirui Pan, Erik Cambria, Pekka Marttinen, and Philip~S. Yu.
 \newblock A survey on knowledge graph embedding: Approaches and applications.
 \newblock \emph{IEEE Transactions on Knowledge and Data Engineering},
   33\penalty0 (4):\penalty0 1--19, 2021.
+
+\bibitem[Li et~al.(2025)Li, Garijo, and
+  Poveda-Villal{\'o}n]{li2025llmontologyreview}
+Jiayi Li, Daniel Garijo, and Mar{\'i}a Poveda-Villal{\'o}n.
+\newblock Large language models for ontology engineering: A systematic
+  literature review.
+\newblock 2025.
+\newblock in press; prepared using sagej.cls, DOI to be assigned by SAGE.
+
+\bibitem[Liu(2022)]{liu2022llamaindex}
+Jerry Liu.
+\newblock {LlamaIndex}, 2022.
+\newblock URL \url{https://github.com/run-llama/llama_index}.
+
+\bibitem[{LlamaIndex}(2024)]{llamaindex2024propertygraph}
+{LlamaIndex}.
+\newblock Comparing {LLM} path extractors for knowledge graph construction,
+  2024.
+\newblock URL
+  \url{https://developers.llamaindex.ai/python/examples/property_graph/dynamic_kg_extraction/}.
 
 \bibitem[Mo et~al.(2025)Mo, Yu, Kazdan, Cabezas, Mpala, Yu, Cundy, Kanatsoulis,
   and Koyejo]{mo2025kggen}
@@ -92,6 +131,23 @@ Jind{\v{r}}ich Mynarz and Kate{\v{r}}ina Hanikov{\'a}.
   ({KGC} 2023)}, volume 3471 of \emph{{CEUR} Workshop Proceedings}, 2023.
 \newblock URL \url{https://ceur-ws.org/Vol-3471/paper4.pdf}.
 
+\bibitem[{Neo4j}(2024)]{neo4jdocs2024kgbuilder}
+{Neo4j}.
+\newblock User guide: Knowledge graph builder ---
+  \textit{neo4j-graphrag-python}, 2024.
+\newblock URL
+  \url{https://neo4j.com/docs/neo4j-graphrag-python/current/user_guide_kg_builder.html}.
+
+\bibitem[{Neo4j Labs}(2024)]{neo4j2024llmgraphbuilder}
+{Neo4j Labs}.
+\newblock {Neo4j LLM} knowledge graph builder, 2024.
+\newblock URL \url{https://neo4j.com/labs/genai-ecosystem/llm-graph-builder/}.
+
+\bibitem[Pan et~al.(2024)]{pan2024llmkg}
+Shirui Pan et~al.
+\newblock Large language models meet knowledge graphs: A survey.
+\newblock \emph{IEEE Transactions on Knowledge and Data Engineering}, 2024.
+
 \bibitem[Paulheim(2017)]{paulheim2017kgquality}
 Heiko Paulheim.
 \newblock Knowledge graph refinement: A survey of approaches and evaluation
@@ -105,6 +161,13 @@ Heiko Paulheim.
   Cases}. Springer, 2024.
 \newblock TODO: verify exact chapter/pages.
 
+\bibitem[Reimers and Gurevych(2019)]{reimers2019sentencebert}
+Nils Reimers and Iryna Gurevych.
+\newblock Sentence-{BERT}: Sentence embeddings using {Siamese} {BERT}-networks.
+\newblock In \emph{Proceedings of the 2019 Conference on Empirical Methods in
+  Natural Language Processing ({EMNLP})}, pages 3982--3992, 2019.
+\newblock URL \url{https://arxiv.org/abs/1908.10084}.
+
 \bibitem[Schlichtkrull et~al.(2018)Schlichtkrull, Kipf, Bloem, van~den Berg,
   Titov, and Welling]{schlichtkrull2018rgcn}
 Michael Schlichtkrull, Thomas~N. Kipf, Peter Bloem, Rianne van~den Berg, Ivan
@@ -112,11 +175,22 @@ Michael Schlichtkrull, Thomas~N. Kipf, Peter Bloem, Rianne van~den Berg, Ivan
 \newblock Modeling relational data with graph convolutional networks.
 \newblock In \emph{ESWC}, 2018.
 
+\bibitem[Shi et~al.(2017)Shi, Li, Zhang, Sun, and Yu]{shi2017surveyhin}
+Chuan Shi, Yitong Li, Jiawei Zhang, Yizhou Sun, and Philip~S. Yu.
+\newblock A survey of heterogeneous information network analysis.
+\newblock In \emph{IEEE TKDE}, 2017.
+
 \bibitem[Sun et~al.(2011)Sun, Han, Yan, Yu, and Wu]{sun2011pathsim}
 Yizhou Sun, Jiawei Han, Xifeng Yan, Philip~S. Yu, and Tianyi Wu.
 \newblock Pathsim: Meta path-based top-k similarity search in heterogeneous
   information networks.
 \newblock In \emph{VLDB}, 2011.
+
+\bibitem[Trivedi et~al.(2017)Trivedi, Dai, Wang, and
+  Song]{trivedi2017knowledevolution}
+Rakshit Trivedi, Hanjun Dai, Yichen Wang, and Le~Song.
+\newblock Know-evolve: Deep temporal reasoning for dynamic knowledge graphs.
+\newblock \emph{ICML}, 2017.
 
 \bibitem[Tsang et~al.(2025)Tsang, Bai, Huang, Xiao, Zheng, Xu, Liu, and
   Song]{tsang2025autographr1}
@@ -131,5 +205,13 @@ Quan Wang, Zhendong Mao, Bin Wang, and Li~Guo.
 \newblock Knowledge graph embedding: A survey of approaches and applications.
 \newblock \emph{IEEE Transactions on Knowledge and Data Engineering},
   29\penalty0 (12):\penalty0 2724--2743, 2017.
+
+\bibitem[Xu and Cohen(2018)]{xu2018stocktweets}
+Yumo Xu and Shay~B. Cohen.
+\newblock Stock movement prediction from tweets and historical prices.
+\newblock In \emph{Proceedings of the 56th Annual Meeting of the Association
+  for Computational Linguistics ({ACL}), Volume 1: Long Papers}, pages
+  1970--1979, 2018.
+\newblock URL \url{https://aclanthology.org/P18-1183/}.
 
 \end{thebibliography}

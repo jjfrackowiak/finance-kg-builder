@@ -22,6 +22,17 @@ For each candidate, a graph is constructed from the input corpus, structural fea
 per trading day, and an XGBoost classifier is trained and evaluated on a downstream prediction task.
 The candidate with the highest validation AUC is selected as the seed for the next step; the loop
 terminates when the step budget is exhausted.
+Figure~\ref{fig:architecture} illustrates the complete loop.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/architecture.png}
+  \caption{Overview of the feedback-driven KG construction framework. The Ontology Agent proposes
+    candidate schemas; the KG Builder Agent constructs the graph from financial news under each
+    schema; subgraph features are extracted and fed to a downstream classifier; the resulting AUC
+    is returned as a feedback signal to guide the next round of ontology proposals.}
+  \label{fig:architecture}
+\end{figure}
 
 \subsection{Ontology Representation and Base Schema}
 \label{sec:ontology-repr}
@@ -51,6 +62,17 @@ All graph data are stored in a Neo4j AuraDB instance.
 
 \subsection{KG Construction and Candidate Isolation}
 \label{sec:construction}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/pipeline_detail.png}
+  \caption{Pipeline detail. \textit{Creation Pipeline} (top): ontology definition, LLM-based
+    information extraction, entity normalisation, and merging into the shared Neo4j graph.
+    \textit{Evaluation Pipeline} (bottom): temporal subgraph selection, graph statistics and
+    metapath computation, path extraction and textualization, sentence embedding, and downstream
+    classifier training.}
+  \label{fig:pipeline}
+\end{figure}
 
 \paragraph{LLM extraction.}
 For each article, an \texttt{IncrementalArticleKGMutator} invokes an LLM with a structured prompt
@@ -152,53 +174,39 @@ Independent model fitting per candidate also training variance --- from random
 initialisation and mini-batch ordering --- that confounds the AUC comparison between candidates
 and corrupts the ontology selection signal.
 
-All three possible feature modes avoid these problems: features are computed locally within each day's
-lookback window, require no model fitting, are deterministic given the graph state, and produce
-vectors of fixed dimension regardless of the ontology.
+The two feature blocks described below avoid these problems: they are computed locally within each
+day's lookback window, require no model fitting, are deterministic given the graph state, and
+produce vectors of fixed dimension regardless of the ontology.
 
-\paragraph{Feature vector.}
-For each trading day $d$, a feature vector is extracted over a lookback window of $k$ days.
-The framework supports three modes, selected via the \texttt{feature\_mode} parameter.
+\paragraph{Path embeddings.}
+For each trading day $d$, relationship chains of length 5--6 hops are extracted from entities
+mentioned in articles published within a lookback window of $k$ days.
+Each chain records the alternating sequence of node and relationship types encountered along the
+path; infrastructure edges (\texttt{PUBLISHED\_ON}, \texttt{WRITTEN\_BY}, \texttt{MENTIONS}) are
+excluded so that only domain-relevant relationships contribute.
+The type sequence of each chain is serialised as a text string and encoded with a sentence
+encoder~\citep{reimers2019sentencebert} (\texttt{all-MiniLM-L6-v2}); the resulting embeddings are
+mean-aggregated across chains within each article and then across articles in the window, yielding a
+single 384-dimensional path vector $\mathbf{p}_d \in \mathbb{R}^{384}$.
+As the ontology evolves and relationship types become more semantically specific, the chain strings
+become more discriminative, directly linking ontology quality to feature quality.
 
+\paragraph{Topology features.}
+For each entity mentioned in the lookback window, eight local graph statistics are computed against
+the graph state up to and including day $d$, enforcing temporal integrity.
+The statistics are: in-degree (number of incoming relationships), out-degree (number of outgoing
+relationships), unique in-neighbour count, unique out-neighbour count, relationship-type diversity
+(total degree divided by the number of distinct neighbours, measuring how concentrated the
+connectivity is), mention count (number of articles in the window that reference the entity),
+days since first mention (an entity recency proxy), and total degree.
+These per-entity vectors are mean-aggregated across all entities mentioned in the window to produce
+a topology vector $\mathbf{t}_d \in \mathbb{R}^{8}$.
+Unlike path embeddings, topology features are schema-agnostic by construction: they count
+relationships without inspecting their types and therefore remain comparable across all ontology
+candidates.
 
-\textit{Path mode (default)} encodes relationship chains of desired length extracted from entities
-mentioned in articles within the look-back window: each sequence of node and relation type labels is serialised
-as a text string and encoded with a sentence encoder~\citep{reimers2019sentencebert} (default:
-\texttt{all-MiniLM-L6-v2}), mean-aggregated per article, then mean-aggregated across articles in
-the window.
-
-\textit{Histogram mode} constructs a fixed-size structural representation:
-
-\begin{equation}
-\mathbf{x}_{d}^{\text{sub}}
-= \bigl[\,\mathbf{h}_{\text{node}} \;\|\; \mathbf{h}_{\text{rel}} \;\|\;
-         \mathbf{h}_{\text{meta}} \;\|\; \mathbf{h}_{\text{nov}}\,\bigr]
-\;\in\; \mathbb{R}^{96}
-\label{eq:subgraph}
-\end{equation}
-
-Each component is a normalised hash-bucketed histogram: a token string (e.g.\ a relationship type
-label) is mapped deterministically to a bucket index via MD5 modulo the bucket count, and the
-resulting histogram is $\ell_1$-normalised.
-
-\begin{itemize}
-\item $\mathbf{h}_{\text{node}} \in \mathbb{R}^{16}$: histogram of node type labels for entities
-  mentioned by articles in the lookback window.
-\item $\mathbf{h}_{\text{rel}} \in \mathbb{R}^{24}$: histogram of candidate-filtered relationship
-  types incident to mentioned entities; infrastructure edges (\texttt{PUBLISHED\_ON},
-  \texttt{WRITTEN\_BY}, \texttt{MENTIONS}) are excluded.
-\item $\mathbf{h}_{\text{meta}} \in \mathbb{R}^{48}$: histogram of 2-hop and 3-hop typed
-  metapaths anchored at mentioned entities, limited to 400 and 300 sampled paths respectively to
-  bound query cost.
-\item $\mathbf{h}_{\text{nov}} \in \mathbb{R}^{8}$: temporal novelty statistics --- article count,
-  mentioned entity count, new entity count (first seen within the window), recurring entity count,
-  undated entity count, novelty ratio, recurring ratio, and entities per article.
-\end{itemize}
-
-\textit{Hybrid mode} concatenates the subgraph and path feature blocks.
-
-Topology features --- node degree and mention counts, computed independently of the ontology ---
-are appended to the feature vector in all modes.
+The final day-level feature vector is the concatenation
+$\mathbf{x}_d = [\,\mathbf{p}_d \;\|\; \mathbf{t}_d\,] \in \mathbb{R}^{392}$.
 
 \subsection{Downstream Classifier and Evaluation Protocol}
 \label{sec:eval-protocol}

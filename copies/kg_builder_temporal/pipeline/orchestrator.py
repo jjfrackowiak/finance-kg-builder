@@ -9,22 +9,18 @@ import pandas as pd
 from neo4j_graphrag.embeddings.openai import OpenAIEmbeddings
 from neo4j_graphrag.llm import OpenAILLM
 
-from kg_builder_llm.config import Config
-from kg_builder_llm.core.article_linking import create_and_link_article_days
-from kg_builder_llm.core.data import prepare_articles
-from kg_builder_llm.core.entity_resolution import (
-    MERGE_DUPLICATES_BY_KEY_CYPHER,
-    MERGE_DUPLICATES_BY_NAME_CYPHER,
-)
-from kg_builder_llm.core.graph import GraphDriver
-from kg_builder_llm.core.neo4j_io import write_price_labels_to_days
-from kg_builder_llm.core.ontology import OntologyCandidate, create_base_ontology
-from kg_builder_llm.core.ontology_io import save_ontology_candidate, save_ontology_summary
-from kg_builder_llm.core.tagging import tag_candidate_entities
-from kg_builder_llm.ml.modeling import ModelMetrics
-from kg_builder_llm.mutations.base import build_kg_incremental_candidate
-from kg_builder_llm.pipeline.evaluator import evaluate_article_text_baseline, evaluate_candidate
-from kg_builder_llm.pipeline.ontology_evolution import OntologyEvolutionAgent
+from kg_builder_temporal.config import Config
+from kg_builder_temporal.core.article_linking import create_and_link_article_days
+from kg_builder_temporal.core.data import prepare_articles
+from kg_builder_temporal.core.graph import GraphDriver
+from kg_builder_temporal.core.neo4j_io import write_price_labels_to_days
+from kg_builder_temporal.core.ontology import OntologyCandidate, create_base_ontology
+from kg_builder_temporal.core.ontology_io import save_ontology_candidate, save_ontology_summary
+from kg_builder_temporal.core.tagging import tag_candidate_entities
+from kg_builder_temporal.ml.modeling import ModelMetrics
+from kg_builder_temporal.mutations.base import build_kg_incremental_candidate
+from kg_builder_temporal.pipeline.evaluator import evaluate_candidate
+from kg_builder_temporal.pipeline.ontology_evolution import OntologyEvolutionAgent
 
 logger = logging.getLogger(__name__)
 
@@ -51,10 +47,7 @@ class Orchestrator:
         self.driver = driver
         self.llm = llm
         self.embedder = embedder
-        self.evolution_agent = OntologyEvolutionAgent(
-            llm,
-            prompt_template_path=config.experiment.evolution_prompt_template,
-        )
+        self.evolution_agent = OntologyEvolutionAgent(llm)
         self.results = {}
         self.candidates_per_step: Dict[int, List[OntologyCandidate]] = {}
         self.ontologies_dir = Path("results/ontologies")
@@ -100,22 +93,6 @@ class Orchestrator:
         await self._build_base_structure(base_ontology, articles_df)
         logger.info("✓ Base structure ready (step 0 complete)")
 
-        # STEP 0b: Write article text embeddings then run text-only baseline
-        logger.info("=== Step 0b (Article-text baseline) ===")
-        await self._write_article_embeddings(articles_df)
-        baseline_metrics = evaluate_article_text_baseline(
-            self.driver,
-            day_labels=self._extract_day_labels(price_df),
-            lookback_days=self.config.experiment.lookback_days,
-            train_ratio=self.config.experiment.train_ratio,
-        )
-        self.results["baseline_article_embedding"] = baseline_metrics
-        logger.info(
-            "Baseline (article text only): AUC=%.4f, F1=%.4f",
-            baseline_metrics.auc,
-            baseline_metrics.f1,
-        )
-
         # STEP 1+: Evolve and evaluate ontologies using incremental mutation
         # num_steps=0 means only base, num_steps=1 means base + 1 evolution step, etc.
         best_candidate = base_ontology
@@ -142,54 +119,6 @@ class Orchestrator:
         self._save_ontologies()
 
         return self.results
-
-    async def _write_article_embeddings(self, articles_df: pd.DataFrame) -> None:
-        """Embed all article texts and store on Article nodes for the baseline.
-
-        Uses the same embedding type and model as the rest of the pipeline so
-        dimensions are consistent. Matches Article nodes by text hash (same key
-        used in the incremental mutator).
-
-        Args:
-            articles_df: Articles DataFrame with a 'text' column.
-        """
-        import os
-
-        import numpy as np
-
-        from kg_builder_llm.ml.embeddings import embed_text_deterministic
-
-        api_key = os.getenv("OPENAI_API_KEY")
-        embedding_type = self.config.experiment.embedding_type
-        local_model = self.config.experiment.local_model_name
-
-        if embedding_type == "openai" and not api_key:
-            logger.warning("OPENAI_API_KEY not set — skipping article embedding, baseline will be 0")
-            return
-
-        logger.info("Embedding %d articles for baseline (%s)…", len(articles_df), embedding_type)
-        written = 0
-        for _, row in articles_df.iterrows():
-            text = row.get("text", "")
-            if not isinstance(text, str) or not text.strip():
-                continue
-            try:
-                emb = embed_text_deterministic(
-                    text,
-                    api_key=api_key,
-                    embedding_type=embedding_type,
-                    local_model=local_model,
-                )
-                emb_list = emb.tolist() if isinstance(emb, np.ndarray) else emb
-                self.driver.run_query(
-                    "MATCH (a:Article {id: $id}) SET a.text_embedding = $emb",
-                    parameters={"id": str(hash(text)), "emb": emb_list},
-                )
-                written += 1
-            except Exception as e:
-                logger.warning("Failed to embed article: %s", e)
-
-        logger.info("✓ Wrote text embeddings for %d / %d articles", written, len(articles_df))
 
     async def _build_base_structure(
         self,
@@ -296,7 +225,6 @@ class Orchestrator:
             )
 
             tag_candidate_entities(self.driver, candidate.candidate_tag)
-            self._deduplicate_graph(candidate.candidate_tag)
 
             # Build allowed tags for evaluation
             # Step 1+: evaluate with base + current + remaining tagged candidates from previous steps
@@ -321,13 +249,6 @@ class Orchestrator:
                 allowed_tags=allowed_tags_for_eval,
                 embedding_type=self.config.experiment.embedding_type,
                 local_model=self.config.experiment.local_model_name,
-                lookback_days=self.config.experiment.lookback_days,
-                min_chain_hops=self.config.experiment.min_chain_hops,
-                max_chain_hops=self.config.experiment.max_chain_hops,
-                path_uniqueness=self.config.experiment.path_uniqueness,
-                feature_mode=self.config.experiment.feature_mode,
-                max_metapath_hops=self.config.experiment.max_metapath_hops,
-                train_ratio=self.config.experiment.train_ratio,
             )
 
             self.results[candidate.candidate_tag] = metrics
@@ -378,35 +299,6 @@ class Orchestrator:
         )
 
         return best_candidate
-
-    def _deduplicate_graph(self, candidate_tag: str) -> None:
-        """Merge duplicate nodes created during candidate building.
-
-        Runs two passes:
-        1. Name-based merge: same label + same lowercased name → one node.
-        2. Key-based merge: same label + same uppercased key → one node.
-
-        Both passes use APOC refactor.mergeNodes to combine properties and
-        relationships rather than deleting them.
-
-        Args:
-            candidate_tag: Tag of the just-built candidate (used only for logging).
-        """
-        logger.info("Running post-build deduplication for candidate %s …", candidate_tag)
-
-        try:
-            name_results = self.driver.run_query(MERGE_DUPLICATES_BY_NAME_CYPHER)
-            merged_by_name = sum(r.get("merged", 0) for r in (name_results or []))
-            logger.info("  Name-based merge: %d duplicate groups collapsed", merged_by_name)
-        except Exception as e:
-            logger.warning("Name-based deduplication failed (APOC required): %s", e)
-
-        try:
-            key_results = self.driver.run_query(MERGE_DUPLICATES_BY_KEY_CYPHER)
-            merged_by_key = sum(r.get("merged", 0) for r in (key_results or []))
-            logger.info("  Key-based merge: %d duplicate groups collapsed", merged_by_key)
-        except Exception as e:
-            logger.warning("Key-based deduplication failed (APOC required): %s", e)
 
     def _select_best_candidate(self) -> OntologyCandidate:
         """Select best candidate from current step.

@@ -2,9 +2,28 @@
 \contentsline {paragraph}{Contributions.}{4}{section*.2}%
 \contentsline {paragraph}{Paper organisation.}{4}{section*.3}%
 \contentsline {section}{\numberline {2}Related Work}{4}{section.2}%
-\contentsline {section}{\numberline {3}Research Hypotheses}{6}{section.3}%
-\contentsline {section}{\numberline {4}Methodology}{7}{section.4}%
-\contentsline {section}{\numberline {5}Experimental Setup}{7}{section.5}%
-\contentsline {section}{\numberline {6}Results}{7}{section.6}%
-\contentsline {section}{\numberline {7}Discussion}{7}{section.7}%
-\contentsline {section}{\numberline {8}Conclusion}{7}{section.8}%
+\contentsline {section}{\numberline {3}Research Hypotheses}{7}{section.3}%
+\contentsline {section}{\numberline {4}Methodology}{8}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Framework Overview}{8}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Ontology Representation and Base Schema}{8}{subsection.4.2}%
+\contentsline {paragraph}{Dataset and storage.}{9}{section*.4}%
+\contentsline {subsection}{\numberline {4.3}KG Construction and Candidate Isolation}{9}{subsection.4.3}%
+\contentsline {paragraph}{LLM extraction.}{9}{section*.5}%
+\contentsline {paragraph}{Candidate isolation.}{9}{section*.6}%
+\contentsline {paragraph}{Entity deduplication.}{9}{section*.7}%
+\contentsline {paragraph}{Temporal integrity.}{9}{section*.8}%
+\contentsline {subsection}{\numberline {4.4}Ontology Evolution Agent}{10}{subsection.4.4}%
+\contentsline {paragraph}{Phase 1 --- entity vocabulary expansion.}{10}{section*.9}%
+\contentsline {paragraph}{Phase 2 --- relationship specialisation.}{10}{section*.10}%
+\contentsline {paragraph}{Prompt and feedback signal.}{10}{section*.11}%
+\contentsline {subsection}{\numberline {4.5}Feature Engineering}{10}{subsection.4.5}%
+\contentsline {paragraph}{Why not learned embeddings.}{11}{section*.12}%
+\contentsline {paragraph}{Feature vector.}{11}{section*.13}%
+\contentsline {subsection}{\numberline {4.6}Downstream Classifier and Evaluation Protocol}{12}{subsection.4.6}%
+\contentsline {paragraph}{Temporal split.}{12}{section*.14}%
+\contentsline {paragraph}{Classifier.}{12}{section*.15}%
+\contentsline {paragraph}{Text-only baseline.}{12}{section*.16}%
+\contentsline {section}{\numberline {5}Experimental Setup}{12}{section.5}%
+\contentsline {section}{\numberline {6}Results}{12}{section.6}%
+\contentsline {section}{\numberline {7}Discussion}{13}{section.7}%
+\contentsline {section}{\numberline {8}Conclusion}{13}{section.8}%

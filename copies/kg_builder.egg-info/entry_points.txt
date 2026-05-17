@@ -1,0 +1,2 @@
+[console_scripts]
+kg-builder = kg_builder.main:main

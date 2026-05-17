@@ -98,3 +98,25 @@
 2026-05-12 00:42:00 DEBUG    Embedded batch 200–213
 2026-05-12 00:42:00 INFO     Finished embedding 214 chunks
 2026-05-12 00:42:00 INFO     sync() done — added=3 reindexed=0 removed=0 unchanged=31 embedded=214
+2026-05-14 16:00:57 INFO     search() query='FNSPID financial news dataset NASDAQ stock price time series' files=['dong_2024_fnspid.pdf'] n=5
+2026-05-14 16:00:59 INFO     search() returned 5 hits via cosine
+2026-05-14 16:00:59 INFO     search() query='event-driven stock prediction deep learning subject predicate object triples' files=['ding_2016_kg_event_stock.pdf'] n=5
+2026-05-14 16:01:00 INFO     search() returned 5 hits via cosine
+2026-05-14 16:01:00 INFO     search() query='news-oriented stock trend prediction deep learning attention' files=['hu_2018_chaotic_whispers.pdf'] n=5
+2026-05-14 16:01:01 INFO     search() returned 5 hits via cosine
+2026-05-14 16:01:01 INFO     search() query='stock movement prediction tweets historical prices' files=['xu_2018_stock_tweets.pdf'] n=5
+2026-05-14 16:01:01 INFO     search() returned 5 hits via cosine
+2026-05-14 16:04:41 INFO     search() query='FNSPID dataset financial news stock price time series contribution benchmark' files=['dong_2024_fnspid.pdf'] n=4
+2026-05-14 16:04:41 INFO     search() returned 4 hits via cosine
+2026-05-14 16:04:42 INFO     search() query='deep learning event-driven stock prediction CNN structured events results accura' files=['ding_2015_stock_pred.pdf'] n=4
+2026-05-14 16:04:42 INFO     search() returned 4 hits via cosine
+2026-05-14 16:04:43 INFO     search() query='knowledge graph event embeddings stock prediction KG enrichment results' files=['ding_2016_kg_event_stock.pdf'] n=4
+2026-05-14 16:04:43 INFO     search() returned 4 hits via cosine
+2026-05-14 16:04:44 INFO     search() query='hybrid attention network news stock trend temporal attention self-paced learning' files=['hu_2018_chaotic_whispers.pdf'] n=4
+2026-05-14 16:04:44 INFO     search() returned 4 hits via cosine
+2026-05-14 16:04:45 INFO     search() query='StockNet tweets historical prices variational autoencoder stock movement predict' files=['xu_2018_stock_tweets.pdf'] n=4
+2026-05-14 16:04:45 INFO     search() returned 4 hits via cosine
+2026-05-14 16:04:46 INFO     search() query='FinReflectKG financial knowledge graph SEC 10-K schema reflection construction e' files=['arun_2025_finreflectkg.pdf'] n=4
+2026-05-14 16:04:46 INFO     search() returned 4 hits via cosine
+2026-05-16 18:01:20 INFO     publications-rag MCP server initialised
+2026-05-17 12:34:31 INFO     publications-rag MCP server initialised

@@ -21,6 +21,115 @@ logger = logging.getLogger(__name__)
 
 
 
+def evaluate_article_text_baseline(
+    driver: GraphDriver,
+    day_labels: Dict[str, int],
+    lookback_days: int = 2,
+    train_ratio: float = 0.7,
+) -> ModelMetrics:
+    """Evaluate a text-only baseline using mean-pooled article text embeddings.
+
+    Uses EXACTLY the same day set and train/val split as ``evaluate_candidate``:
+    every day in ``day_labels`` is included; days with no article embeddings in
+    their lookback window receive a zero vector (mirroring how candidates handle
+    days with no graph chains).
+
+    Args:
+        driver: Graph driver
+        day_labels: {day_date: direction} — must be the same dict passed to
+            evaluate_candidate so the splits are identical.
+        lookback_days: Number of calendar days to look back for articles.
+        train_ratio: Fraction of days used for training.
+
+    Returns:
+        ModelMetrics with AUC/F1 of the text-only classifier (max_hops always 0).
+    """
+    from datetime import date, timedelta
+
+    logger.info("=== Article-text baseline evaluation (lookback=%d days) ===", lookback_days)
+
+    # Use exactly the same sorted day list as evaluate_candidate would.
+    days = sorted(day_labels.keys())
+
+    # Fetch mean-pooled embeddings for days that have articles in their window.
+    # d.date is stored as a string in Neo4j — use string comparison.
+    day_windows = [
+        {
+            "eval_date": d,
+            "window_start": str(date.fromisoformat(d) - timedelta(days=lookback_days)),
+        }
+        for d in days
+    ]
+
+    query = """
+    UNWIND $day_windows AS entry
+    MATCH (a:Article)-[:PUBLISHED_ON]->(d:Day)
+    WHERE toString(d.date) >= entry.window_start
+      AND toString(d.date) <= entry.eval_date
+      AND a.text_embedding IS NOT NULL
+    WITH entry.eval_date AS eval_date, collect(a.text_embedding) AS embeddings
+    WHERE size(embeddings) > 0
+    RETURN eval_date,
+           [i IN range(0, size(embeddings[0]) - 1) |
+               reduce(s = 0.0, e IN embeddings | s + e[i]) / size(embeddings)
+           ] AS mean_embedding
+    """
+
+    emb_by_day: Dict[str, np.ndarray] = {}
+    try:
+        rows = driver.run_query(query, parameters={"day_windows": day_windows})
+        for row in rows or []:
+            day = str(row["eval_date"])
+            emb = row.get("mean_embedding")
+            if emb and day in day_labels:
+                emb_by_day[day] = np.array(emb, dtype=np.float32)
+    except Exception as e:
+        logger.error("Baseline query failed: %s", e)
+        return ModelMetrics(auc=0.0, f1=0.0, max_hops_train=0, max_hops_val=0)
+
+    if not emb_by_day:
+        logger.warning("No article embeddings found for baseline — were embeddings written?")
+        return ModelMetrics(auc=0.0, f1=0.0, max_hops_train=0, max_hops_val=0)
+
+    # Determine embedding dimension from any available vector.
+    emb_dim = next(iter(emb_by_day.values())).shape[0]
+    zero_vec = np.zeros(emb_dim, dtype=np.float32)
+
+    # Build feature matrix over ALL days — zero vector where no articles found.
+    # This guarantees the same day list and split as evaluate_candidate.
+    X = np.array([emb_by_day.get(d, zero_vec) for d in days], dtype=np.float32)
+    y = np.array([day_labels[d] for d in days], dtype=np.int32)
+
+    logger.info(
+        "Baseline: %d / %d days have article embeddings (rest → zero vector)",
+        len(emb_by_day), len(days),
+    )
+
+    try:
+        train_idx, val_idx = temporal_train_val_split(days, train_ratio=train_ratio)
+    except Exception as e:
+        logger.error("Baseline train/val split failed: %s", e)
+        return ModelMetrics(auc=0.0, f1=0.0, max_hops_train=0, max_hops_val=0)
+
+    if not train_idx or not val_idx:
+        logger.warning("Baseline train/val split produced empty sets")
+        return ModelMetrics(auc=0.0, f1=0.0, max_hops_train=0, max_hops_val=0)
+
+    df_train = pd.DataFrame({"features": list(X[train_idx]), "direction": y[train_idx]})
+    df_val   = pd.DataFrame({"features": list(X[val_idx]),   "direction": y[val_idx]})
+
+    try:
+        metrics = train_classifier_on_embeddings(df_train, df_val)
+        metrics.max_hops_train = 0
+        metrics.max_hops_val = 0
+    except Exception as e:
+        logger.error("Baseline classifier failed: %s", e)
+        return ModelMetrics(auc=0.0, f1=0.0, max_hops_train=0, max_hops_val=0)
+
+    logger.info("Baseline AUC=%.4f, F1=%.4f", metrics.auc, metrics.f1)
+    return metrics
+
+
 def fetch_edges_for_candidate(
     driver: GraphDriver,
     neo4j_cfg: Optional[Neo4jConfig],

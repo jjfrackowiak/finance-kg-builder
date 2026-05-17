@@ -1,0 +1,7 @@
+2026-02-22 22:40:44 [INFO] __main__:   step_1_candidate_0: AUC=0.6019, F1=0.5714, max_hops_train=6, max_hops_val=6
+2026-02-22 22:40:44 [INFO] __main__:   step_1_candidate_1: AUC=0.4815, F1=0.5714, max_hops_train=6, max_hops_val=6
+2026-02-22 22:40:44 [INFO] __main__:   step_2_candidate_0: AUC=0.5648, F1=0.5714, max_hops_train=6, max_hops_val=6
+2026-02-22 22:40:44 [INFO] __main__:   step_2_candidate_1: AUC=0.6204, F1=0.4286, max_hops_train=6, max_hops_val=6
+2026-02-22 22:40:44 [INFO] __main__:   step_3_candidate_0: AUC=0.5556, F1=0.5714, max_hops_train=6, max_hops_val=6
+2026-02-22 22:40:44 [INFO] __main__:   step_3_candidate_1: AUC=0.6852, F1=0.5714, max_hops_train=6, max_hops_val=6
+2026-02-22 22:40:44 [INFO] __main__: ✓ Results saved to results/experiment_100days_unique_paths.json
