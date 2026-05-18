@@ -2,11 +2,15 @@
 
 import argparse
 import asyncio
+import datetime
 import json
 import logging
 import sys
 from pathlib import Path
 from typing import Optional, Tuple
+
+import mlflow
+import yfinance as yf
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -27,9 +31,9 @@ logger = get_logger(__name__)
 # ============================================================================
 
 # Load .env from parent directory
-env_path = Path(__file__).parent.parent.parent / ".env"
+env_path = Path(__file__).parent.parent / ".env"
 if env_path.exists():
-    load_dotenv(env_path)
+    load_dotenv(env_path, override=True)
 
 
 # ============================================================================
@@ -45,8 +49,6 @@ def fetch_stooq_prices(symbol: str = "TSLA") -> pd.DataFrame:
     Returns:
         DataFrame with columns: ['day', 'Open', 'High', 'Low', 'Close', 'Volume']
     """
-    import yfinance as yf
-
     logger.info(f"Fetching price data for {symbol} via yfinance...")
     try:
         ticker = yf.Ticker(symbol)
@@ -426,6 +428,46 @@ def save_results(results: dict, output_path: Path) -> None:
 
 
 # ============================================================================
+# MLflow Helpers
+# ============================================================================
+
+def _setup_mlflow(config: Config) -> None:
+    """Configure MLflow tracking URI and experiment."""
+    if config.mlflow.tracking_uri:
+        mlflow.set_tracking_uri(config.mlflow.tracking_uri)
+        logger.info("MLflow tracking URI: %s", config.mlflow.tracking_uri)
+    mlflow.set_experiment(config.mlflow.experiment_name)
+
+
+def _make_run_name(args: argparse.Namespace, config: Config) -> str:
+    """Build a human-readable run name from key CLI args."""
+    date_str = datetime.date.today().isoformat()
+    ticker = config.experiment.target_ticker
+    return f"{ticker}-steps{args.steps}-cands{args.candidates}-{args.feature_mode}-{date_str}"
+
+
+def _log_params(args: argparse.Namespace, config: Config) -> None:
+    """Log all experiment hyperparameters to the active MLflow run."""
+    mlflow.log_params({
+        "steps": args.steps,
+        "candidates": args.candidates,
+        "time_window_days": args.time_window_days,
+        "articles_per_day": args.articles_per_day,
+        "lookback_days": args.lookback_days,
+        "feature_mode": args.feature_mode,
+        "min_chain_hops": args.min_chain_hops,
+        "max_chain_hops": args.max_chain_hops,
+        "path_uniqueness": args.path_uniqueness,
+        "max_metapath_hops": args.max_metapath_hops,
+        "train_ratio": args.train_ratio,
+        "embedding_type": args.embedding_type,
+        "local_model": args.local_model,
+        "llm_model": config.openai.model_name,
+        "llm_base_url": config.openai.base_url or "openai",
+    })
+
+
+# ============================================================================
 # Main Entry Point
 # ============================================================================
 
@@ -464,17 +506,21 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
 
         # 4. Initialize LLM and embedder
         logger.info("Initializing LLM and embedder...")
-        llm = OpenAILLM(
-            api_key=config.openai.api_key,
-            model_name=config.openai.model_name,
-        )
+        llm_kwargs = {"api_key": config.openai.api_key, "model_name": config.openai.model_name}
+        if config.openai.base_url:
+            llm_kwargs["base_url"] = config.openai.base_url
+            logger.info(f"  - LLM_BASE_URL={config.openai.base_url}")
+        llm = OpenAILLM(**llm_kwargs)
         embedder = OpenAIEmbeddings(
             api_key=config.openai.api_key,
             model="text-embedding-3-small",
         )
         logger.info("✓ LLM and embedder initialized")
 
-        # 5. Create orchestrator and run experiment
+        # 5. Setup MLflow
+        _setup_mlflow(config)
+
+        # 6. Create orchestrator and run experiment
         logger.info("Creating orchestrator...")
         orchestrator = Orchestrator(config, driver, llm, embedder)
         logger.info("✓ Orchestrator created")
@@ -483,13 +529,16 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
         logger.info(f"Starting experiment: {args.steps} steps, {args.candidates} candidates/step")
         logger.info("=" * 80)
 
-        results = await orchestrator.run(articles_df, price_df)
+        with mlflow.start_run(run_name=_make_run_name(args, config)) as run:
+            _log_params(args, config)
+            results = await orchestrator.run(articles_df, price_df)
+            logger.info("MLflow run: %s", run.info.run_id)
 
         logger.info("=" * 80)
         logger.info("✓ Experiment completed!")
         logger.info("=" * 80)
 
-        # 6. Display and save results
+        # 7. Display and save results
         logger.info("\nResults by candidate:")
         for candidate_tag in sorted(results.keys()):
             metrics = results[candidate_tag]

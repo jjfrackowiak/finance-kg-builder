@@ -5,6 +5,9 @@ import logging
 from pathlib import Path
 from typing import Dict, List
 
+import mlflow
+from mlflow.tracking import MlflowClient
+
 import pandas as pd
 from neo4j_graphrag.embeddings.openai import OpenAIEmbeddings
 from neo4j_graphrag.llm import OpenAILLM
@@ -58,6 +61,7 @@ class Orchestrator:
         self.results = {}
         self.candidates_per_step: Dict[int, List[OntologyCandidate]] = {}
         self.ontologies_dir = Path("results/ontologies")
+        self._mlflow_run_ids: Dict[str, str] = {}
 
     async def run(self, articles_df: pd.DataFrame, price_df: pd.DataFrame) -> dict:
         """Run the experiment.
@@ -115,6 +119,7 @@ class Orchestrator:
             baseline_metrics.auc,
             baseline_metrics.f1,
         )
+        self._log_baseline_to_mlflow(baseline_metrics)
 
         # STEP 1+: Evolve and evaluate ontologies using incremental mutation
         # num_steps=0 means only base, num_steps=1 means base + 1 evolution step, etc.
@@ -334,6 +339,7 @@ class Orchestrator:
             logger.info(
                 "Candidate %s: AUC=%.4f, F1=%.4f", candidate.candidate_tag, metrics.auc, metrics.f1
             )
+            self._log_candidate_to_mlflow(candidate, metrics, step, idx)
 
         # Prune tags of losing candidates
         if self.results and self.candidates_per_step[step]:
@@ -342,6 +348,7 @@ class Orchestrator:
                 key=lambda c: self.results.get(c.candidate_tag, ModelMetrics(0, 0, 0, 0)).auc,
             )
             logger.info("Winner of step %d: %s", step, best_step.candidate_tag)
+            self._tag_step_winner_in_mlflow(step, best_step.candidate_tag)
 
             # Prune tags from losing candidates (don't delete nodes/rels, just remove their tags)
             for candidate in self.candidates_per_step[step]:
@@ -703,6 +710,68 @@ class Orchestrator:
             pruned_nodes = result[0].get("pruned_nodes", 0) if isinstance(result[0], dict) else 0
             logger.info("Pruned %d nodes (removed tag %s)", pruned_nodes, candidate_tag)
 
+    def _log_baseline_to_mlflow(self, metrics) -> None:
+        """Log the article-text baseline as a nested MLflow run."""
+        try:
+            with mlflow.start_run(run_name="baseline_article_embedding", nested=True):
+                mlflow.log_params({"candidate_tag": "baseline_article_embedding", "step": 0})
+                mlflow.log_metrics({"auc": metrics.auc, "f1": metrics.f1})
+                mlflow.set_tag("winner", "false")
+        except Exception as e:
+            logger.warning("MLflow baseline logging failed: %s", e)
+
+    def _log_candidate_to_mlflow(
+        self,
+        candidate: OntologyCandidate,
+        metrics,
+        step: int,
+        variant_idx: int,
+    ) -> None:
+        """Log a single candidate's metrics and ontology params as a nested MLflow run."""
+        try:
+            node_labels = [
+                n.get("label", "") if isinstance(n, dict) else str(n)
+                for n in candidate.schema.get("node_types", [])
+            ]
+            rel_labels = [
+                r.get("label", "") if isinstance(r, dict) else str(r)
+                for r in candidate.schema.get("relationship_types", [])
+            ]
+            with mlflow.start_run(run_name=candidate.candidate_tag, nested=True) as run:
+                mlflow.log_params({
+                    "candidate_tag": candidate.candidate_tag,
+                    "step": step,
+                    "variant_idx": variant_idx,
+                    "parent_tag": candidate.parent_tag or "base",
+                    "node_types": ",".join(node_labels),
+                    "rel_types": ",".join(rel_labels),
+                    "n_node_types": len(node_labels),
+                    "n_rel_types": len(rel_labels),
+                    "description": candidate.description[:250],
+                })
+                mlflow.log_metrics({
+                    "auc": metrics.auc,
+                    "f1": metrics.f1,
+                    "max_hops_train": metrics.max_hops_train,
+                    "max_hops_val": metrics.max_hops_val,
+                })
+                self._mlflow_run_ids[candidate.candidate_tag] = run.info.run_id
+        except Exception as e:
+            logger.warning("MLflow logging failed for %s: %s", candidate.candidate_tag, e)
+
+    def _tag_step_winner_in_mlflow(self, step: int, winner_tag: str) -> None:
+        """Tag the winner and losers of a step on their (already closed) nested runs."""
+        try:
+            client = MlflowClient()
+            for candidate in self.candidates_per_step.get(step, []):
+                run_id = self._mlflow_run_ids.get(candidate.candidate_tag)
+                if run_id:
+                    is_winner = candidate.candidate_tag == winner_tag
+                    client.set_tag(run_id, "winner", str(is_winner).lower())
+                    client.set_tag(run_id, "step_winner", winner_tag)
+        except Exception as e:
+            logger.warning("MLflow winner tagging failed for step %d: %s", step, e)
+
     def _save_ontologies(self) -> None:
         """Save all ontology candidates and results to files."""
         logger.info("Saving ontology candidates...")
@@ -729,3 +798,9 @@ class Orchestrator:
         )
 
         logger.info("✓ Saved ontologies to %s", self.ontologies_dir)
+
+        try:
+            mlflow.log_artifacts(str(self.ontologies_dir), artifact_path="ontologies")
+            logger.info("✓ Logged ontology artifacts to MLflow")
+        except Exception as e:
+            logger.warning("MLflow artifact logging failed: %s", e)

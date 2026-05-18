@@ -33,14 +33,32 @@ class OpenAIConfig:
 
     api_key: str
     model_name: str = "gpt-4o-mini"
+    base_url: str = ""
 
     @classmethod
     def from_env(cls) -> "OpenAIConfig":
         """Load from environment variables."""
-        api_key = os.getenv("OPENAI_API_KEY", "")
-        model_name = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        return cls(
+            api_key=os.getenv("OPENAI_API_KEY", "fake"),
+            model_name=os.getenv("LLM_MODEL", "gpt-4o-mini"),
+            base_url=os.getenv("LLM_BASE_URL", ""),
+        )
 
-        return cls(api_key=api_key, model_name=model_name)
+
+@dataclass
+class MLflowConfig:
+    """MLflow tracking configuration."""
+
+    tracking_uri: str = ""
+    experiment_name: str = "kg-ontology-evolution"
+
+    @classmethod
+    def from_env(cls) -> "MLflowConfig":
+        """Load from environment variables."""
+        return cls(
+            tracking_uri=os.getenv("MLFLOW_TRACKING_URI", ""),
+            experiment_name=os.getenv("MLFLOW_EXPERIMENT_NAME", "kg-ontology-evolution"),
+        )
 
 
 @dataclass
@@ -98,6 +116,11 @@ class Config:
     neo4j: Neo4jConfig
     openai: OpenAIConfig
     experiment: ExperimentConfig
+    mlflow: MLflowConfig = None
+
+    def __post_init__(self) -> None:
+        if self.mlflow is None:
+            self.mlflow = MLflowConfig()
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -106,4 +129,5 @@ class Config:
             neo4j=Neo4jConfig.from_env(),
             openai=OpenAIConfig.from_env(),
             experiment=ExperimentConfig.from_env(),
+            mlflow=MLflowConfig.from_env(),
         )
