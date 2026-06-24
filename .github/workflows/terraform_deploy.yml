@@ -3,22 +3,41 @@ name: 🚀 Terraform Deploy
 on:
   push:
     branches: [dev, prod, qa]
-    paths: ["infra/configs/dev/**"]
+    paths: ["infra/**.tf"]
 
 permissions:
   id-token: write
   contents: read
 
 env:
-  TF_WORKING_DIR: infra/configs/dev
-  BACKEND_VARS: infra/configs/backend/dev/generated/backend.tfvars
-  PLAN_APPLY_VARS: infra/configs/backend/dev/generated/plan_apply.tfvars
   AWS_REGION: eu-central-1
 
 jobs:
+  resolve-env:
+    name: 🗺️ Resolve environment
+    runs-on: ubuntu-latest
+    outputs:
+      tf_dir: ${{ steps.env.outputs.tf_dir }}
+      backend_vars: ${{ steps.env.outputs.backend_vars }}
+      plan_apply_vars: ${{ steps.env.outputs.plan_apply_vars }}
+    steps:
+      - name: 🗺️ Map branch to environment
+        id: env
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          case "$BRANCH" in
+            prod) ENV=prod ;;
+            qa)   ENV=qa   ;;
+            *)    ENV=dev  ;;
+          esac
+          echo "tf_dir=infra"                                                          >> $GITHUB_OUTPUT
+          echo "backend_vars=infra/configs/backend/$ENV/generated/backend.tfvars"      >> $GITHUB_OUTPUT
+          echo "plan_apply_vars=infra/configs/backend/$ENV/generated/plan_apply.tfvars" >> $GITHUB_OUTPUT
+
   deploy:
     name: 🚀 Deploy
     runs-on: ubuntu-latest
+    needs: resolve-env
 
     steps:
       - name: 📥 Checkout
@@ -27,8 +46,11 @@ jobs:
       - name: 🔑 Read deployment config
         id: config
         run: |
-          GITHUB_ROLE=$(grep 'github_role_arn' ${{ env.PLAN_APPLY_VARS }} | cut -d'"' -f2)
+          VARS="${{ needs.resolve-env.outputs.plan_apply_vars }}"
+          GITHUB_ROLE=$(grep 'github_role_arn' $VARS | cut -d'"' -f2)
+          ROLE_ARN=$(grep '^role_arn' $VARS | cut -d'"' -f2)
           echo "github_role_arn=$GITHUB_ROLE" >> $GITHUB_OUTPUT
+          echo "role_arn=$ROLE_ARN"           >> $GITHUB_OUTPUT
 
       - name: 🔐 Authenticate to AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -42,13 +64,19 @@ jobs:
           terraform_version: "~> 1.10"
 
       - name: 🗂️ Init
-        run: terraform init -backend-config="${{ github.workspace }}/${{ env.BACKEND_VARS }}"
-        working-directory: ${{ env.TF_WORKING_DIR }}
+        run: terraform init -backend-config="${{ github.workspace }}/${{ needs.resolve-env.outputs.backend_vars }}"
+        working-directory: ${{ needs.resolve-env.outputs.tf_dir }}
+        env:
+          TF_VAR_role_arn: ${{ steps.config.outputs.role_arn }}
 
       - name: 📋 Plan
         run: terraform plan -no-color -out=tfplan
-        working-directory: ${{ env.TF_WORKING_DIR }}
+        working-directory: ${{ needs.resolve-env.outputs.tf_dir }}
+        env:
+          TF_VAR_role_arn: ${{ steps.config.outputs.role_arn }}
 
       - name: 🚀 Apply
         run: terraform apply -auto-approve tfplan
-        working-directory: ${{ env.TF_WORKING_DIR }}
+        working-directory: ${{ needs.resolve-env.outputs.tf_dir }}
+        env:
+          TF_VAR_role_arn: ${{ steps.config.outputs.role_arn }}
