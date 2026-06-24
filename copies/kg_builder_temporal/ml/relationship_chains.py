@@ -22,8 +22,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from kg_builder_temporal.core.graph import GraphDriver
-from kg_builder_temporal.ml.embeddings import embed_text_deterministic, get_embedding_dim
+from copies.kg_builder_temporal.core.graph import GraphDriver
+from copies.kg_builder_temporal.ml.embeddings import embed_text_deterministic, get_embedding_dim
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,7 @@ def embed_relationship_chains(
         - 'embedding': np.ndarray (384 dims for local, 1536 for openai)
         - 'hop_count': Number of hops
     """
-    from kg_builder_temporal.ml.embeddings import embed_text_local, get_local_embedder
+    from copies.kg_builder_temporal.ml.embeddings import embed_text_local, get_local_embedder
     
     embedded_chains = []
     logger.info("Embedding %d chains using %s...", len(chains), embedding_type)

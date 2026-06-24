@@ -2,7 +2,7 @@
 
 import sys
 
-from kg_builder.main import main
+from copies.kg_builder.main import main
 
 if __name__ == "__main__":
     exit_code = __import__("asyncio").run(main())

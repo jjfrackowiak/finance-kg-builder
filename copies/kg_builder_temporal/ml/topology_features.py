@@ -5,7 +5,7 @@ from typing import Dict, List
 
 import numpy as np
 
-from kg_builder_temporal.core.graph import GraphDriver
+from copies.kg_builder_temporal.core.graph import GraphDriver
 
 logger = logging.getLogger(__name__)
 

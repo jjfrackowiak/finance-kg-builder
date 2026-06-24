@@ -5,7 +5,7 @@ from neo4j import Driver
 from neo4j_graphrag.llm import LLMInterface
 from pydantic import BaseModel
 
-from kg_builder.core.entity_resolution import normalize_key
+from copies.kg_builder.core.entity_resolution import normalize_key
 
 logger = logging.getLogger(__name__)
 

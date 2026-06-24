@@ -7,8 +7,8 @@ from typing import Optional
 from neo4j_graphrag.llm import OpenAILLM
 from pydantic import BaseModel, ConfigDict
 
-from kg_builder_temporal.core.ontology import OntologyCandidate
-from kg_builder_temporal.ml.modeling import ModelMetrics
+from copies.kg_builder_temporal.core.ontology import OntologyCandidate
+from copies.kg_builder_temporal.ml.modeling import ModelMetrics
 
 logger = logging.getLogger(__name__)
 

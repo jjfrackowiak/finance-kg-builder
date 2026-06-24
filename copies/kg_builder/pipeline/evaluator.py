@@ -6,10 +6,10 @@ from typing import Dict, List, Optional
 import pandas as pd
 from neo4j_graphrag.embeddings import Embedder
 
-from kg_builder.config import Neo4jConfig
-from kg_builder.core.graph import GraphDriver
-from kg_builder.ml.embeddings import compute_hope_embeddings
-from kg_builder.ml.modeling import (
+from copies.kg_builder.config import Neo4jConfig
+from copies.kg_builder.core.graph import GraphDriver
+from copies.kg_builder.ml.embeddings import compute_hope_embeddings
+from copies.kg_builder.ml.modeling import (
     ModelMetrics,
     build_day_embedding_frame,
     train_classifier_on_embeddings,

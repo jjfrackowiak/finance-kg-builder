@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from kg_builder.core.graph import GraphDriver
+from copies.kg_builder.core.graph import GraphDriver
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, f1_score
 from xgboost import XGBClassifier
 
-from config import ExperimentConfig
+from copies.experiment_agent_copy.config import ExperimentConfig
 
 logger = logging.getLogger(__name__)
 

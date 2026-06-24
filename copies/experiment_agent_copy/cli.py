@@ -8,8 +8,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 import os
-from config import Neo4jConfig, ExperimentConfig, OpenAIConfig
-from pipeline import run_ontology_experiment
+from copies.experiment_agent_copy.config import Neo4jConfig, ExperimentConfig, OpenAIConfig
+from copies.experiment_agent_copy.pipeline import run_ontology_experiment
 import asyncio
 
 async def main():

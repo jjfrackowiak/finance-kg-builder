@@ -10,8 +10,8 @@ from neo4j_graphrag.llm import OpenAILLM
 from neo4j_graphrag.embeddings.openai import OpenAIEmbeddings
 from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
 
-from config import Neo4jConfig, ExperimentConfig
-from ontology import OntologyCandidate
+from copies.experiment_agent_copy.config import Neo4jConfig, ExperimentConfig
+from copies.experiment_agent_copy.ontology import OntologyCandidate
 
 logger = logging.getLogger(__name__)
 

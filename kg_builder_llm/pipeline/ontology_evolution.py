@@ -196,14 +196,6 @@ class OntologyEvolutionAgent:
     # Private Helper Methods
     # ========================================================================
 
-    # All candidate entity types the system knows about.
-    # Used to filter out suggestions that are already in the schema.
-    _ALL_CANDIDATE_NODE_TYPES = [
-        "Market", "Sector", "Index", "Deal", "Contract", "Regulation",
-        "Product", "Event", "Quarter", "Insider", "Executive", "Fund",
-        "Portfolio", "Sentiment", "Analyst", "Competitor", "ETF",
-    ]
-
     # Generic relationship types that should be specialised in later steps.
     _GENERIC_RELS = ["RELATES_TO", "INVOLVES", "ASSOCIATED_WITH"]
 
@@ -239,12 +231,15 @@ class OntologyEvolutionAgent:
         Returns:
             Prompt string for LLM
         """
-        existing_nodes = [n["label"] for n in previous.schema.get("node_types", [])]
+        existing_nodes = [
+            n["label"] if isinstance(n, dict) else str(n)
+            for n in previous.schema.get("node_types", [])
+        ]
         existing_rels = previous.schema.get("relationship_types", [])
 
         # If custom prompt template is loaded, use it
         if self.custom_prompt_template:
-            prompt = self.custom_prompt_template.format(
+            return self.custom_prompt_template.format(
                 schema_json=json.dumps(previous.schema, indent=2),
                 existing_nodes=", ".join(existing_nodes),
                 existing_rels=", ".join(existing_rels),
@@ -255,36 +250,18 @@ class OntologyEvolutionAgent:
                 step_index=step_index,
                 variant_index=variant_index,
             )
-            return prompt
 
-        # --- dynamic suggestion list: exclude types already in schema ---
-        existing_set = set(existing_nodes)
-        new_type_suggestions = [t for t in self._ALL_CANDIDATE_NODE_TYPES if t not in existing_set]
-
-        # --- identify generic rels still present that could be specialised ---
+        # Identify generic rels still present that could be specialised
         generic_present = [r for r in self._GENERIC_RELS if r in existing_rels]
         specialisation_lines = []
         for rel in generic_present:
             options = ", ".join(self._REL_SPECIALISATIONS.get(rel, []))
             specialisation_lines.append(f"  - {rel}  →  consider: {options}")
-        specialisation_block = "\n".join(specialisation_lines) if specialisation_lines else "  (none — all generic rels already specialised)"
-
-        # --- step-aware task description ---
-        if step_index <= 1 and new_type_suggestions:
-            task_description = f"""TASK — NEW ENTITY TYPES (step {step_index}):
-Add entity types from this list that are NOT yet in the schema: {', '.join(new_type_suggestions)}.
-For each new type, add at least one semantically specific relationship connecting it to existing types.
-Keep all existing node_types and relationship_types unchanged."""
-        else:
-            task_description = f"""TASK — RELATIONSHIP SPECIALISATION (step {step_index}):
-The node vocabulary is now rich enough. Your primary goal is to REPLACE generic relationship types
-with semantically specific ones that better describe the actual connection.
-
-Generic relationships still in schema that should be specialised:
-{specialisation_block}
-
-You MAY also add new entity types from this list if genuinely needed: {', '.join(new_type_suggestions) or '(all covered)'}.
-Keep all existing node_types and relationship_types unchanged."""
+        specialisation_block = (
+            "\n".join(specialisation_lines)
+            if specialisation_lines
+            else "  (none — all generic rels already specialised)"
+        )
 
         auc_signal = (
             f"AUC improved to {metrics.auc:.4f} (+{metrics.auc - 0.5:.4f} above random)"
@@ -294,27 +271,34 @@ Keep all existing node_types and relationship_types unchanged."""
 
         return f"""You are a knowledge graph ontology designer optimizing for financial news analysis.
 
-{task_description}
+TASK — step {step_index}, variant {variant_index}:
+Evolve the schema by doing BOTH of the following:
+
+1. ADD NEW ENTITY TYPES — propose 3–5 new node types NOT already in the schema that would
+   capture financially relevant concepts (e.g. corporate actions, macro events, instruments,
+   regulatory bodies, supply-chain actors, geographic regions, credit ratings, etc.).
+   Be creative and domain-specific; do not repeat existing types.
+
+2. SPECIALISE GENERIC RELATIONSHIPS — replace vague relationship types with semantically
+   precise ones. Generic rels still present that should be specialised:
+{specialisation_block}
 
 Current schema:
 ```json
 {json.dumps(previous.schema, indent=2)}
 ```
 
-EXISTING ENTITY TYPES (do NOT re-add these): {', '.join(existing_nodes)}
+EXISTING ENTITY TYPES (do NOT re-add): {', '.join(existing_nodes)}
 EXISTING RELATIONSHIP TYPES: {', '.join(existing_rels)}
 
 Performance signal: {auc_signal}
-Max relationship-chain hops found — train: {metrics.max_hops_train}, val: {metrics.max_hops_val}
-Variant: {variant_index}
+Max relationship-chain hops — train: {metrics.max_hops_train}, val: {metrics.max_hops_val}
 
 RULES:
-1. For property types use only: STRING, INTEGER, FLOAT, BOOLEAN
-2. Patterns MUST be formatted as ["NodeA", "RELATIONSHIP", "NodeB"]
-3. Keep all existing node_types and relationship_types
-4. Return ONLY valid JSON with keys: node_types, relationship_types, patterns
-
-Return ONLY valid JSON, no prose."""
+1. Property types: STRING, INTEGER, FLOAT, BOOLEAN only
+2. Patterns MUST be ["NodeA", "RELATIONSHIP", "NodeB"]
+3. Keep ALL existing node_types and relationship_types — only add, never remove
+4. Return ONLY valid JSON with keys: node_types, relationship_types, patterns — no prose"""
 
     def _parse_schema_response(self, response: str) -> dict:
         """Parse LLM response to extract schema.

@@ -1,0 +1,105 @@
+name: 📋 Terraform Plan
+
+on:
+  pull_request:
+    branches: [dev, prod, qa]
+    paths: ["infra/**.tf"]
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  TF_WORKING_DIR: infra/configs/dev
+  BACKEND_VARS: infra/configs/backend/dev/generated/backend.tfvars
+  PLAN_APPLY_VARS: infra/configs/backend/dev/generated/plan_apply.tfvars
+  AWS_REGION: eu-central-1
+
+jobs:
+  plan:
+    name: 📋 Plan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔑 Read deployment config
+        id: config
+        run: |
+          GITHUB_ROLE=$(grep 'github_role_arn' ${{ env.PLAN_APPLY_VARS }} | cut -d'"' -f2)
+          echo "github_role_arn=$GITHUB_ROLE" >> $GITHUB_OUTPUT
+
+      - name: 🔐 Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.config.outputs.github_role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ⚙️ Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.10"
+
+      - name: 🗂️ Init
+        id: init
+        run: terraform init -backend-config="${{ github.workspace }}/${{ env.BACKEND_VARS }}"
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: 🎨 Format Check
+        id: fmt
+        run: terraform fmt -check -recursive
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        continue-on-error: true
+
+      - name: ✅ Validate
+        id: validate
+        run: terraform validate -no-color
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      - name: 📋 Plan
+        id: plan
+        run: terraform plan -no-color -out=tfplan 2>&1 | tee plan.txt
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        continue-on-error: true
+
+      - name: 💬 Post Plan Comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ env.TF_WORKING_DIR }}/plan.txt', 'utf8');
+            const truncated = plan.length > 60000 ? plan.slice(0, 60000) + '\n...(truncated)' : plan;
+
+            const body = [
+              '## 📋 Terraform Plan',
+              '',
+              '| Step | Result |',
+              '|------|--------|',
+              `| 🗂️ Init     | \`${{ steps.init.outcome }}\` |`,
+              `| 🎨 Format  | \`${{ steps.fmt.outcome }}\` |`,
+              `| ✅ Validate | \`${{ steps.validate.outcome }}\` |`,
+              `| 📋 Plan    | \`${{ steps.plan.outcome }}\` |`,
+              '',
+              '<details><summary>📄 Show full plan</summary>',
+              '',
+              '```hcl',
+              truncated,
+              '```',
+              '',
+              '</details>',
+              '',
+              `> Triggered by @${{ github.actor }} on \`${{ github.head_ref }}\``,
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
+
+      - name: 🚫 Fail if Plan Failed
+        if: steps.plan.outcome == 'failure' || steps.validate.outcome == 'failure'
+        run: exit 1

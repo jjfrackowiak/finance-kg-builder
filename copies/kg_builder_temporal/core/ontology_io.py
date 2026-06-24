@@ -5,8 +5,8 @@ import logging
 from pathlib import Path
 from typing import Dict, List
 
-from kg_builder_temporal.core.ontology import OntologyCandidate
-from kg_builder_temporal.ml.modeling import ModelMetrics
+from copies.kg_builder_temporal.core.ontology import OntologyCandidate
+from copies.kg_builder_temporal.ml.modeling import ModelMetrics
 
 logger = logging.getLogger(__name__)
 

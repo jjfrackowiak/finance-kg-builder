@@ -184,7 +184,69 @@ Key fields in the ECS task definition JSON:
 }
 ```
 
-### 2.4 ECS cluster with GPU capacity provider
+### 2.4 EFS volume for model weight caching
+
+EFS is part of the baseline setup — not an optional optimization. Without it, every new
+g5.xlarge Spot instance downloads 65 GB from HuggingFace Hub (~10–15 min cold start).
+With EFS the model is cached and cold start drops to ~60 seconds.
+
+```bash
+# Create EFS filesystem
+aws efs create-file-system \
+  --performance-mode generalPurpose \
+  --throughput-mode bursting \
+  --tags Key=Name,Value=kg-model-cache \
+  --profile wne-uw
+
+# Create mount target in the same VPC/subnet as the ECS cluster
+aws efs create-mount-target \
+  --file-system-id <fs-id> \
+  --subnet-id <subnet-id> \
+  --security-groups <sg-id> \
+  --profile wne-uw
+```
+
+One-time model download to EFS — run as an ECS task (no bare EC2 needed):
+
+```bash
+aws ecs run-task \
+  --cluster kg-experiments \
+  --task-definition kg-vllm \
+  --launch-type EC2 \
+  --overrides '{
+    "containerOverrides": [{
+      "name": "vllm",
+      "command": [
+        "python", "-c",
+        "from huggingface_hub import snapshot_download; snapshot_download(\"Qwen/Qwen2.5-32B-Instruct\")"
+      ]
+    }]
+  }' \
+  --profile wne-uw
+```
+
+The task reuses the `kg-vllm` task definition (which already has the EFS mount and HuggingFace token),
+downloads the weights to EFS, then exits. Run once — all subsequent experiment runs skip this entirely.
+
+Add EFS mount to the vLLM task definition (alongside the container definition):
+
+```json
+"volumes": [{
+  "name": "model-cache",
+  "efsVolumeConfiguration": {
+    "fileSystemId": "<fs-id>",
+    "rootDirectory": "/models"
+  }
+}],
+"mountPoints": [{
+  "sourceVolume": "model-cache",
+  "containerPath": "/root/.cache/huggingface"
+}]
+```
+
+**Cost:** ~65 GB × $0.30/GB-month ≈ **$20/month** — negligible vs compute savings.
+
+### 2.5 ECS cluster with GPU capacity provider
 
 ```bash
 # Create cluster
@@ -197,7 +259,7 @@ aws ecs create-cluster --cluster-name kg-experiments --profile wne-uw
 
 > The ECS-optimized GPU AMI already has CUDA, NVIDIA drivers, and the ECS agent — use it as-is.
 
-### 2.5 ALB for vLLM
+### 2.6 ALB for vLLM
 
 Add an Application Load Balancer in front of the vLLM ECS service so the orchestrator
 has a stable endpoint regardless of how many tasks are running.
@@ -311,21 +373,6 @@ Neo4j AuraDB is the only always-on cost (existing).
 
 ---
 
-## Model Weights Caching (after first run)
-
-First run downloads ~65 GB from HuggingFace Hub — slow (~10–15 min cold start).
-After validation, mount an EFS volume and pre-download:
-
-```bash
-# One-time: download weights to EFS
-docker run --rm -v /mnt/efs/models:/root/.cache/huggingface \
-  vllm/vllm-openai:latest \
-  python -c "from transformers import AutoModelForCausalLM; AutoModelForCausalLM.from_pretrained('Qwen/Qwen2.5-32B-Instruct')"
-```
-
-Add EFS mount to the vLLM task definition — cold start drops to ~60 seconds.
-
----
 
 ## Sequence Summary
 
@@ -339,8 +386,9 @@ Phase 1 (local, today)
 Phase 2 (one-time AWS setup)
   └── ECR repos
   └── Orchestrator Dockerfile + push
+  └── EFS filesystem + one-time model weight download (~65 GB)
   └── ECS cluster + g5.xlarge capacity provider
-  └── vLLM task definition (32B, bitsandbytes 4-bit)
+  └── vLLM task definition (32B, bitsandbytes 4-bit) + EFS mount
   └── ALB
 
 Phase 3 (each experiment run)

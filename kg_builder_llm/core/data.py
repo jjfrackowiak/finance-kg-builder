@@ -1,7 +1,7 @@
 """Data loading and preprocessing."""
 
 import logging
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -41,6 +41,7 @@ def filter_articles_by_date_window(
     df: pd.DataFrame,
     num_days: int,
     articles_per_day: Optional[int] = None,
+    start_date: Optional[date] = None,
 ) -> pd.DataFrame:
     """Filter articles to a consecutive date window.
 
@@ -48,6 +49,7 @@ def filter_articles_by_date_window(
         df: DataFrame with 'timestamp' column (must be datetime)
         num_days: Number of consecutive days to use
         articles_per_day: Max articles per day (None = no limit)
+        start_date: Window start date (default: earliest date in dataset)
 
     Returns:
         Filtered DataFrame spanning num_days
@@ -63,8 +65,9 @@ def filter_articles_by_date_window(
     # Sort by timestamp
     df = df.sort_values("timestamp").reset_index(drop=True)
 
-    # Find earliest date and span num_days forward
-    start_date = df["timestamp"].min().date()
+    # Use provided start_date or fall back to earliest date in dataset
+    if start_date is None:
+        start_date = df["timestamp"].min().date()
     end_date = start_date + timedelta(days=num_days)
 
     # Filter to date window

@@ -6,13 +6,13 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from kg_builder_temporal.core.graph import GraphDriver
-from kg_builder_temporal.ml.embeddings import embed_text_deterministic, get_embedding_dim
-from kg_builder_temporal.ml.relationship_chains import (
+from copies.kg_builder_temporal.core.graph import GraphDriver
+from copies.kg_builder_temporal.ml.embeddings import embed_text_deterministic, get_embedding_dim
+from copies.kg_builder_temporal.ml.relationship_chains import (
     aggregate_chain_embeddings,
     embed_relationship_chains,
 )
-from kg_builder_temporal.ml.topology_features import (
+from copies.kg_builder_temporal.ml.topology_features import (
     aggregate_topology_features,
     compute_topology_features,
 )
@@ -214,7 +214,7 @@ def build_day_feature_vector(
         logger.info("Processing %d articles for relationship chain extraction...", len(articles))
         
         # STEP 1: Build batch jobs for all articles
-        from kg_builder_temporal.ml.relationship_chains import extract_chains_batch
+        from copies.kg_builder_temporal.ml.relationship_chains import extract_chains_batch
         
         # Excluded relationship types (uninformative for chains)
         excluded_rels = ['PUBLISHED_ON', 'WRITTEN_BY', 'MENTIONS', 'MENTIONED_IN', 'REFERENCES']
@@ -270,7 +270,7 @@ def build_day_feature_vector(
         
         # STEP 3: Batch embed ALL chains at once (local, fast)
         if all_chains:
-            from kg_builder_temporal.ml.relationship_chains import embed_relationship_chains
+            from copies.kg_builder_temporal.ml.relationship_chains import embed_relationship_chains
             
             logger.info("Batch embedding %d chains...", len(all_chains))
             embedded_chains = embed_relationship_chains(
@@ -283,7 +283,7 @@ def build_day_feature_vector(
             logger.info("✓ Embedded %d chains in one batch", total_chains_embedded)
             
             # STEP 4: Group embeddings back by article and aggregate per article
-            from kg_builder_temporal.ml.relationship_chains import aggregate_chain_embeddings
+            from copies.kg_builder_temporal.ml.relationship_chains import aggregate_chain_embeddings
             
             article_embeddings = {}  # article_idx -> list of embedded chains
             chains_without_idx = 0

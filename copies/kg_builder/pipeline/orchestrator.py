@@ -8,18 +8,18 @@ import pandas as pd
 from neo4j_graphrag.embeddings.openai import OpenAIEmbeddings
 from neo4j_graphrag.llm import OpenAILLM
 
-from kg_builder.config import Config
-from kg_builder.core.article_linking import create_and_link_article_days
-from kg_builder.core.data import prepare_articles
-from kg_builder.core.graph import GraphDriver
-from kg_builder.core.neo4j_io import write_price_labels_to_days
-from kg_builder.core.ontology import OntologyCandidate, create_base_ontology
-from kg_builder.core.ontology_io import save_ontology_candidate, save_ontology_summary
-from kg_builder.core.tagging import tag_candidate_entities
-from kg_builder.ml.modeling import ModelMetrics
-from kg_builder.mutations.base import build_kg_incremental_candidate
-from kg_builder.pipeline.evaluator import evaluate_candidate
-from kg_builder.pipeline.ontology_evolution import OntologyEvolutionAgent
+from copies.kg_builder.config import Config
+from copies.kg_builder.core.article_linking import create_and_link_article_days
+from copies.kg_builder.core.data import prepare_articles
+from copies.kg_builder.core.graph import GraphDriver
+from copies.kg_builder.core.neo4j_io import write_price_labels_to_days
+from copies.kg_builder.core.ontology import OntologyCandidate, create_base_ontology
+from copies.kg_builder.core.ontology_io import save_ontology_candidate, save_ontology_summary
+from copies.kg_builder.core.tagging import tag_candidate_entities
+from copies.kg_builder.ml.modeling import ModelMetrics
+from copies.kg_builder.mutations.base import build_kg_incremental_candidate
+from copies.kg_builder.pipeline.evaluator import evaluate_candidate
+from copies.kg_builder.pipeline.ontology_evolution import OntologyEvolutionAgent
 
 logger = logging.getLogger(__name__)
 

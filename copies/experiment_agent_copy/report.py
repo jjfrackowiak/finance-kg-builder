@@ -2,8 +2,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Dict, Any
-from ontology import OntologyCandidate
-from modeling import ModelMetrics
+from copies.experiment_agent_copy.ontology import OntologyCandidate
+from copies.experiment_agent_copy.modeling import ModelMetrics
 import json
 
 

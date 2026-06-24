@@ -4,8 +4,8 @@ import logging
 
 import pandas as pd
 
-from kg_builder_temporal.config import Neo4jConfig
-from kg_builder_temporal.core.graph import GraphDriver
+from copies.kg_builder_temporal.config import Neo4jConfig
+from copies.kg_builder_temporal.core.graph import GraphDriver
 
 logger = logging.getLogger(__name__)
 

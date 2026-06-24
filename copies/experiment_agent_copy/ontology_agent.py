@@ -3,7 +3,7 @@ from typing import List, Optional
 import json
 from openai import OpenAI
 from pydantic import BaseModel, Field, ConfigDict
-from ontology import OntologyCandidate
+from copies.experiment_agent_copy.ontology import OntologyCandidate
 
 # ------------------------------------------------------------
 # 1. Allowed Property Types

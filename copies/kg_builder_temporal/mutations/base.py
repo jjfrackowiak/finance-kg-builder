@@ -11,11 +11,11 @@ from neo4j_graphrag.embeddings.openai import OpenAIEmbeddings
 from neo4j_graphrag.experimental.pipeline.kg_builder import SimpleKGPipeline
 from neo4j_graphrag.llm import OpenAILLM
 
-from kg_builder_temporal.config import ExperimentConfig, Neo4jConfig
-from kg_builder_temporal.core.graph import GraphDriver
-from kg_builder_temporal.core.ontology import OntologyCandidate
-from kg_builder_temporal.ml.embeddings import embed_text_deterministic
-from kg_builder_temporal.mutations.incremental_kg_mutator import IncrementalArticleKGMutator
+from copies.kg_builder_temporal.config import ExperimentConfig, Neo4jConfig
+from copies.kg_builder_temporal.core.graph import GraphDriver
+from copies.kg_builder_temporal.core.ontology import OntologyCandidate
+from copies.kg_builder_temporal.ml.embeddings import embed_text_deterministic
+from copies.kg_builder_temporal.mutations.incremental_kg_mutator import IncrementalArticleKGMutator
 
 logger = logging.getLogger(__name__)
 

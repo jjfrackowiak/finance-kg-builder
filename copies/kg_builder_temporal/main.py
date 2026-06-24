@@ -13,11 +13,11 @@ from dotenv import load_dotenv
 from neo4j_graphrag.embeddings.openai import OpenAIEmbeddings
 from neo4j_graphrag.llm import OpenAILLM
 
-from kg_builder_temporal.config import Config
-from kg_builder_temporal.core.data import filter_articles_by_date_window, load_articles, prepare_articles
-from kg_builder_temporal.core.graph import GraphDriver
-from kg_builder_temporal.logger import get_logger, setup_logging
-from kg_builder_temporal.pipeline.orchestrator import Orchestrator
+from copies.kg_builder_temporal.config import Config
+from copies.kg_builder_temporal.core.data import filter_articles_by_date_window, load_articles, prepare_articles
+from copies.kg_builder_temporal.core.graph import GraphDriver
+from copies.kg_builder_temporal.logger import get_logger, setup_logging
+from copies.kg_builder_temporal.pipeline.orchestrator import Orchestrator
 
 logger = get_logger(__name__)
 

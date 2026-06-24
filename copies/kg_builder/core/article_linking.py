@@ -4,7 +4,7 @@ import logging
 
 import pandas as pd
 
-from kg_builder.core.graph import GraphDriver
+from copies.kg_builder.core.graph import GraphDriver
 
 logger = logging.getLogger(__name__)
 

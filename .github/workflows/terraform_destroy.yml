@@ -1,0 +1,65 @@
+name: 💣 Terraform Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy" to confirm. This will tear down all infrastructure.'
+        required: true
+      environment:
+        description: Target environment
+        required: true
+        default: dev
+        type: choice
+        options: [dev, prod]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-central-1
+
+jobs:
+  destroy:
+    name: 💣 Destroy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🛑 Confirm destroy
+        if: github.event.inputs.confirm != 'destroy'
+        run: |
+          echo "❌ Confirmation failed — input was '${{ github.event.inputs.confirm }}', expected 'destroy'"
+          exit 1
+
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔑 Read deployment config
+        id: config
+        run: |
+          VARS="infra/configs/backend/${{ github.event.inputs.environment }}/generated/plan_apply.tfvars"
+          GITHUB_ROLE=$(grep 'github_role_arn' $VARS | cut -d'"' -f2)
+          BACKEND="infra/configs/backend/${{ github.event.inputs.environment }}/generated/backend.tfvars"
+          echo "github_role_arn=$GITHUB_ROLE" >> $GITHUB_OUTPUT
+          echo "backend_vars=$BACKEND" >> $GITHUB_OUTPUT
+          echo "tf_dir=infra/configs/${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+
+      - name: 🔐 Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.config.outputs.github_role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ⚙️ Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~> 1.10"
+
+      - name: 🗂️ Init
+        run: terraform init -backend-config="${{ github.workspace }}/${{ steps.config.outputs.backend_vars }}"
+        working-directory: ${{ steps.config.outputs.tf_dir }}
+
+      - name: 💣 Destroy
+        run: terraform destroy -auto-approve
+        working-directory: ${{ steps.config.outputs.tf_dir }}

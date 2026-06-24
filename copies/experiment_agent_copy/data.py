@@ -5,7 +5,7 @@ import pandas as pd
 from typing import Tuple
 import requests
 
-from config import ExperimentConfig
+from copies.experiment_agent_copy.config import ExperimentConfig
 
 
 def load_article_sample(config: ExperimentConfig) -> pd.DataFrame:

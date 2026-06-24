@@ -130,6 +130,12 @@ Examples:
         help="Max articles per day (default: all articles in time window)",
     )
     data_group.add_argument(
+        "--day-start",
+        type=str,
+        default=None,
+        help="Window start date in YYYY-MM-DD format (default: earliest date in dataset)",
+    )
+    data_group.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -269,31 +275,31 @@ def setup_config(args: argparse.Namespace) -> Config:
     config.experiment.num_steps = args.steps
     config.experiment.max_candidates_per_step = args.candidates
     config.experiment.semaphore_limit = args.semaphore_limit
-    config.experiment.embedding_type = args.embedding_type
-    config.experiment.local_model_name = args.local_model
-    config.experiment.lookback_days = args.lookback_days
-    config.experiment.min_chain_hops = args.min_chain_hops
-    config.experiment.max_chain_hops = args.max_chain_hops
-    config.experiment.path_uniqueness = args.path_uniqueness
-    config.experiment.feature_mode = args.feature_mode
-    config.experiment.max_metapath_hops = args.max_metapath_hops
-    config.experiment.train_ratio = args.train_ratio
     config.experiment.evolution_prompt_template = args.evolution_prompt
+    config.experiment.feature.embedding_type = args.embedding_type
+    config.experiment.feature.local_model_name = args.local_model
+    config.experiment.feature.lookback_days = args.lookback_days
+    config.experiment.feature.min_chain_hops = args.min_chain_hops
+    config.experiment.feature.max_chain_hops = args.max_chain_hops
+    config.experiment.feature.path_uniqueness = args.path_uniqueness
+    config.experiment.feature.feature_mode = args.feature_mode
+    config.experiment.feature.max_metapath_hops = args.max_metapath_hops
+    config.experiment.feature.train_ratio = args.train_ratio
 
     logger.info("✓ Configuration loaded:")
     logger.info(f"  - NEO4J_URI={config.neo4j.uri}")
     logger.info(f"  - NEO4J_USERNAME={config.neo4j.user}")
     logger.info(f"  - NEO4J_DATABASE={config.neo4j.database}")
     logger.info(f"  - OPENAI_MODEL={config.openai.model_name}")
-    logger.info(f"  - EMBEDDING_TYPE={config.experiment.embedding_type}")
-    if config.experiment.embedding_type == "local":
-        logger.info(f"  - LOCAL_MODEL={config.experiment.local_model_name}")
-    logger.info(f"  - LOOKBACK_DAYS={config.experiment.lookback_days}")
-    logger.info(f"  - CHAIN_HOPS={config.experiment.min_chain_hops}-{config.experiment.max_chain_hops}")
-    logger.info(f"  - PATH_UNIQUENESS={config.experiment.path_uniqueness}")
-    logger.info(f"  - FEATURE_MODE={config.experiment.feature_mode}")
-    logger.info(f"  - MAX_METAPATH_HOPS={config.experiment.max_metapath_hops}")
-    logger.info(f"  - TRAIN_RATIO={config.experiment.train_ratio:.2f}")
+    logger.info(f"  - EMBEDDING_TYPE={config.experiment.feature.embedding_type}")
+    if config.experiment.feature.embedding_type == "local":
+        logger.info(f"  - LOCAL_MODEL={config.experiment.feature.local_model_name}")
+    logger.info(f"  - LOOKBACK_DAYS={config.experiment.feature.lookback_days}")
+    logger.info(f"  - CHAIN_HOPS={config.experiment.feature.min_chain_hops}-{config.experiment.feature.max_chain_hops}")
+    logger.info(f"  - PATH_UNIQUENESS={config.experiment.feature.path_uniqueness}")
+    logger.info(f"  - FEATURE_MODE={config.experiment.feature.feature_mode}")
+    logger.info(f"  - MAX_METAPATH_HOPS={config.experiment.feature.max_metapath_hops}")
+    logger.info(f"  - TRAIN_RATIO={config.experiment.feature.train_ratio:.2f}")
     logger.info(f"  - EVOLUTION_PROMPT={config.experiment.evolution_prompt_template}")
     
     return config
@@ -308,7 +314,7 @@ def validate_config(config: Config) -> None:
     Raises:
         ValueError: If required configuration is missing
     """
-    if config.experiment.embedding_type == "openai" and not config.openai.api_key:
+    if config.experiment.feature.embedding_type == "openai" and not config.openai.api_key:
         raise ValueError("OPENAI_API_KEY not set in environment (required for openai embedding type)")
     
     if not config.neo4j.password:
@@ -341,6 +347,16 @@ def initialize_driver(config: Config) -> GraphDriver:
         return driver
     except Exception as e:
         raise ConnectionError(f"Failed to connect to Neo4j: {e}")
+
+
+def _parse_day_start(day_start_str: str | None) -> "datetime.date | None":
+    """Parse --day-start string to date, or return None (use dataset earliest)."""
+    if day_start_str is None:
+        return None
+    try:
+        return datetime.date.fromisoformat(day_start_str)
+    except ValueError:
+        raise ValueError(f"--day-start must be YYYY-MM-DD, got: {day_start_str!r}")
 
 
 def load_and_prepare_data(
@@ -378,6 +394,7 @@ def load_and_prepare_data(
         articles_df,
         num_days=args.time_window_days,
         articles_per_day=args.articles_per_day,
+        start_date=_parse_day_start(args.day_start),
     )
     logger.info(
         f"✓ Filtered to {len(articles_df)} articles in {args.time_window_days}-day window"
@@ -431,6 +448,39 @@ def save_results(results: dict, output_path: Path) -> None:
 # MLflow Helpers
 # ============================================================================
 
+def _log_data_stats(
+    articles_df: pd.DataFrame,
+    price_df: pd.DataFrame,
+    train_ratio: float,
+) -> None:
+    """Log runtime data statistics to the active MLflow run."""
+    n_articles = len(articles_df)
+    n_days = articles_df["day"].nunique() if "day" in articles_df.columns else 0
+    date_start = str(articles_df["timestamp"].min().date())
+    date_end = str(articles_df["timestamp"].max().date())
+
+    n_price_days = len(price_df)
+    n_train_days = round(n_price_days * train_ratio)
+    n_val_days = n_price_days - n_train_days
+    class_balance = float(price_df["direction"].mean()) if "direction" in price_df.columns else 0.0
+
+    mlflow.log_params({
+        "n_articles_actual": n_articles,
+        "n_days_actual": n_days,
+        "date_start_actual": date_start,
+        "date_end_actual": date_end,
+        "n_price_days": n_price_days,
+        "n_train_days": n_train_days,
+        "n_val_days": n_val_days,
+    })
+    mlflow.log_metric("class_balance", class_balance)
+    logger.info(
+        "Data: %d articles, %d days (%s → %s), %d price days, train=%d val=%d, up_days=%.1f%%",
+        n_articles, n_days, date_start, date_end, n_price_days, n_train_days, n_val_days,
+        class_balance * 100,
+    )
+
+
 def _setup_mlflow(config: Config) -> None:
     """Configure MLflow tracking URI and experiment."""
     if config.mlflow.tracking_uri:
@@ -449,21 +499,38 @@ def _make_run_name(args: argparse.Namespace, config: Config) -> str:
 def _log_params(args: argparse.Namespace, config: Config) -> None:
     """Log all experiment hyperparameters to the active MLflow run."""
     mlflow.log_params({
-        "steps": args.steps,
-        "candidates": args.candidates,
+        # --- data ---
+        "data_file": args.data,
+        "day_start": args.day_start or "earliest",
         "time_window_days": args.time_window_days,
         "articles_per_day": args.articles_per_day,
+        # --- experiment ---
+        "ticker": config.experiment.target_ticker,
+        "steps": args.steps,
+        "candidates": args.candidates,
+        "semaphore_limit": args.semaphore_limit,
+        "evolution_prompt": args.evolution_prompt,
+        # --- embedding ---
+        "embedding_type": args.embedding_type,
+        "local_model": args.local_model,
+        # --- feature engineering ---
         "lookback_days": args.lookback_days,
         "feature_mode": args.feature_mode,
         "min_chain_hops": args.min_chain_hops,
         "max_chain_hops": args.max_chain_hops,
         "path_uniqueness": args.path_uniqueness,
         "max_metapath_hops": args.max_metapath_hops,
+        # --- model training ---
         "train_ratio": args.train_ratio,
-        "embedding_type": args.embedding_type,
-        "local_model": args.local_model,
+        # --- output ---
+        "output": args.output,
+        "log_level": args.log_level,
+        # --- infrastructure (no credentials) ---
         "llm_model": config.openai.model_name,
         "llm_base_url": config.openai.base_url or "openai",
+        "neo4j_uri": config.neo4j.uri,
+        "neo4j_user": config.neo4j.user,
+        "neo4j_database": config.neo4j.database,
     })
 
 
@@ -531,6 +598,7 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
 
         with mlflow.start_run(run_name=_make_run_name(args, config)) as run:
             _log_params(args, config)
+            _log_data_stats(articles_df, price_df, config.experiment.feature.train_ratio)
             results = await orchestrator.run(articles_df, price_df)
             logger.info("MLflow run: %s", run.info.run_id)
 

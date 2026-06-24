@@ -2,9 +2,9 @@
 """Merge duplicate entities in Neo4j graph based on normalized keys."""
 
 import logging
-from kg_builder.config import Config
-from kg_builder.core.graph import GraphDriver
-from kg_builder.core.entity_resolution import normalize_key
+from copies.kg_builder.config import Config
+from copies.kg_builder.core.graph import GraphDriver
+from copies.kg_builder.core.entity_resolution import normalize_key
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

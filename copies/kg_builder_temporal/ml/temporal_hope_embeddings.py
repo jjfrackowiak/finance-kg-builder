@@ -28,8 +28,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from kg_builder_temporal.core.graph import GraphDriver
-from kg_builder_temporal.ml.embeddings import compute_hope_embeddings
+from copies.kg_builder_temporal.core.graph import GraphDriver
+from copies.kg_builder_temporal.ml.embeddings import compute_hope_embeddings
 
 logger = logging.getLogger(__name__)
 

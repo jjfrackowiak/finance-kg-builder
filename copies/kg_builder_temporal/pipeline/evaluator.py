@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 from neo4j_graphrag.embeddings import Embedder
 
-from kg_builder_temporal.config import Neo4jConfig
-from kg_builder_temporal.core.graph import GraphDriver
-from kg_builder_temporal.ml.modeling import (
+from copies.kg_builder_temporal.config import Neo4jConfig
+from copies.kg_builder_temporal.core.graph import GraphDriver
+from copies.kg_builder_temporal.ml.modeling import (
     ModelMetrics,
     temporal_train_val_split,
     train_classifier_on_embeddings,
@@ -173,7 +173,7 @@ def evaluate_candidate(
     
     # Compute rolling 5-day temporal HOPE embeddings
     logger.info("Computing rolling HOPE embeddings (5-day windows)...")
-    from kg_builder_temporal.ml.temporal_hope_embeddings import compute_rolling_hope_embeddings
+    from copies.kg_builder_temporal.ml.temporal_hope_embeddings import compute_rolling_hope_embeddings
     
     try:
         day_embedding_dict = compute_rolling_hope_embeddings(
@@ -192,7 +192,7 @@ def evaluate_candidate(
         return ModelMetrics(auc=0.0, f1=0.0, max_hops_train=0, max_hops_val=0)
     
     # Build embedding frame (maps day dates to embeddings + labels)
-    from kg_builder_temporal.ml.modeling import build_day_embedding_frame_from_rolling
+    from copies.kg_builder_temporal.ml.modeling import build_day_embedding_frame_from_rolling
     
     df_embed = build_day_embedding_frame_from_rolling(df_days, day_embedding_dict)
     
