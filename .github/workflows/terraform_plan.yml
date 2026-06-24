@@ -31,7 +31,7 @@ jobs:
             qa)   ENV=qa   ;;
             *)    ENV=dev  ;;
           esac
-          echo "tf_dir=infra/configs/$ENV"                                        >> $GITHUB_OUTPUT
+          echo "tf_dir=infra"                                                      >> $GITHUB_OUTPUT
           echo "backend_vars=infra/configs/backend/$ENV/generated/backend.tfvars" >> $GITHUB_OUTPUT
           echo "plan_apply_vars=infra/configs/backend/$ENV/generated/plan_apply.tfvars" >> $GITHUB_OUTPUT
 
