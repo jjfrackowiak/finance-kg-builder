@@ -10,10 +10,9 @@ permissions:
   contents: read
   pull-requests: write
 
-# One plan at a time per branch — queues runs rather than cancelling them
-# (a cancelled run leaves the state lock behind)
+# Shared concurrency group with terraform_deploy.yml — one terraform op per branch at a time
 concurrency:
-  group: terraform-plan-${{ github.base_ref }}
+  group: terraform-${{ github.base_ref }}
   cancel-in-progress: false
 
 env:

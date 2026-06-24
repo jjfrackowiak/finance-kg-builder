@@ -9,6 +9,11 @@ permissions:
   id-token: write
   contents: read
 
+# Shared group with terraform_plan.yml — plan and deploy queue, never overlap
+concurrency:
+  group: terraform-${{ github.ref_name }}
+  cancel-in-progress: false
+
 env:
   AWS_REGION: eu-central-1
 
