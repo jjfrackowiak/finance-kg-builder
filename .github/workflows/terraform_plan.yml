@@ -68,7 +68,7 @@ jobs:
 
       - name: 🎨 Format Check
         id: fmt
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check
         working-directory: ${{ needs.resolve-env.outputs.tf_dir }}
         continue-on-error: true
 
