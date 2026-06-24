@@ -46,8 +46,11 @@ jobs:
       - name: 🔑 Read deployment config
         id: config
         run: |
-          GITHUB_ROLE=$(grep 'github_role_arn' ${{ needs.resolve-env.outputs.plan_apply_vars }} | cut -d'"' -f2)
+          VARS="${{ needs.resolve-env.outputs.plan_apply_vars }}"
+          GITHUB_ROLE=$(grep 'github_role_arn' $VARS | cut -d'"' -f2)
+          ROLE_ARN=$(grep '^role_arn' $VARS | cut -d'"' -f2)
           echo "github_role_arn=$GITHUB_ROLE" >> $GITHUB_OUTPUT
+          echo "role_arn=$ROLE_ARN"           >> $GITHUB_OUTPUT
 
       - name: 🔐 Authenticate to AWS via OIDC
         uses: aws-actions/configure-aws-credentials@v4
@@ -63,11 +66,17 @@ jobs:
       - name: 🗂️ Init
         run: terraform init -backend-config="${{ github.workspace }}/${{ needs.resolve-env.outputs.backend_vars }}"
         working-directory: ${{ needs.resolve-env.outputs.tf_dir }}
+        env:
+          TF_VAR_role_arn: ${{ steps.config.outputs.role_arn }}
 
       - name: 📋 Plan
         run: terraform plan -no-color -out=tfplan
         working-directory: ${{ needs.resolve-env.outputs.tf_dir }}
+        env:
+          TF_VAR_role_arn: ${{ steps.config.outputs.role_arn }}
 
       - name: 🚀 Apply
         run: terraform apply -auto-approve tfplan
         working-directory: ${{ needs.resolve-env.outputs.tf_dir }}
+        env:
+          TF_VAR_role_arn: ${{ steps.config.outputs.role_arn }}
