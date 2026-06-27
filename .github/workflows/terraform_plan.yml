@@ -3,7 +3,9 @@ name: 📋 Terraform Plan
 on:
   pull_request:
     branches: [dev, prod, qa]
-    paths: ["infra/**.tf"]
+    paths:
+      - "infra/*.tf"
+      - "infra/**/*.tf"
 
 permissions:
   id-token: write

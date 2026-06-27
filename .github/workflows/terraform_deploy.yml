@@ -3,7 +3,9 @@ name: 🚀 Terraform Deploy
 on:
   push:
     branches: [dev, prod, qa]
-    paths: ["infra/**.tf"]
+    paths:
+      - "infra/*.tf"
+      - "infra/**/*.tf"
 
 permissions:
   id-token: write
