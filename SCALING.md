@@ -1,398 +1,426 @@
-# Experiment Scaling Plan — Qwen 2.5 32B + AWS ECS
+# Experiment Scaling Plan — Kubernetes + Qwen 2.5 32B
 
-Replace OpenAI with a self-hosted Qwen 2.5 32B Instruct model.
-High-throughput entity extraction and ontology evolution, serverless containers, short-lived GPU workers.
-
----
-
-## Architecture Overview
-
-```
-┌─────────────────────── ECS Cluster ──────────────────────────┐
-│                                                               │
-│  ┌───────────────────────────┐                                │
-│  │  Orchestrator Task        │  Fargate (CPU)                 │
-│  │  kg_builder_llm           │  run-once, self-terminates     │
-│  │  LLM_BASE_URL → vLLM ALB  │                                │
-│  └───────────┬───────────────┘                                │
-│              │ HTTP  /v1/chat/completions                      │
-│              ▼                                                 │
-│  ┌───────────────────────────┐                                │
-│  │  vLLM Service             │  EC2 Spot g5.xlarge            │
-│  │  Qwen2.5-32B-Instruct     │  scales 0 → N → 0             │
-│  │  OpenAI-compatible API    │  ~$0.40/hr per instance        │
-│  └───────────────────────────┘                                │
-│                                                               │
-│  ┌───────────────────────────┐                                │
-│  │  Neo4j AuraDB (existing)  │  external                      │
-│  └───────────────────────────┘                                │
-└───────────────────────────────────────────────────────────────┘
-```
-
-**Both LLM roles handled by Qwen 2.5 32B — no OpenAI dependency:**
-
-| Role | Call volume | Model |
-|------|-------------|-------|
-| Entity extraction | ~100s per experiment | Qwen 2.5 32B on vLLM |
-| Ontology evolution | ~2–4 per experiment | Qwen 2.5 32B on vLLM |
-
-**Why 32B over 7B:**
-- Better instruction following under complex ontology schema constraints
-- Fewer hallucinated entity types, more consistent JSON output
-- Strong enough for ontology evolution reasoning — no need to keep OpenAI as a fallback
-- Cost difference is negligible for short experiment runs (~$0.40/hr vs $0.16/hr)
-
-**GPU sizing:**
-- Qwen 2.5 32B in 4-bit quantization: ~18 GB VRAM
-- g5.xlarge: 1× A10G (24 GB) — fits comfortably, ~$0.40/hr Spot
-- g5.2xlarge: same GPU, more CPU/RAM if needed
+Cloud-agnostic deployment: identical manifests run on local minikube and AWS EKS.
+Experiments are triggered from DagsHub via MLflow Projects Kubernetes backend.
 
 ---
 
-## Phase 1 — Local Validation (Mac, Apple Silicon)
+## Architecture
 
-Before touching AWS, validate that Qwen 2.5 32B produces acceptable extraction quality
-on a small sample. Cost: $0.
+```
+DagsHub UI  ──►  mlflow run (Kubernetes backend)
+                       │
+                       ▼
+              Job: sweep  (kg-experiments namespace)
+                       │
+          ┌────────────┼────────────┐
+          ▼            ▼            ▼
+     Job: kg-builder  Job: kg-builder  ...   (one per config, parallel)
+          │
+          └──► MLflow child run (DagsHub tracking)
 
-### 1.1 Install Ollama and pull the model
+Cluster services (always present during experiment):
+  Deployment: vllm          ← scales 0 → N before Jobs, N → 0 after
+  Service:    vllm-svc      ← ClusterIP, stable endpoint for kg-builder Jobs
+  PVC:        model-cache   ← model weights cached across runs
+```
+
+**LLM roles — both handled by Qwen 2.5 32B on vLLM:**
+
+| Role | Volume | Notes |
+|------|--------|-------|
+| Entity extraction | ~100s per experiment | high concurrency via semaphore |
+| Ontology evolution | 2–4 per step | sequential, low volume |
+
+**GPU sizing (cloud only):**
+- Qwen 2.5 32B 4-bit: ~18 GB VRAM
+- g5.xlarge: 1× A10G (24 GB) — fits, ~$0.40/hr Spot
+
+---
+
+## Repository layout
+
+```
+k8s/
+├── base/                        # environment-agnostic manifests
+│   ├── kustomization.yaml
+│   ├── namespace.yaml
+│   ├── configmap.yaml           # LLM_BASE_URL, model name, experiment defaults
+│   ├── rbac/
+│   │   ├── serviceaccount.yaml  # sweep-runner ServiceAccount
+│   │   └── role.yaml            # allows sweep Job to CRUD Jobs in namespace
+│   ├── vllm/
+│   │   ├── deployment.yaml      # vLLM server, replicas=0 at rest
+│   │   ├── service.yaml         # ClusterIP on port 8000
+│   │   └── pvc.yaml             # model weight cache (ReadWriteMany)
+│   └── kg-builder/
+│       └── job.yaml             # Job template — params injected as env vars
+├── overlays/
+│   ├── local/                   # minikube: CPU only, hostPath storage, stub vLLM
+│   │   ├── kustomization.yaml
+│   │   └── patches/
+│   │       ├── vllm-cpu.yaml    # removes GPU request, uses tiny stub image
+│   │       └── storage-hostpath.yaml
+│   └── aws/                     # EKS: GPU node selector, EFS storage class
+│       ├── kustomization.yaml
+│       └── patches/
+│           ├── vllm-gpu.yaml    # nvidia.com/gpu: 1, node selector
+│           └── storage-efs.yaml
+└── mlproject/
+    ├── kubernetes_config.json   # MLflow backend config (context, namespace)
+    └── sweep_values.yaml        # default param matrix for DagsHub UI
+```
+
+---
+
+## Phase 1 — Local validation (Mac, no cost)
+
+Validate extraction quality with Ollama before touching any cluster.
 
 ```bash
 brew install ollama
 ollama pull qwen2.5:32b-instruct
-ollama serve   # starts OpenAI-compatible API on localhost:11434
+ollama serve   # OpenAI-compatible API on localhost:11434
 ```
-
-> Note: the 32B model is ~20 GB on disk. Download takes a few minutes.
-> On Apple Silicon (M1/M2/M3) it runs via Metal acceleration — slow but functional for smoke testing.
-
-### 1.2 Add env vars to `.env`
 
 ```dotenv
+# .env
 LLM_BASE_URL=http://localhost:11434/v1
 LLM_MODEL=qwen2.5:32b-instruct
-OPENAI_API_KEY=fake          # Ollama ignores this but the client requires it
+OPENAI_API_KEY=fake
 ```
-
-### 1.3 Wire `LLM_BASE_URL` into the codebase
-
-**`kg_builder_llm/config.py`** — add to `OpenAIConfig`:
-
-```python
-base_url: str = ""
-
-@classmethod
-def from_env(cls) -> "OpenAIConfig":
-    return cls(
-        api_key=os.getenv("OPENAI_API_KEY", "fake"),
-        model_name=os.getenv("LLM_MODEL", "gpt-4o-mini"),
-        base_url=os.getenv("LLM_BASE_URL", ""),
-    )
-```
-
-**`kg_builder_llm/main.py`** (wherever `OpenAILLM` is instantiated) — pass `base_url` if set:
-
-```python
-llm_kwargs = {"model_name": config.openai.model_name, "api_key": config.openai.api_key}
-if config.openai.base_url:
-    llm_kwargs["base_url"] = config.openai.base_url
-
-llm = OpenAILLM(**llm_kwargs)
-```
-
-### 1.4 Run a small smoke test
 
 ```bash
 uv run python -m kg_builder_llm.main \
   --data data/fnspid_sample_nasdaq_long_text.csv \
-  --time-window-days 10 \
-  --articles-per-day 3 \
-  --steps 1 \
-  --candidates 1 \
-  --embedding-type local \
-  --output results/qwen32b_local_smoke.json
+  --time-window-days 10 --articles-per-day 3 \
+  --steps 1 --candidates 1 \
+  --embedding-type local
 ```
 
-Check: does extracted JSON match the ontology schema? Are entity types reasonable?
-If yes → Phase 2.
+If JSON output matches ontology schema → Phase 2.
 
 ---
 
-## Phase 2 — ECS Setup (One-time Infrastructure)
+## Phase 2 — Local Kubernetes (minikube)
 
-### 2.1 ECR repositories
+Goal: full experiment flow running locally, no GPU, no real vLLM.
 
-```bash
-aws ecr create-repository --repository-name kg-orchestrator --profile wne-uw
-aws ecr create-repository --repository-name kg-vllm --profile wne-uw
-```
-
-### 2.2 Orchestrator Dockerfile
-
-`kg_builder_llm/Dockerfile`:
-
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-COPY pyproject.toml uv.lock ./
-RUN pip install uv && uv sync --frozen
-
-COPY kg_builder_llm/ ./kg_builder_llm/
-COPY data/ ./data/
-
-ENTRYPOINT ["uv", "run", "python", "-m", "kg_builder_llm.main"]
-```
-
-Build and push:
+### 2.1 Prerequisites
 
 ```bash
-IMAGE=<account_id>.dkr.ecr.<region>.amazonaws.com/kg-orchestrator:latest
-docker build -f kg_builder_llm/Dockerfile -t $IMAGE .
-aws ecr get-login-password --profile wne-uw | docker login --username AWS --password-stdin <account_id>.dkr.ecr.<region>.amazonaws.com
-docker push $IMAGE
+brew install minikube kubectl kustomize
+minikube start --cpus 4 --memory 8g --driver docker
 ```
 
-### 2.3 vLLM task definition
+### 2.2 Manifests — base layer
 
-Use the official `vllm/vllm-openai` image — no custom build needed.
-
-Key fields in the ECS task definition JSON:
-
-```json
-{
-  "family": "kg-vllm",
-  "requiresCompatibilities": ["EC2"],
-  "containerDefinitions": [{
-    "name": "vllm",
-    "image": "vllm/vllm-openai:latest",
-    "command": [
-      "--model", "Qwen/Qwen2.5-32B-Instruct",
-      "--quantization", "bitsandbytes",
-      "--max-model-len", "4096",
-      "--port", "8000"
-    ],
-    "portMappings": [{"containerPort": 8000}],
-    "environment": [
-      {"name": "HUGGING_FACE_HUB_TOKEN", "value": "<from Secrets Manager>"}
-    ],
-    "resourceRequirements": [
-      {"type": "GPU", "value": "1"}
-    ]
-  }],
-  "memory": "22000",
-  "cpu": "4096"
-}
+`k8s/base/namespace.yaml` — isolates all resources:
+```yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kg-experiments
 ```
 
-### 2.4 EFS volume for model weight caching
+`k8s/base/configmap.yaml` — non-secret config:
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kg-config
+  namespace: kg-experiments
+data:
+  LLM_BASE_URL: "http://vllm-svc:8000/v1"
+  LLM_MODEL: "Qwen/Qwen2.5-32B-Instruct"
+  EMBEDDING_TYPE: "local"
+  LOCAL_MODEL_NAME: "all-MiniLM-L6-v2"
+```
 
-EFS is part of the baseline setup — not an optional optimization. Without it, every new
-g5.xlarge Spot instance downloads 65 GB from HuggingFace Hub (~10–15 min cold start).
-With EFS the model is cached and cold start drops to ~60 seconds.
+`k8s/base/rbac/` — sweep Job needs to manage other Jobs:
+```yaml
+# serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sweep-runner
+  namespace: kg-experiments
+---
+# role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: job-manager
+  namespace: kg-experiments
+rules:
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["create", "get", "list", "watch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/scale"]
+  verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sweep-runner-job-manager
+  namespace: kg-experiments
+subjects:
+- kind: ServiceAccount
+  name: sweep-runner
+roleRef:
+  kind: Role
+  name: job-manager
+  apiGroup: rbac.authorization.k8s.io
+```
+
+`k8s/base/vllm/deployment.yaml` — starts at 0 replicas:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: kg-experiments
+spec:
+  replicas: 0          # sweep scales this before submitting kg-builder Jobs
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:latest
+        args:
+        - --model
+        - $(LLM_MODEL)
+        - --quantization
+        - bitsandbytes
+        - --max-model-len
+        - "4096"
+        - --port
+        - "8000"
+        envFrom:
+        - configMapRef:
+            name: kg-config
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - name: model-cache
+          mountPath: /root/.cache/huggingface
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: model-cache
+```
+
+`k8s/base/kg-builder/job.yaml` — Job template (params overridden per-run):
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kg-builder        # sweep appends -<hash> per config
+  namespace: kg-experiments
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 0         # fail fast — no retries for experiments
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: kg-builder
+        image: <account>.dkr.ecr.eu-central-1.amazonaws.com/kg-orchestrator:latest
+        envFrom:
+        - configMapRef:
+            name: kg-config
+        - secretRef:
+            name: kg-secrets   # NEO4J_URI, NEO4J_PASSWORD, MLFLOW_TRACKING_URI
+        resources:
+          requests:
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+```
+
+### 2.3 Local overlay — CPU stub for vLLM
+
+`k8s/overlays/local/patches/vllm-cpu.yaml`:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: kg-experiments
+spec:
+  template:
+    spec:
+      containers:
+      - name: vllm
+        image: kennethreitz/httpbin   # stub: returns 200 to health checks
+        args: []
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+```
+
+### 2.4 Apply locally
 
 ```bash
-# Create EFS filesystem
-aws efs create-file-system \
-  --performance-mode generalPurpose \
-  --throughput-mode bursting \
-  --tags Key=Name,Value=kg-model-cache \
-  --profile wne-uw
-
-# Create mount target in the same VPC/subnet as the ECS cluster
-aws efs create-mount-target \
-  --file-system-id <fs-id> \
-  --subnet-id <subnet-id> \
-  --security-groups <sg-id> \
-  --profile wne-uw
-```
-
-One-time model download to EFS — run as an ECS task (no bare EC2 needed):
-
-```bash
-aws ecs run-task \
-  --cluster kg-experiments \
-  --task-definition kg-vllm \
-  --launch-type EC2 \
-  --overrides '{
-    "containerOverrides": [{
-      "name": "vllm",
-      "command": [
-        "python", "-c",
-        "from huggingface_hub import snapshot_download; snapshot_download(\"Qwen/Qwen2.5-32B-Instruct\")"
-      ]
-    }]
-  }' \
-  --profile wne-uw
-```
-
-The task reuses the `kg-vllm` task definition (which already has the EFS mount and HuggingFace token),
-downloads the weights to EFS, then exits. Run once — all subsequent experiment runs skip this entirely.
-
-Add EFS mount to the vLLM task definition (alongside the container definition):
-
-```json
-"volumes": [{
-  "name": "model-cache",
-  "efsVolumeConfiguration": {
-    "fileSystemId": "<fs-id>",
-    "rootDirectory": "/models"
-  }
-}],
-"mountPoints": [{
-  "sourceVolume": "model-cache",
-  "containerPath": "/root/.cache/huggingface"
-}]
-```
-
-**Cost:** ~65 GB × $0.30/GB-month ≈ **$20/month** — negligible vs compute savings.
-
-### 2.5 ECS cluster with GPU capacity provider
-
-```bash
-# Create cluster
-aws ecs create-cluster --cluster-name kg-experiments --profile wne-uw
-
-# Launch template: g5.xlarge Spot, ECS-optimized GPU AMI (al2-ami-ecs-gpu-hvm)
-# Auto Scaling Group: min=0, max=4, desired=0
-# Add as capacity provider to the cluster
-```
-
-> The ECS-optimized GPU AMI already has CUDA, NVIDIA drivers, and the ECS agent — use it as-is.
-
-### 2.6 ALB for vLLM
-
-Add an Application Load Balancer in front of the vLLM ECS service so the orchestrator
-has a stable endpoint regardless of how many tasks are running.
-
-Target group: port 8000, health check `GET /health`.
-
-The orchestrator env var becomes:
-```
-LLM_BASE_URL=http://<alb-dns-name>/v1
+kubectl apply -k k8s/overlays/local
+kubectl get all -n kg-experiments
 ```
 
 ---
 
-## Phase 3 — Running an Experiment
+## Phase 3 — Sweep launcher + MLflow Projects
 
-### 3.1 Experiment runner script
+### 3.1 MLproject file (repo root)
 
-`run_experiment.sh`:
+```yaml
+name: kg-experiments
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
+docker_env:
+  image: <account>.dkr.ecr.eu-central-1.amazonaws.com/kg-orchestrator:latest
 
-CLUSTER=kg-experiments
-VLLM_SERVICE=kg-vllm-service
-PROFILE=wne-uw
-N_WORKERS=${1:-1}   # pass number of vLLM workers as first arg, default 1
+entry_points:
+  main:
+    parameters:
+      steps:        {type: int,   default: 3}
+      candidates:   {type: int,   default: 2}
+      feature_mode: {type: string, default: path}
+      time_window_days: {type: int, default: 150}
+    command: >
+      python -m kg_builder_llm.main
+        --steps {steps}
+        --candidates {candidates}
+        --feature-mode {feature_mode}
+        --time-window-days {time_window_days}
 
-echo "→ Scaling vLLM service to $N_WORKERS..."
-aws ecs update-service \
-  --cluster $CLUSTER \
-  --service $VLLM_SERVICE \
-  --desired-count $N_WORKERS \
-  --profile $PROFILE
-
-echo "→ Waiting for vLLM tasks to be running..."
-aws ecs wait services-stable \
-  --cluster $CLUSTER \
-  --services $VLLM_SERVICE \
-  --profile $PROFILE
-
-echo "→ Running orchestrator task..."
-TASK_ARN=$(aws ecs run-task \
-  --cluster $CLUSTER \
-  --task-definition kg-orchestrator \
-  --launch-type FARGATE \
-  --overrides '{"containerOverrides": [{"name": "orchestrator", "command": [
-    "--data", "s3://kg-experiments-data/fnspid_sample.csv",
-    "--steps", "3",
-    "--candidates", "3",
-    "--time-window-days", "100"
-  ]}]}' \
-  --profile $PROFILE \
-  --query 'tasks[0].taskArn' --output text)
-
-echo "→ Orchestrator task: $TASK_ARN"
-echo "→ Waiting for orchestrator to finish..."
-aws ecs wait tasks-stopped \
-  --cluster $CLUSTER \
-  --tasks $TASK_ARN \
-  --profile $PROFILE
-
-echo "→ Scaling vLLM back to 0..."
-aws ecs update-service \
-  --cluster $CLUSTER \
-  --service $VLLM_SERVICE \
-  --desired-count 0 \
-  --profile $PROFILE
-
-echo "✓ Done."
+  sweep:
+    parameters:
+      configs: {type: string, default: "[]"}   # JSON array of param dicts
+    command: "python kg_builder_llm/scripts/sweep.py --configs '{configs}'"
 ```
 
-Usage:
+### 3.2 sweep.py — manages vLLM lifecycle and parallel Jobs
+
+`kg_builder_llm/scripts/sweep.py`:
+- Parses `--configs` JSON array (list of param dicts)
+- Creates parent MLflow run
+- Patches vLLM Deployment replicas → N (computed from len(configs))
+- Waits for vLLM pod Ready
+- Submits N Kubernetes Jobs (one per config), each with child MLflow run ID in env
+- Watches Jobs via `kubernetes` Python client until all Complete or Failed
+- Patches vLLM replicas → 0
+- Logs summary to parent run
+
+### 3.3 Trigger from DagsHub
+
 ```bash
-./run_experiment.sh 2   # spin up 2 vLLM workers
+# local test
+mlflow run . -e sweep \
+  --backend kubernetes \
+  --backend-config k8s/mlproject/kubernetes_config.json \
+  -P configs='[{"steps":3,"candidates":2,"feature_mode":"path"},{"steps":3,"candidates":2,"feature_mode":"subgraph"}]'
 ```
 
-### 3.2 Data in S3
-
-Upload the FNSPID CSV once:
-```bash
-aws s3 cp data/fnspid_sample_nasdaq_long_text.csv s3://kg-experiments-data/ --profile wne-uw
-```
-
-The orchestrator task reads from S3 (add `boto3` download at task startup, or mount via EFS).
+DagsHub UI: set `configs` param → Run → sweep Job appears in cluster, child runs appear in MLflow.
 
 ---
 
-## Throughput Tuning
+## Phase 4 — EKS on AWS (Terraform)
 
-The orchestrator already has `semaphore_limit` which caps concurrent LLM calls.
-With a single vLLM worker, a good starting value is **20–30** (vLLM batches internally).
-With N workers behind an ALB, multiply: `semaphore_limit = N * 25`.
+Replaces Phase 2 cluster. Same manifests, different overlay.
 
-vLLM handles request queuing and continuous batching — you don't need to implement
-batching on the client side.
+### 4.1 Terraform resources (infra/)
+
+- `eks.tf` — EKS cluster, two node groups:
+  - `cpu-nodes`: `m5.xlarge` On-Demand (sweep + kg-builder Jobs)
+  - `gpu-nodes`: `g5.xlarge` Spot, min=0 max=4 (vLLM only, scales to 0 at rest)
+- `efs.tf` — EFS filesystem, EFS CSI driver add-on, StorageClass
+- `irsa.tf` — IAM Roles for Service Accounts (IRSA): sweep-runner assumes role with EKS + ECR permissions
+
+### 4.2 AWS overlay
+
+`k8s/overlays/aws/patches/vllm-gpu.yaml` — adds GPU resource and node selector:
+```yaml
+spec:
+  template:
+    spec:
+      nodeSelector:
+        node.kubernetes.io/instance-type: g5.xlarge
+      containers:
+      - name: vllm
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+            memory: "22Gi"
+          requests:
+            nvidia.com/gpu: "1"
+            memory: "22Gi"
+```
+
+One-time model download to EFS (run once, weights persist across cluster restarts):
+```bash
+kubectl run model-download \
+  --image=vllm/vllm-openai:latest \
+  --restart=Never \
+  --overrides='{"spec":{"nodeSelector":{"node.kubernetes.io/instance-type":"g5.xlarge"}}}' \
+  -n kg-experiments \
+  -- python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen2.5-32B-Instruct')"
+```
+
+### 4.3 kubeconfig for DagsHub
+
+```bash
+aws eks update-kubeconfig --name kg-experiments --region eu-central-1 --profile wne-uw
+```
+
+Store `~/.kube/config` (EKS context only) as DagsHub secret `KUBECONFIG_B64` (base64-encoded).
+The sweep container decodes it at runtime → `mlflow run` submits Jobs to EKS.
 
 ---
 
-## Cost Estimate
+## Cost estimate (AWS, per experiment batch)
 
-| Component | Instance | Spot price | 3-hour run |
-|-----------|----------|------------|------------|
-| 1× vLLM worker | g5.xlarge (A10G 24GB) | ~$0.40/hr | ~$1.20 |
-| 2× vLLM workers | g5.xlarge | ~$0.40/hr each | ~$2.40 |
-| Orchestrator | Fargate 2 vCPU | ~$0.04/hr | ~$0.12 |
-| **Total (1 worker)** | | | **~$1.32** |
-| **Total (2 workers)** | | | **~$2.52** |
+| Component | Instance | Price | 3-hr batch |
+|-----------|----------|-------|------------|
+| 1× vLLM worker | g5.xlarge Spot | ~$0.40/hr | ~$1.20 |
+| N× kg-builder Jobs | m5.xlarge On-Demand | ~$0.19/hr | ~$0.57 per Job |
+| EFS model cache | 65 GB | $0.30/GB-month | ~$0.03/day |
+| EKS control plane | — | $0.10/hr | ~$0.30 |
+| **2 kg-builder configs** | | | **~$3.30 total** |
 
-Neo4j AuraDB is the only always-on cost (existing).
+CPU nodes scale to 0 between batches (Cluster Autoscaler).
+GPU node scales to 0 after vLLM Deployment replicas → 0.
 
 ---
 
-
-## Sequence Summary
+## Sequence summary
 
 ```
-Phase 1 (local, today)
-  └── brew install ollama
-  └── ollama pull qwen2.5:32b-instruct
-  └── add LLM_BASE_URL to config.py
-  └── smoke test on 10-day sample
+Phase 1 (local, Ollama)
+  └── validate extraction quality on 10-day sample
 
-Phase 2 (one-time AWS setup)
-  └── ECR repos
-  └── Orchestrator Dockerfile + push
-  └── EFS filesystem + one-time model weight download (~65 GB)
-  └── ECS cluster + g5.xlarge capacity provider
-  └── vLLM task definition (32B, bitsandbytes 4-bit) + EFS mount
-  └── ALB
+Phase 2 (minikube)
+  └── apply k8s/overlays/local
+  └── test sweep.py with 2 configs, CPU stub vLLM
+  └── verify child MLflow runs in DagsHub
 
-Phase 3 (each experiment run)
-  └── ./run_experiment.sh N
-  └── workers spin up, experiment runs, workers spin down
-  └── results in Neo4j + local JSON
+Phase 3 (MLflow Projects)
+  └── MLproject file + sweep entry point
+  └── mlflow run --backend kubernetes
+  └── trigger from DagsHub UI
+
+Phase 4 (EKS)
+  └── terraform apply (EKS + EFS + IRSA)
+  └── kubectl apply -k k8s/overlays/aws
+  └── one-time model download to EFS
+  └── run full experiment batch from DagsHub
 ```
