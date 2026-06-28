@@ -225,7 +225,7 @@ def main():
 
     if args.n_workers > 0:
         scale_deployment(apps_v1, VLLM_DEPLOYMENT, 0)
-        scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, 1)
+        scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, 0)
 
     if tracking_enabled:
         mlflow.log_metrics(parent_run_id, {
