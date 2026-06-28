@@ -122,7 +122,7 @@ resource "aws_iam_role_policy" "github_assume_deployment" {
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow"
-      Action   = "sts:AssumeRole"
+      Action   = ["sts:AssumeRole", "sts:TagSession"]
       Resource = aws_iam_role.terraform_deployment.arn
     }]
   })
