@@ -13,6 +13,10 @@ provider "aws" {
   profile = "wne-uw"
 }
 
+locals {
+  local_operator_arn = "arn:aws:iam::039293892587:user/jj.frackowiak2@uw.edu.pl"
+}
+
 module "backend" {
   source = "../modules/backend"
 
@@ -21,7 +25,7 @@ module "backend" {
   aws_region         = "eu-central-1"
   account_id         = "039293892587"
   github_repo        = "jjfrackowiak/finance-kg-builder"
-  local_operator_arn = "arn:aws:iam::039293892587:user/jj.frackowiak2@uw.edu.pl"
+  local_operator_arn = local.local_operator_arn
   tags               = {}
 }
 
@@ -51,12 +55,13 @@ resource "local_file" "plan_apply_tfvars" {
   file_permission = "0600"
 
   content = <<-EOT
-    github_role_arn = "${module.backend.github_role_arn}"
-    role_arn        = "${module.backend.terraform_deployment_role_arn}"
-    environment     = "${module.backend.environment}"
-    usecase         = "${module.backend.usecase}"
-    region          = "${module.backend.region}"
-    prefix          = "${module.backend.prefix}"
-    tags            = ${jsonencode(module.backend.tags)}
+    github_role_arn     = "${module.backend.github_role_arn}"
+    role_arn            = "${module.backend.terraform_deployment_role_arn}"
+    environment         = "${module.backend.environment}"
+    usecase             = "${module.backend.usecase}"
+    region              = "${module.backend.region}"
+    prefix              = "${module.backend.prefix}"
+    tags                = ${jsonencode(module.backend.tags)}
+    local_operator_arn  = "${module.backend.local_operator_arn}"
   EOT
 }
