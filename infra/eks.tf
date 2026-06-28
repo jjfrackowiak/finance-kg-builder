@@ -103,8 +103,29 @@ resource "aws_eks_cluster" "main" {
     endpoint_public_access  = true
   }
 
+  access_config {
+    authentication_mode                         = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = true
+  }
+
   depends_on = [aws_iam_role_policy_attachment.eks_cluster]
   tags       = var.tags
+}
+
+# ── EKS access entry — Terraform deployment role (used by CI/CD) ──────────────
+
+resource "aws_eks_access_entry" "deployment_role" {
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = var.role_arn
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "deployment_role" {
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = var.role_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  access_scope { type = "cluster" }
+  depends_on = [aws_eks_access_entry.deployment_role]
 }
 
 # ── OIDC provider (for IRSA) ─────────────────────────────────────────────────

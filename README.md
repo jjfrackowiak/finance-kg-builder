@@ -1,345 +1,280 @@
-# KG Builder - Knowledge Graph Evolution with LLM (Ontology as a Hyperparameter)
+# finance-kg-builder
 
-System for incrementally building and evolving knowledge graphs using Large Language Models (LLMs). This project combines Neo4j graph databases with LLM-based entity extraction and HOPE embeddings to create dynamic, multi-candidate knowledge graphs optimized for financial sentiment analysis and price prediction.
+Research platform for **task-aware knowledge graph construction**: LLM agents propose candidate ontologies, build KG variants from financial news, and a downstream predictor (XGBoost on subgraph embeddings) feeds back to select the winning schema. Part of a PhD project at the University of Warsaw.
 
-![alt text](resources/furniture.png)
+Empirical testbed: [FNSPID](https://dl.acm.org/doi/10.1145/3637528.3671629) — financial news → next-day stock price direction.
 
-## Overview
+---
 
-**KG Builder** implements an innovative approach to knowledge graph construction:
+## How it works
 
-- **Incremental Evolution**: Build knowledge graphs step-by-step with multiple candidate ontologies at each step
-- **Isolation Constraints**: Candidates from the same step cannot link to each other's entities, preventing cross-contamination
-- **Tag-based Pruning**: Losing candidates have their tags removed rather than being deleted, keeping the graph intact
-- **LLM-Guided Extraction**: Use OpenAI's API to extract entities and relationships from unstructured text
-- **Graph Embeddings**: Compute HOPE embeddings to represent graph structure, then train classifiers for downstream tasks
-- **Automatic Evaluation**: Evaluate candidates using graph-based features and temporal price labels
-
-## Key Features
-
-### 1. **Incremental KG Mutation**
-- Step 0: Build base structure (articles, companies, authors, days)
-- Steps 1+: Incrementally extract new entities with isolation constraints
-- Each candidate can only link to base entities or its own newly extracted entities
-
-### 2. **Isolation Constraints**
-```cypher
-WHERE
-  (ANY(tag IN COALESCE(s.candidate_tags, []) WHERE tag IN $accepted_tags) 
-   OR $candidate_tag IN COALESCE(s.candidate_tags, []))
-  AND
-  (ANY(tag IN COALESCE(t.candidate_tags, []) WHERE tag IN $accepted_tags) 
-   OR $candidate_tag IN COALESCE(t.candidate_tags, []))
 ```
-Ensures candidates don't contaminate each other's entity spaces.
+Financial news articles (FNSPID)
+        │
+        ▼
+┌──────────────────────────────────┐
+│  Ontology Agent (LLM)            │  proposes N candidate schemas per step
+│  KG Builder Agent (LLM)         │  extracts entities/relations per candidate
+│  Neo4j (AuraDB)                 │  stores tagged multi-candidate graph
+└──────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────┐
+│  Feature Engineering             │  subgraph embeddings, metapaths, topology
+│  XGBoost / Logistic Regression   │  predicts price direction
+│  AUC / F1 feedback               │  selects winning ontology per step
+└──────────────────────────────────┘
+        │
+        └──► repeat until convergence or budget exhausted
+```
 
-### 3. **Tag-Based Architecture**
-- Every node and relationship has a `candidate_tags` property
-- Base structure tagged with `"base_structure"`
-- Each candidate tagged with step identifier: `"step_1_candidate_0"`, etc.
-- Loser candidates' tags are pruned (relationships removed), winners continue
+Experiments are tracked in [DagsHub / MLflow](https://dagshub.com). Each sweep run is a parent MLflow run; each KG variant is a child run.
 
-### 4. **Multi-Candidate Evaluation**
-- Train XGBoost classifiers on HOPE embeddings
-- Evaluate against temporal price labels
-- Select best candidate per step by AUC score
-- Metrics tracked: AUC, F1, n_train (nodes in graph), n_val (embedded nodes)
+---
 
-## Architecture
+## Repository layout
 
 ```
 finance-kg-builder/
-├── kg_builder/
-│   ├── core/                    # Core graph operations
-│   │   ├── graph.py            # Neo4j driver and queries
-│   │   ├── ontology.py         # Ontology models and schema
-│   │   ├── ontology_io.py      # Save/load ontologies
-│   │   ├── data.py             # Article loading and filtering
-│   │   ├── article_linking.py  # Create Article/Day nodes
-│   │   ├── tagging.py          # Tag nodes/relationships
-│   │   └── neo4j_io.py         # Price label loading
-│   ├── ml/
-│   │   ├── embeddings.py       # HOPE embeddings computation
-│   │   └── modeling.py         # XGBoost classifier training
-│   ├── mutations/
-│   │   ├── base.py             # Build base KG structure
-│   │   └── incremental_kg_mutator.py  # LLM-guided incremental mutation
-│   ├── pipeline/
-│   │   ├── orchestrator.py     # Main experiment runner
-│   │   ├── ontology_evolution.py  # LLM-based candidate generation
-│   │   └── evaluator.py        # Candidate evaluation with embeddings
-│   ├── config.py               # Configuration management
-│   ├── logger.py               # Logging setup
-│   ├── main.py                 # CLI entry point
-│   └── constants.py            # Constants and enums
-├── data/
-│   ├── fnspid_sample_nasdaq.csv           # Sample articles (short text)
-│   └── fnspid_sample_nasdaq_long_text.csv # Sample articles (full text)
-├── results/
-│   └── ontologies/             # Saved candidate ontologies
-└── tests/                      # Test files
+├── kg_builder_llm/          # main package
+│   ├── core/                # Neo4j I/O, data loading (local + S3), entity resolution
+│   ├── ml/                  # subgraph features, metapaths, topology, XGBoost
+│   ├── mutations/           # base KG builder, incremental LLM-guided mutator
+│   ├── pipeline/            # orchestrator, ontology evolution agent, evaluator
+│   └── main.py              # CLI entry point
+├── k8s/
+│   ├── base/                # namespace, configmap, secret template, RBAC,
+│   │                        # vLLM deployment/svc/pvc, embeddings deployment/svc,
+│   │                        # kg-builder job, EFS StorageClass
+│   ├── overlays/
+│   │   ├── local/           # Ollama (qwen2:0.5b) via Helm, standard storage
+│   │   └── aws/             # vLLM + GPU node, EFS, production images
+│   └── helm-values/
+├── infra/                   # Terraform: ECR, S3, VPC, EKS, EFS
+│   └── configs/backend/     # bootstrap state bucket + IAM (local state)
+├── scripts/
+│   └── eks-bootstrap.sh     # one-shot cluster setup after terraform apply
+├── .github/workflows/
+│   ├── terraform_plan.yml   # runs on PR to dev — posts plan as comment
+│   ├── terraform_deploy.yml # runs on push to dev — applies infra
+│   ├── ecr_deploy.yml       # builds & pushes kg-builder Docker image to ECR
+│   └── sweep.yml            # workflow_dispatch — runs hyperparameter sweep on EKS
+├── manuscript/              # LaTeX paper (Article 1 of PhD thesis)
+├── data/                    # local CSVs (gitignored — upload to S3 for cluster use)
+├── pyproject.toml           # uv-managed dependencies
+└── MLproject                # MLflow Projects entry point for sweep
 ```
 
-## Installation
+---
 
-### Requirements
-- Python 3.9+
-- Neo4j database (local or cloud)
-- OpenAI API key
+## Local development (minikube + Ollama)
 
-### Setup
+### Prerequisites
 
-1. **Clone and navigate to project**
-```bash
-cd finance-kg-builder
-```
+- [uv](https://docs.astral.sh/uv/) — `brew install uv`
+- [minikube](https://minikube.sigs.k8s.io/) + [Podman](https://podman.io/) (rootful VM)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/) + [kustomize](https://kustomize.io/)
+- [Helm](https://helm.sh/) — `brew install helm`
+- Neo4j AuraDB instance (free tier works)
 
-2. **Create conda environment**
-```bash
-conda create -n ml-env python=3.11
-conda activate ml-env
-```
-
-3. **Install dependencies**
-```bash
-pip install -r requirements.txt
-```
-
-4. **Set environment variables**
-```bash
-export NEO4J_URI="bolt://localhost:7687"
-export NEO4J_USER="neo4j"
-export NEO4J_PASSWORD="your-password"
-export NEO4J_DATABASE="neo4j"
-export OPENAI_API_KEY="sk-..."
-```
-
-## Usage
-
-### Basic Usage
+### Install dependencies
 
 ```bash
-python -m kg_builder.main \
-  --time-window-days 20 \
-  --articles-per-day 2 \
-  --steps 3 \
-  --candidates 2 \
-  --data data/fnspid_sample_nasdaq_long_text.csv
+uv sync
 ```
 
-### Command Line Arguments
+### Start minikube
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--time-window-days` | 20 | Number of calendar days to include |
-| `--articles-per-day` | None | Max articles per day (None = all) |
-| `--steps` | 3 | Number of evolution steps |
-| `--candidates` | 2 | Candidates per step |
-| `--data` | `data/fnspid_sample_nasdaq_long_text.csv` | Article CSV file path |
-| `--limit` | None | Limit articles to process |
-| `--output` | `results/ontology_experiment_results.json` | Output results file |
-| `--log-level` | `INFO` | Logging level |
-
-### Example: Run Pipeline
-
-```python
-from kg_builder.main import main
-import asyncio
-
-# Run with custom arguments
-exit_code = asyncio.run(main())
-```
-
-## Data Format
-
-### Article CSV
-Must contain columns: `text`, `timestamp`, `headline`, `ticker`
-
-```csv
-text,timestamp,headline,ticker
-"Tesla announced record Q3 earnings...",2024-01-15 10:30:00,"Tesla Q3 Earnings Beat",TSLA
-...
-```
-
-## Configuration
-
-Configuration is managed through environment variables and `Config` class:
-
-```python
-from kg_builder.config import Config
-
-config = Config.from_env()
-print(config.neo4j.uri)
-print(config.openai.model_name)
-```
-
-### Key Settings
-- `NEO4J_URI`: Neo4j connection string
-- `OPENAI_API_KEY`: OpenAI API key
-- `OPENAI_MODEL`: Model name (default: `gpt-4-turbo`)
-- `HOPE_EMBEDDING_DIM`: HOPE embedding dimension (default: 128)
-
-## Workflow
-
-### Step 0: Base Structure
-1. Create Article and Day nodes from articles
-2. Link articles to days via `PUBLISHED_ON`
-3. Extract and create Company, Author, and entity nodes
-4. Tag everything with `"base_structure"`
-5. Fetch price data and add direction/return labels to Day nodes
-
-### Steps 1+: Incremental Evolution
-For each step (1 to num_steps):
-1. **Generate Candidates**: LLM proposes new ontology schema variants
-2. **Build Incrementally**: Extract entities using each candidate's schema
-   - Use isolation constraints to prevent cross-contamination
-   - New entities can only link to base_structure or self
-3. **Tag Entities**: Apply candidate_tag to all newly created nodes/relationships
-4. **Evaluate**: 
-   - Fetch edges matching allowed_tags (base + current + previous winners)
-   - Compute HOPE embeddings on filtered edges
-   - Train XGBoost on Day embeddings
-   - Calculate AUC and F1 scores
-5. **Select Winner**: Keep candidate with highest AUC
-6. **Prune Loser**: Remove loser's tags from all nodes/relationships
-
-### Result
-Final graph contains:
-- Base structure (always present)
-- All winners' entities from each step
-- Loser entities still present but untagged
-- Metrics showing how each candidate performed
-
-## Isolation Constraint Example
-
-Given two candidates in step 1:
-
-**Candidate 0** extracts:
-- `Company("Tesla")` tagged with `"step_1_candidate_0"`
-- `Person("Elon")` tagged with `"step_1_candidate_0"`
-
-**Candidate 1** tries to extract:
-- `Sentiment("Bullish")` tagged with `"step_1_candidate_1"`
-- Link: `Sentiment --[TOWARDS]--> Company("Tesla")`
-
-**Result**: Link is REJECTED because:
-- `Company("Tesla")` has tag `"step_1_candidate_0"` 
-- Not in accepted_tags `["base_structure"]` for candidate 1
-- Constraint prevents cross-candidate relationships
-
-## Metrics Interpretation
-
-Output example:
-```
-Results by candidate:
-  step_1_candidate_0: AUC=0.5000, F1=0.6667, n_train=713, n_val=713
-  step_1_candidate_1: AUC=0.5000, F1=0.6667, n_train=897, n_val=897
-  step_2_candidate_0: AUC=0.2500, F1=0.6667, n_train=1013, n_val=1013
-```
-
-- **AUC**: How well graph structure predicts stock price direction (0.5 = random)
-- **F1**: F1 score on validation set
-- **n_train**: Total nodes in graph for this candidate
-- **n_val**: Nodes that received embeddings
-
-## Troubleshooting
-
-### No nodes/relationships created in step 1+
-- Check that `--data` file has sufficient text (>100 chars per article)
-- Use `fnspid_sample_nasdaq_long_text.csv` instead of short text variant
-- Enable debug logging: `--log-level DEBUG`
-
-### Isolation constraint preventing all links
-- Verify `_get_accepted_tags_for_step()` returns correct tags
-- Check that previous step winners are in accepted_tags
-- Review Cypher WHERE clause in `incremental_kg_mutator.py`
-
-### Poor AUC scores (near 0.5)
-- Small dataset (n_train < 20) causes random variation
-- Stock price direction highly correlated with momentum, not text
-- Try `--time-window-days 120` for larger validation sets
-
-### Memory issues with large graphs
-- Reduce `--articles-per-day`
-- Reduce `--steps`
-- Use smaller HOPE embedding dimension in config
-
-## Testing
-
-Run tests:
 ```bash
-python -m pytest tests/ -v
+podman machine start   # must be rootful
+minikube start --driver=podman
 ```
 
-Key test files:
-- `test_incremental_isolated.py`: Test incremental builder in isolation
-- `test_orchestrator_incremental_fix.py`: Test full orchestrator
-- `verify_restructuring.py`: Verify architecture changes
+### Create the secret
 
-## Project Structure Details
-
-### Incremental KG Mutator
-**File**: `kg_builder/mutations/incremental_kg_mutator.py`
-
-Handles LLM-guided extraction with isolation:
-- Calls LLM with ontology schema and article text
-- Extracts entities and relationships in JSON format
-- Applies isolation constraints before creating graph elements
-- Tags all nodes/relationships with candidate_tag
-
-### Orchestrator
-**File**: `kg_builder/pipeline/orchestrator.py`
-
-Main experiment runner:
-- Manages multi-step evolution
-- Coordinates candidate generation, building, and evaluation
-- Handles winner selection and tag pruning
-- Saves ontologies and results
-
-### Evaluator
-**File**: `kg_builder/pipeline/evaluator.py`
-
-Evaluates candidates:
-- Fetches edges matching allowed_tags
-- Computes HOPE embeddings
-- Trains XGBoost classifier
-- Returns metrics (AUC, F1, n_train, n_val)
-
-## Citation
-
-If you use this project, please cite:
-
-```bibtex
-@software{kg_builder_2025,
-  title={KG Builder: Knowledge Graph Evolution with LLM},
-  author={Your Name},
-  year={2025},
-  url={https://github.com/yourusername/finance-kg-builder}
-}
+```bash
+kubectl create secret generic kg-secrets \
+  --namespace kg-experiments \
+  --from-literal=NEO4J_URI=bolt+s://... \
+  --from-literal=NEO4J_PASSWORD=... \
+  --from-literal=MLFLOW_TRACKING_URI=https://dagshub.com/... \
+  --from-literal=MLFLOW_TRACKING_TOKEN=... \
+  --from-literal=HF_TOKEN=...
 ```
 
-## License
+### Apply local overlay (Ollama + standard storage)
 
-MIT License - See LICENSE file for details
+```bash
+kubectl apply -k k8s/overlays/local
+```
 
-## Contributing
+### Run a sweep locally
 
-Contributions welcome! Please:
-1. Create feature branch: `git checkout -b feature/my-feature`
-2. Commit changes: `git commit -am 'Add feature'`
-3. Push branch: `git push origin feature/my-feature`
-4. Open pull request
+```bash
+# stub mode — busybox jobs, no LLM calls, tests orchestration only
+python kg_builder_llm/scripts/sweep.py \
+  --configs '{"steps":2,"candidates":2}' \
+  --n-workers 0 \
+  --stub
 
-## Support
+# real run against local Ollama
+python kg_builder_llm/scripts/sweep.py \
+  --configs '{"steps":2,"candidates":2}' \
+  --n-workers 0
+```
 
-For questions or issues:
-- Open an issue on GitHub
-- Check existing issues for solutions
-- Review logs with `--log-level DEBUG`
+---
 
-## Acknowledgments
+## Production deployment (AWS EKS)
 
-- Neo4j for graph database and LLMInterface
-- OpenAI for LLM capabilities
-- scikit-learn and XGBoost for ML tools
-- KarateClub for HOPE embeddings
+### Infrastructure
+
+Terraform manages: ECR, S3 (data + state), VPC (2 AZs, public/private subnets, NAT), EKS 1.33, CPU node group (t3.medium), GPU node group (g5.xlarge, scales 0→1 via Cluster Autoscaler), EFS (model weight cache), EFS CSI driver + IRSA.
+
+#### Bootstrap backend (first time only — local state)
+
+```bash
+cd infra/configs/backend/dev
+terraform init && terraform apply
+```
+
+#### Plan / deploy infra (CI)
+
+PRs to `dev` trigger `terraform_plan.yml` which posts the plan as a PR comment. Merging to `dev` triggers `terraform_deploy.yml` which applies.
+
+To run locally:
+
+```bash
+cd infra
+terraform init -backend-config=configs/backend/dev/generated/backend.tfvars
+terraform plan  -var-file=configs/backend/dev/generated/plan_apply.tfvars
+terraform apply -var-file=configs/backend/dev/generated/plan_apply.tfvars
+```
+
+### Bootstrap the cluster (CI/CD)
+
+After `terraform apply`, store credentials in AWS Secrets Manager (one time):
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id kg-experiments-dev/kg-credentials \
+  --profile wne-uw \
+  --secret-string '{
+    "NEO4J_URI":             "bolt+s://...",
+    "NEO4J_PASSWORD":        "...",
+    "MLFLOW_TRACKING_URI":   "https://dagshub.com/...",
+    "MLFLOW_TRACKING_TOKEN": "...",
+    "HF_TOKEN":              "hf_..."
+  }'
+```
+
+Then trigger the bootstrap workflow from GitHub Actions UI → **Bootstrap EKS Cluster**, or:
+
+```bash
+gh workflow run eks-bootstrap.yml -f environment=dev
+```
+
+This workflow: applies `k8s/overlays/aws`, applies the EFS StorageClass (EFS ID resolved via AWS CLI), syncs `kg-secrets` from Secrets Manager into the cluster (idempotent).
+
+### Upload data (local only)
+
+The data CSV is local and gitignored — upload it manually once:
+
+```bash
+AWS_PROFILE=wne-uw ./scripts/upload-data.sh
+```
+
+### Local kubectl access (read-only inspection)
+
+To run `kubectl get pods/logs/describe` locally without cluster-admin write access:
+
+```bash
+aws eks update-kubeconfig \
+  --name kg-experiments-dev-eks \
+  --region eu-central-1 \
+  --profile wne-uw \
+  --role-arn arn:aws:iam::039293892587:role/kg-experiments-dev-terraform-deployment
+```
+
+This reuses the existing deployment role — no additional IAM resources needed.
+
+### Push a Docker image
+
+```bash
+# manually (CI does this automatically on push to dev):
+aws ecr get-login-password --region eu-central-1 --profile wne-uw \
+  | docker login --username AWS --password-stdin \
+    039293892587.dkr.ecr.eu-central-1.amazonaws.com
+
+docker build -t kg-builder kg_builder_llm/
+docker tag kg-builder:latest \
+  039293892587.dkr.ecr.eu-central-1.amazonaws.com/kg-experiments-dev-kg-builder:latest
+docker push \
+  039293892587.dkr.ecr.eu-central-1.amazonaws.com/kg-experiments-dev-kg-builder:latest
+```
+
+### Run a sweep on EKS
+
+Trigger via GitHub Actions UI → **Run Sweep** → set `configs` and `n_workers`:
+
+```json
+{"steps": 3, "candidates": 2}
+```
+
+Or with the GitHub CLI:
+
+```bash
+gh workflow run sweep.yml \
+  -f configs='{"steps":3,"candidates":2}' \
+  -f n_workers=1
+```
+
+Results appear in the MLflow/DagsHub UI under the project tracking URI.
+
+---
+
+## Architecture notes
+
+**LLM serving**
+
+| Environment | LLM | Embeddings |
+|---|---|---|
+| Local (minikube) | Ollama `qwen2:0.5b` (Helm chart) | HuggingFace TEI (CPU) |
+| AWS (EKS) | vLLM `Qwen2.5-32B` (GPU, g5.xlarge) | HuggingFace TEI (GPU) |
+
+**Sequential sweep** — AuraDB free tier allows one database, so experiments run one at a time. `sweep.py` submits Kubernetes Jobs sequentially; vLLM/TEI handle concurrency within each Job via async calls.
+
+**Data access** — `DATA_URI` in the ConfigMap points to an S3 path. `kg_builder_llm/core/data.py` detects `s3://` prefixes and reads via boto3. For local runs, pass a local CSV path.
+
+**Secrets** — `kg-secrets` is never committed. Create it with `eks-bootstrap.sh` or `kubectl create secret`. The `k8s/base/secret.yaml` is a template with placeholders only.
+
+---
+
+## CI/CD overview
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `terraform_plan.yml` | PR → `dev` touching `infra/` | `terraform plan`, posts output as PR comment |
+| `terraform_deploy.yml` | Push → `dev` touching `infra/` | `terraform apply` |
+| `ecr_deploy.yml` | Push → `dev` touching `kg_builder_llm/` or `Dockerfile` | Build + push image to ECR |
+| `eks-bootstrap.yml` | `workflow_dispatch` | Apply k8s manifests, EFS SC, sync Secrets Manager → k8s secret |
+| `sweep.yml` | `workflow_dispatch` | Run hyperparameter sweep on EKS, log to MLflow |
+
+All workflows authenticate to AWS via GitHub OIDC, then chain to the Terraform deployment role (`sts:AssumeRole` + `sts:TagSession`). Credentials are stored in AWS Secrets Manager — no GitHub Secrets for application credentials.
+
+---
+
+## Environment variables
+
+| Variable | Where set | Description |
+|---|---|---|
+| `NEO4J_URI` | `kg-secrets` | AuraDB bolt+s URI |
+| `NEO4J_PASSWORD` | `kg-secrets` | AuraDB password |
+| `MLFLOW_TRACKING_URI` | `kg-secrets` | DagsHub MLflow URI |
+| `MLFLOW_TRACKING_TOKEN` | `kg-secrets` | DagsHub access token |
+| `HF_TOKEN` | `kg-secrets` | HuggingFace token (for TEI model pull) |
+| `LLM_BASE_URL` | ConfigMap | vLLM or Ollama base URL |
+| `LLM_MODEL` | ConfigMap | model name |
+| `EMBEDDING_BASE_URL` | ConfigMap | TEI service URL |
+| `EMBEDDING_MODEL` | ConfigMap | embedding model name |
+| `DATA_URI` | ConfigMap | S3 or local path to articles CSV |
