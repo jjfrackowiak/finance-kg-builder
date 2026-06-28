@@ -1,0 +1,25 @@
+replicaCount: 0
+model: Qwen/Qwen2.5-32B-Instruct
+extraArgs:
+- --quantization
+- bitsandbytes
+- --max-model-len
+- "4096"
+resources:
+  limits:
+    nvidia.com/gpu: "1"
+    memory: 22Gi
+  requests:
+    nvidia.com/gpu: "1"
+    memory: 22Gi
+nodeSelector:
+  node-role: gpu
+persistence:
+  enabled: true
+  existingClaim: model-cache
+env:
+- name: HF_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: kg-secrets
+      key: HF_TOKEN

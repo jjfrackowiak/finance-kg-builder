@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kg-builder-test
+  namespace: kg-experiments
+spec:
+  template:
+    spec:
+      containers:
+      - name: kg-builder
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"

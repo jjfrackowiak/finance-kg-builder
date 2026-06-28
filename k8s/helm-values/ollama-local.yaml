@@ -1,0 +1,18 @@
+replicaCount: 1
+
+ollama:
+  models:
+    pull:
+    - qwen2:0.5b
+
+service:
+  type: ClusterIP
+  port: 11434
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi
