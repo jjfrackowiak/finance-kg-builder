@@ -8,11 +8,11 @@ spec:
     spec:
       containers:
       - name: tei
-        image: ghcr.io/huggingface/text-embeddings-inference:latest
+        image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
         resources:
           requests:
             memory: "2Gi"
-            cpu: "1"
+            cpu: "2"
           limits:
             memory: "4Gi"
-            cpu: "2"
+            cpu: "4"

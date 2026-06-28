@@ -19,6 +19,10 @@ on:
         description: 'Time window in days for each experiment'
         required: false
         default: '150'
+      timeout_minutes:
+        description: 'Workflow timeout in minutes (default 360 = 6h)'
+        required: false
+        default: '360'
 
 permissions:
   id-token: write
@@ -31,7 +35,7 @@ jobs:
   sweep:
     name: 🧪 Submit sweep to EKS
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: ${{ fromJSON(github.event.inputs.timeout_minutes) }}
 
     steps:
       - name: 📥 Checkout
@@ -102,3 +106,8 @@ jobs:
             --configs '${{ github.event.inputs.configs }}' \
             --n-workers ${{ github.event.inputs.n_workers }} \
             --n-embedding-workers ${{ github.event.inputs.n_embedding_workers }}
+
+      - name: 🧹 Scale down (always runs — failure, cancel, or success)
+        if: always()
+        run: |
+          kubectl scale deployment vllm embeddings --replicas=0 -n kg-experiments || true
