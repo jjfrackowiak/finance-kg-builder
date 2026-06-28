@@ -87,20 +87,15 @@ jobs:
           echo "mlflow_uri=$URI"     >> $GITHUB_OUTPUT
           echo "mlflow_token=$TOKEN" >> $GITHUB_OUTPUT
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - name: 📦 Install dependencies
-        run: pip install uv && uv sync --frozen --no-dev
+        run: pip install mlflow kubernetes
 
       - name: 🧪 Run sweep
         env:
           MLFLOW_TRACKING_URI:   ${{ steps.mlflow.outputs.mlflow_uri }}
           MLFLOW_TRACKING_TOKEN: ${{ steps.mlflow.outputs.mlflow_token }}
         run: |
-          uv run python kg_builder_llm/scripts/sweep.py \
+          python kg_builder_llm/scripts/sweep.py \
             --configs '${{ github.event.inputs.configs }}' \
             --n-workers ${{ github.event.inputs.n_workers }} \
             --n-embedding-workers ${{ github.event.inputs.n_embedding_workers }}
