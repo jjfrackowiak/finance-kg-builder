@@ -106,3 +106,8 @@ jobs:
             --configs '${{ github.event.inputs.configs }}' \
             --n-workers ${{ github.event.inputs.n_workers }} \
             --n-embedding-workers ${{ github.event.inputs.n_embedding_workers }}
+
+      - name: 🧹 Scale down (always runs — failure, cancel, or success)
+        if: always()
+        run: |
+          kubectl scale deployment vllm embeddings --replicas=0 -n kg-experiments || true
