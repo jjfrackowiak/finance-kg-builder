@@ -3,10 +3,10 @@ resource "aws_security_group" "efs" {
   vpc_id = aws_vpc.main.id
 
   ingress {
-    from_port       = 2049
-    to_port         = 2049
-    protocol        = "tcp"
-    security_groups = [aws_security_group.eks_cluster.id]
+    from_port   = 2049
+    to_port     = 2049
+    protocol    = "tcp"
+    cidr_blocks = local.private_subnets
   }
 
   egress {
