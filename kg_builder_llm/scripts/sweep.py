@@ -4,6 +4,7 @@ import os
 import time
 import uuid
 
+import mlflow
 from kubernetes import client, config
 
 NAMESPACE = "kg-experiments"
@@ -122,38 +123,53 @@ def main():
     configs = json.loads(args.configs)
     sweep_id = str(uuid.uuid4())[:8]
 
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
+    if tracking_uri:
+        mlflow.set_tracking_uri(tracking_uri)
+
     load_k8s_config()
     apps_v1 = client.AppsV1Api()
     batch_v1 = client.BatchV1Api()
 
-    print(f"Starting sweep {sweep_id} — {len(configs)} configs, sequential")
+    with mlflow.start_run(run_name=f"sweep-{sweep_id}") as parent_run:
+        parent_run_id = parent_run.info.run_id
+        mlflow.log_params({
+            "n_configs": len(configs),
+            "n_workers": args.n_workers,
+            "sweep_id": sweep_id,
+        })
 
-    if args.n_workers > 0:
-        scale_deployment(apps_v1, VLLM_DEPLOYMENT, args.n_workers)
-        scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, args.n_embedding_workers)
-        time.sleep(10)
+        print(f"Starting sweep {sweep_id} — {len(configs)} configs, sequential")
+        print(f"MLflow parent run: {parent_run_id}")
 
-    failed_count = 0
-    for i, cfg in enumerate(configs):
-        print(f"\n[{i+1}/{len(configs)}] Submitting: {cfg}")
-        job = build_job_manifest(
-            sweep_id, i, cfg, args.parent_run_id,
-            image=args.image,
-            cpu_request=args.cpu_request,
-            memory_request=args.memory_request,
-            stub=args.stub,
-        )
-        job_name = job.metadata.name
-        batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job)
-        success = wait_for_job(batch_v1, job_name)
-        if not success:
-            failed_count += 1
+        if args.n_workers > 0:
+            scale_deployment(apps_v1, VLLM_DEPLOYMENT, args.n_workers)
+            scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, args.n_embedding_workers)
+            time.sleep(10)
 
-    if args.n_workers > 0:
-        scale_deployment(apps_v1, VLLM_DEPLOYMENT, 0)
-        scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, 1)
+        failed_count = 0
+        for i, cfg in enumerate(configs):
+            print(f"\n[{i+1}/{len(configs)}] Submitting: {cfg}")
+            job = build_job_manifest(
+                sweep_id, i, cfg, parent_run_id,
+                image=args.image,
+                cpu_request=args.cpu_request,
+                memory_request=args.memory_request,
+                stub=args.stub,
+            )
+            job_name = job.metadata.name
+            batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job)
+            success = wait_for_job(batch_v1, job_name)
+            if not success:
+                failed_count += 1
 
-    print(f"\nSweep complete. {len(configs) - failed_count}/{len(configs)} succeeded.")
+        if args.n_workers > 0:
+            scale_deployment(apps_v1, VLLM_DEPLOYMENT, 0)
+            scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, 1)
+
+        mlflow.log_metric("succeeded", len(configs) - failed_count)
+        mlflow.log_metric("failed", failed_count)
+        print(f"\nSweep complete. {len(configs) - failed_count}/{len(configs)} succeeded.")
 
 
 if __name__ == "__main__":
