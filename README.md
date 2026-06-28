@@ -151,27 +151,52 @@ terraform plan  -var-file=configs/backend/dev/generated/plan_apply.tfvars
 terraform apply -var-file=configs/backend/dev/generated/plan_apply.tfvars
 ```
 
-### Bootstrap the cluster
+### Bootstrap the cluster (CI/CD)
 
-After `terraform apply` completes, run once per environment:
+After `terraform apply`, store credentials in AWS Secrets Manager (one time):
 
 ```bash
-# set credentials in .env or export them:
-export NEO4J_URI=bolt+s://...
-export NEO4J_PASSWORD=...
-export MLFLOW_TRACKING_URI=https://dagshub.com/...
-export MLFLOW_TRACKING_TOKEN=...
-export HF_TOKEN=...
-
-AWS_PROFILE=wne-uw ./scripts/eks-bootstrap.sh dev
+aws secretsmanager put-secret-value \
+  --secret-id kg-experiments-dev/kg-credentials \
+  --profile wne-uw \
+  --secret-string '{
+    "NEO4J_URI":             "bolt+s://...",
+    "NEO4J_PASSWORD":        "...",
+    "MLFLOW_TRACKING_URI":   "https://dagshub.com/...",
+    "MLFLOW_TRACKING_TOKEN": "...",
+    "HF_TOKEN":              "hf_..."
+  }'
 ```
 
-This script:
-1. Runs `aws eks update-kubeconfig`
-2. Applies `k8s/overlays/aws`
-3. Applies the EFS StorageClass with the real filesystem ID (from `terraform output`)
-4. Creates / updates `kg-secrets` in the cluster (idempotent)
-5. Uploads the data CSV to S3 (skipped if not present locally)
+Then trigger the bootstrap workflow from GitHub Actions UI → **Bootstrap EKS Cluster**, or:
+
+```bash
+gh workflow run eks-bootstrap.yml -f environment=dev
+```
+
+This workflow: applies `k8s/overlays/aws`, applies the EFS StorageClass (EFS ID resolved via AWS CLI), syncs `kg-secrets` from Secrets Manager into the cluster (idempotent).
+
+### Upload data (local only)
+
+The data CSV is local and gitignored — upload it manually once:
+
+```bash
+AWS_PROFILE=wne-uw ./scripts/upload-data.sh
+```
+
+### Local kubectl access (read-only inspection)
+
+To run `kubectl get pods/logs/describe` locally without cluster-admin write access:
+
+```bash
+aws eks update-kubeconfig \
+  --name kg-experiments-dev-eks \
+  --region eu-central-1 \
+  --profile wne-uw \
+  --role-arn arn:aws:iam::039293892587:role/kg-experiments-dev-terraform-deployment
+```
+
+This reuses the existing deployment role — no additional IAM resources needed.
 
 ### Push a Docker image
 
@@ -232,9 +257,10 @@ Results appear in the MLflow/DagsHub UI under the project tracking URI.
 | `terraform_plan.yml` | PR → `dev` touching `infra/` | `terraform plan`, posts output as PR comment |
 | `terraform_deploy.yml` | Push → `dev` touching `infra/` | `terraform apply` |
 | `ecr_deploy.yml` | Push → `dev` touching `kg_builder_llm/` or `Dockerfile` | Build + push image to ECR |
-| `sweep.yml` | `workflow_dispatch` | OIDC auth → EKS → run sweep → log to MLflow |
+| `eks-bootstrap.yml` | `workflow_dispatch` | Apply k8s manifests, EFS SC, sync Secrets Manager → k8s secret |
+| `sweep.yml` | `workflow_dispatch` | Run hyperparameter sweep on EKS, log to MLflow |
 
-All workflows authenticate to AWS via GitHub OIDC (no stored credentials). The GitHub Actions role chains to the Terraform deployment role via `sts:AssumeRole` + `sts:TagSession`.
+All workflows authenticate to AWS via GitHub OIDC, then chain to the Terraform deployment role (`sts:AssumeRole` + `sts:TagSession`). Credentials are stored in AWS Secrets Manager — no GitHub Secrets for application credentials.
 
 ---
 
