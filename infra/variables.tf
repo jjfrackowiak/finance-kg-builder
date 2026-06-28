@@ -18,9 +18,3 @@ variable "tags" {
   type    = map(string)
   default = {}
 }
-
-variable "local_operator_arn" {
-  type        = string
-  description = "IAM ARN of the local operator (IAM user or role) granted EKS cluster-admin access"
-  default     = ""
-}

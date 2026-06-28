@@ -68,17 +68,11 @@ if [[ -n "${AWS_PROFILE:-}" ]]; then
 fi
 
 # ── 1. Update kubeconfig ──────────────────────────────────────────────────────
-# Authenticate as the Terraform deployment role so kubectl has cluster-admin
-# access regardless of which IAM identity is currently active.
 
 echo "→ Configuring kubectl for cluster: $CLUSTER_NAME"
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text "${AWS_ARGS[@]}")
-DEPLOY_ROLE_ARN="${DEPLOY_ROLE_ARN:-arn:aws:iam::${ACCOUNT_ID}:role/kg-experiments-${ENV}-terraform-deployment}"
-
 aws eks update-kubeconfig \
   --name "$CLUSTER_NAME" \
   --region "$REGION" \
-  --role-arn "$DEPLOY_ROLE_ARN" \
   "${AWS_ARGS[@]}"
 
 # ── 2. Apply k8s overlay ──────────────────────────────────────────────────────

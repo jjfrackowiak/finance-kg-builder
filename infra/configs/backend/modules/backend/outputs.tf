@@ -34,8 +34,3 @@ output "prefix" {
 output "tags" {
   value = local.tags
 }
-
-output "local_operator_arn" {
-  value       = var.local_operator_arn
-  description = "IAM ARN of the local operator passed through for EKS access entry"
-}
