@@ -1,0 +1,6 @@
+{
+  "kube-context": "kg-experiments-eks",
+  "kube-namespace": "kg-experiments",
+  "resources.requests.memory": "512Mi",
+  "resources.requests.cpu": "0.5"
+}

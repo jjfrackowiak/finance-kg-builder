@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base
+patches:
+- path: patches/vllm-gpu.yaml
+  target:
+    kind: Deployment
+    name: vllm
+- path: patches/storage-efs.yaml
+  target:
+    kind: PersistentVolumeClaim
+    name: model-cache
+- path: patches/embeddings-gpu.yaml
+  target:
+    kind: Deployment
+    name: embeddings

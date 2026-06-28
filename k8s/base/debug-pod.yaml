@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug
+  namespace: kg-experiments
+spec:
+  containers:
+  - name: shell
+    image: busybox
+    command: ["sleep", "3600"]
+    envFrom:
+    - configMapRef:
+        name: kg-config

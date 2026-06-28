@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embeddings
+  namespace: kg-experiments
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embeddings
+  template:
+    metadata:
+      labels:
+        app: embeddings
+    spec:
+      containers:
+      - name: tei
+        image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
+        args:
+        - --model-id
+        - $(EMBEDDING_MODEL)
+        - --port
+        - "8080"
+        env:
+        - name: EMBEDDING_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: kg-config
+              key: EMBEDDING_MODEL
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "512Mi"
+          limits:
+            cpu: "2"
+            memory: "1Gi"

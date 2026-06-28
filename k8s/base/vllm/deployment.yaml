@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: kg-experiments
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      containers:
+      - name: vllm
+        image: kennethreitz/httpbin
+        envFrom:
+        - configMapRef:
+            name: kg-config
+        - secretRef:
+            name: kg-secrets
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "128Mi"
+          limits:
+            memory: "256Mi"

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kg-config
+  namespace: kg-experiments
+data:
+  LLM_BASE_URL: "http://vllm-svc:8000/v1"
+  LLM_MODEL: "Qwen/Qwen2.5-32B-Instruct"
+  EMBEDDING_TYPE: "remote"
+  EMBEDDING_BASE_URL: "http://embeddings-svc:8080"
+  EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
+  DATA_URI: "s3://kg-experiments-data-039293892587/fnspid_sample_nasdaq_long_text.csv"

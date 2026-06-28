@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sweep-runner-job-manager
+  namespace: kg-experiments
+subjects:
+- kind: ServiceAccount
+  name: sweep-runner
+  namespace: kg-experiments
+roleRef:
+  kind: Role
+  name: job-manager
+  apiGroup: rbac.authorization.k8s.io
