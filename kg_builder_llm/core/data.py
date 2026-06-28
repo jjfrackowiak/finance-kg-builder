@@ -1,5 +1,6 @@
 """Data loading and preprocessing."""
 
+import io
 import logging
 from datetime import date, timedelta
 from pathlib import Path
@@ -14,21 +15,20 @@ def load_articles(
     csv_path: str,
     limit: Optional[int] = None,
 ) -> pd.DataFrame:
-    """Load articles from CSV file.
-
-    Args:
-        csv_path: Path to CSV file
-        limit: Optional limit on number of rows
-
-    Returns:
-        DataFrame with articles
-    """
+    """Load articles from a local path or s3:// URI."""
     logger.info("Loading articles from %s", csv_path)
 
-    if not Path(csv_path).exists():
-        raise FileNotFoundError(f"CSV file not found: {csv_path}")
-
-    df = pd.read_csv(csv_path)
+    if csv_path.startswith("s3://"):
+        import boto3
+        parts = csv_path[5:].split("/", 1)
+        bucket, key = parts[0], parts[1]
+        s3 = boto3.client("s3")
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        df = pd.read_csv(io.BytesIO(obj["Body"].read()))
+    else:
+        if not Path(csv_path).exists():
+            raise FileNotFoundError(f"CSV file not found: {csv_path}")
+        df = pd.read_csv(csv_path)
 
     if limit:
         df = df.head(limit)

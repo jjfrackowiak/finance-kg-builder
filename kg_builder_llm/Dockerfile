@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -9,4 +9,6 @@ RUN uv sync --frozen --no-dev
 
 COPY kg_builder_llm/ ./kg_builder_llm/
 
-ENTRYPOINT ["uv", "run", "python", "-m", "kg_builder_llm.main"]
+ENV PATH="/app/.venv/bin:$PATH"
+
+ENTRYPOINT ["python", "-m", "kg_builder_llm.main"]

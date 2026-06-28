@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base
+patches:
+- path: patches/storage-standard.yaml
+  target:
+    kind: PersistentVolumeClaim
+    name: model-cache
+- path: patches/configmap-ollama.yaml
+  target:
+    kind: ConfigMap
+    name: kg-config
+- path: patches/embeddings-cpu.yaml
+  target:
+    kind: Deployment
+    name: embeddings
+
+helmCharts:
+- name: ollama
+  repo: https://otwld.github.io/ollama-helm/
+  version: 0.74.0
+  releaseName: ollama
+  namespace: kg-experiments
+  valuesFile: ../../helm-values/ollama-local.yaml

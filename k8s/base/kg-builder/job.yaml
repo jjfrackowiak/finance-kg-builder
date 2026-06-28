@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kg-builder-test
+  namespace: kg-experiments
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: kg-builder
+        image: busybox
+        command: ["sh", "-c", "echo 'KG builder started'; sleep 5; echo 'KG builder done'"]
+        envFrom:
+        - configMapRef:
+            name: kg-config
+        - secretRef:
+            name: kg-secrets
+        resources:
+          requests:
+            cpu: "0.5"
+            memory: "512Mi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"

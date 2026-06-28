@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm
+  namespace: kg-experiments
+spec:
+  template:
+    spec:
+      containers:
+      - name: vllm
+        image: vllm/vllm-openai:latest
+        args:
+        - --model
+        - $(LLM_MODEL)
+        - --quantization
+        - bitsandbytes
+        - --max-model-len
+        - "4096"
+        - --port
+        - "8000"
+        resources:
+          requests:
+            nvidia.com/gpu: "1"
+            memory: "20Gi"
+          limits:
+            nvidia.com/gpu: "1"
+            memory: "22Gi"
+        volumeMounts:
+        - name: model-cache
+          mountPath: /root/.cache/huggingface
+      nodeSelector:
+        node-role: gpu
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: model-cache

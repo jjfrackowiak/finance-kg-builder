@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- namespace.yaml
+- configmap.yaml
+- rbac/serviceaccount.yaml
+- rbac/role.yaml
+- rbac/rolebinding.yaml
+- vllm/deployment.yaml
+- vllm/service.yaml
+- vllm/pvc.yaml
+- embeddings/deployment.yaml
+- embeddings/service.yaml
+- kg-builder/job.yaml

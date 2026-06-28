@@ -1,0 +1,11 @@
+replicaCount: 0
+image:
+  repository: kennethreitz/httpbin
+  tag: latest
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+service:
+  type: ClusterIP
+  port: 8000
