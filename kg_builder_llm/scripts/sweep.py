@@ -4,13 +4,73 @@ import os
 import time
 import uuid
 
-import mlflow
+import requests
 from kubernetes import client, config
 
 NAMESPACE = "kg-experiments"
 VLLM_DEPLOYMENT = "vllm"
 EMBEDDINGS_DEPLOYMENT = "embeddings"
 SWEEP_LABEL = "sweep-id"
+
+
+class MlflowClient:
+    """Minimal MLflow REST client — avoids the heavy mlflow package."""
+
+    def __init__(self):
+        self.base_url = os.environ.get("MLFLOW_TRACKING_URI", "").rstrip("/")
+        self.auth = (
+            os.environ.get("MLFLOW_TRACKING_USERNAME", ""),
+            os.environ.get("MLFLOW_TRACKING_PASSWORD", ""),
+        )
+
+    def _post(self, path: str, body: dict) -> dict:
+        r = requests.post(f"{self.base_url}/api/2.0/mlflow/{path}", json=body, auth=self.auth)
+        r.raise_for_status()
+        return r.json()
+
+    def _patch(self, path: str, body: dict) -> dict:
+        r = requests.patch(f"{self.base_url}/api/2.0/mlflow/{path}", json=body, auth=self.auth)
+        r.raise_for_status()
+        return r.json()
+
+    def get_or_create_experiment(self, name: str) -> str:
+        r = requests.get(
+            f"{self.base_url}/api/2.0/mlflow/experiments/get-by-name",
+            params={"experiment_name": name},
+            auth=self.auth,
+        )
+        if r.status_code == 200:
+            return r.json()["experiment"]["experiment_id"]
+        body = self._post("experiments/create", {"name": name})
+        return body["experiment_id"]
+
+    def create_run(self, experiment_id: str, run_name: str) -> str:
+        body = self._post("runs/create", {
+            "experiment_id": experiment_id,
+            "run_name": run_name,
+            "start_time": int(time.time() * 1000),
+        })
+        return body["run"]["info"]["run_id"]
+
+    def log_params(self, run_id: str, params: dict):
+        self._post("runs/log-batch", {
+            "run_id": run_id,
+            "params": [{"key": k, "value": str(v)} for k, v in params.items()],
+        })
+
+    def log_metrics(self, run_id: str, metrics: dict):
+        ts = int(time.time() * 1000)
+        self._post("runs/log-batch", {
+            "run_id": run_id,
+            "metrics": [{"key": k, "value": v, "timestamp": ts, "step": 0} for k, v in metrics.items()],
+        })
+
+    def end_run(self, run_id: str, status: str = "FINISHED"):
+        self._patch("runs/update", {
+            "run_id": run_id,
+            "status": status,
+            "end_time": int(time.time() * 1000),
+        })
 
 
 def load_k8s_config():
@@ -108,7 +168,6 @@ def wait_for_job(batch_v1: client.BatchV1Api, job_name: str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--configs", required=True, help="JSON array of experiment configs")
-    parser.add_argument("--parent-run-id", default="local-sweep", help="MLflow parent run ID")
     parser.add_argument("--n-workers", type=int, default=2, help="vLLM replicas during sweep")
     parser.add_argument("--n-embedding-workers", type=int, default=2, help="embedding replicas during sweep")
     parser.add_argument("--image", default="ghcr.io/jjfrackowiak/kg-orchestrator:latest")
@@ -123,53 +182,59 @@ def main():
     configs = json.loads(args.configs)
     sweep_id = str(uuid.uuid4())[:8]
 
-    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI")
-    if tracking_uri:
-        mlflow.set_tracking_uri(tracking_uri)
+    mlflow = MlflowClient()
+    tracking_enabled = bool(mlflow.base_url)
 
     load_k8s_config()
     apps_v1 = client.AppsV1Api()
     batch_v1 = client.BatchV1Api()
 
-    with mlflow.start_run(run_name=f"sweep-{sweep_id}") as parent_run:
-        parent_run_id = parent_run.info.run_id
-        mlflow.log_params({
+    parent_run_id = "local"
+    if tracking_enabled:
+        experiment_id = mlflow.get_or_create_experiment("kg-sweep")
+        parent_run_id = mlflow.create_run(experiment_id, f"sweep-{sweep_id}")
+        mlflow.log_params(parent_run_id, {
             "n_configs": len(configs),
             "n_workers": args.n_workers,
             "sweep_id": sweep_id,
         })
 
-        print(f"Starting sweep {sweep_id} — {len(configs)} configs, sequential")
-        print(f"MLflow parent run: {parent_run_id}")
+    print(f"Starting sweep {sweep_id} — {len(configs)} configs, sequential")
+    print(f"MLflow parent run: {parent_run_id}")
 
-        if args.n_workers > 0:
-            scale_deployment(apps_v1, VLLM_DEPLOYMENT, args.n_workers)
-            scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, args.n_embedding_workers)
-            time.sleep(10)
+    if args.n_workers > 0:
+        scale_deployment(apps_v1, VLLM_DEPLOYMENT, args.n_workers)
+        scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, args.n_embedding_workers)
+        time.sleep(10)
 
-        failed_count = 0
-        for i, cfg in enumerate(configs):
-            print(f"\n[{i+1}/{len(configs)}] Submitting: {cfg}")
-            job = build_job_manifest(
-                sweep_id, i, cfg, parent_run_id,
-                image=args.image,
-                cpu_request=args.cpu_request,
-                memory_request=args.memory_request,
-                stub=args.stub,
-            )
-            job_name = job.metadata.name
-            batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job)
-            success = wait_for_job(batch_v1, job_name)
-            if not success:
-                failed_count += 1
+    failed_count = 0
+    for i, cfg in enumerate(configs):
+        print(f"\n[{i+1}/{len(configs)}] Submitting: {cfg}")
+        job = build_job_manifest(
+            sweep_id, i, cfg, parent_run_id,
+            image=args.image,
+            cpu_request=args.cpu_request,
+            memory_request=args.memory_request,
+            stub=args.stub,
+        )
+        job_name = job.metadata.name
+        batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job)
+        success = wait_for_job(batch_v1, job_name)
+        if not success:
+            failed_count += 1
 
-        if args.n_workers > 0:
-            scale_deployment(apps_v1, VLLM_DEPLOYMENT, 0)
-            scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, 1)
+    if args.n_workers > 0:
+        scale_deployment(apps_v1, VLLM_DEPLOYMENT, 0)
+        scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, 1)
 
-        mlflow.log_metric("succeeded", len(configs) - failed_count)
-        mlflow.log_metric("failed", failed_count)
-        print(f"\nSweep complete. {len(configs) - failed_count}/{len(configs)} succeeded.")
+    if tracking_enabled:
+        mlflow.log_metrics(parent_run_id, {
+            "succeeded": len(configs) - failed_count,
+            "failed": failed_count,
+        })
+        mlflow.end_run(parent_run_id)
+
+    print(f"\nSweep complete. {len(configs) - failed_count}/{len(configs)} succeeded.")
 
 
 if __name__ == "__main__":
