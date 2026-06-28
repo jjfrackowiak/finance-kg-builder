@@ -54,12 +54,15 @@ jobs:
           role-to-assume: ${{ steps.config.outputs.github_role_arn }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: 🔐 Chain to deployment role
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ steps.config.outputs.role_arn }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-chaining: true
+      - name: 🔐 Assume deployment role
+        run: |
+          CREDS=$(aws sts assume-role \
+            --role-arn "${{ steps.config.outputs.role_arn }}" \
+            --role-session-name sweep \
+            --output json)
+          echo "AWS_ACCESS_KEY_ID=$(echo "$CREDS"     | jq -r .Credentials.AccessKeyId)"     >> "$GITHUB_ENV"
+          echo "AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r .Credentials.SecretAccessKey)" >> "$GITHUB_ENV"
+          echo "AWS_SESSION_TOKEN=$(echo "$CREDS"     | jq -r .Credentials.SessionToken)"    >> "$GITHUB_ENV"
 
       - name: ⚙️ Install kubectl
         uses: azure/setup-kubectl@v4
