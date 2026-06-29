@@ -110,8 +110,8 @@ jobs:
             [ $SECONDS -ge $DEADLINE ] && echo "Timed out waiting for GPU node to join" && exit 1
             sleep 10
           done
-          echo "Node joined — waiting for Ready (timeout 5m)..."
-          kubectl wait node -l node-role=gpu --for=condition=Ready --timeout=300s
+          echo "Node joined — waiting for Ready (timeout 15m)..."
+          kubectl wait node -l node-role=gpu --for=condition=Ready --timeout=900s
 
       - name: 📦 Install dependencies
         run: pip install kubernetes
