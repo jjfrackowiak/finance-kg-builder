@@ -152,6 +152,24 @@ resource "aws_eks_node_group" "cpu" {
 
 # ── Node group — GPU (vLLM) ───────────────────────────────────────────────────
 
+resource "aws_launch_template" "gpu" {
+  name_prefix = "${var.prefix}-gpu-"
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = 100
+      volume_type           = "gp3"
+      delete_on_termination = true
+    }
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags          = var.tags
+  }
+}
+
 resource "aws_eks_node_group" "gpu" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.prefix}-gpu"
@@ -159,6 +177,11 @@ resource "aws_eks_node_group" "gpu" {
   subnet_ids      = aws_subnet.private[*].id
   instance_types  = ["g5.xlarge"]
   ami_type        = "AL2023_x86_64_NVIDIA"
+
+  launch_template {
+    id      = aws_launch_template.gpu.id
+    version = aws_launch_template.gpu.latest_version
+  }
 
   scaling_config {
     desired_size = 0
