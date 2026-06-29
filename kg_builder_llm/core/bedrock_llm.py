@@ -26,8 +26,11 @@ class BedrockLLM:
             modelId=self.model_id,
             messages=[{"role": "user", "content": [{"text": prompt}]}],
             inferenceConfig={"temperature": self.temperature},
+            additionalModelRequestFields={"thinking": {"type": "enabled", "budget_tokens": 4096}},
         )
-        text = response["output"]["message"]["content"][0]["text"]
+        # Response may contain a thinking block followed by the text block; take the text.
+        content_blocks = response["output"]["message"]["content"]
+        text = next(b["text"] for b in content_blocks if "text" in b)
         return _LLMResponse(content=text)
 
     async def ainvoke(self, prompt: str) -> _LLMResponse:
