@@ -66,11 +66,20 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: 🔐 Assume deployment role
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ steps.config.outputs.role_arn }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-chaining: true
+        run: |
+          CREDS=$(aws sts assume-role \
+            --role-arn "${{ steps.config.outputs.role_arn }}" \
+            --role-session-name ecr-build \
+            --output json)
+          KEY=$(echo "$CREDS"   | jq -r .Credentials.AccessKeyId)
+          SECRET=$(echo "$CREDS"| jq -r .Credentials.SecretAccessKey)
+          TOKEN=$(echo "$CREDS" | jq -r .Credentials.SessionToken)
+          echo "::add-mask::$KEY"
+          echo "::add-mask::$SECRET"
+          echo "::add-mask::$TOKEN"
+          echo "AWS_ACCESS_KEY_ID=$KEY"        >> "$GITHUB_ENV"
+          echo "AWS_SECRET_ACCESS_KEY=$SECRET" >> "$GITHUB_ENV"
+          echo "AWS_SESSION_TOKEN=$TOKEN"      >> "$GITHUB_ENV"
 
       - name: 🔑 Login to ECR
         id: ecr-login
