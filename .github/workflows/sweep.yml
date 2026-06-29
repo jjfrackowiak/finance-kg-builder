@@ -52,9 +52,11 @@ jobs:
           GITHUB_ROLE=$(grep 'github_role_arn' "$VARS" | cut -d'"' -f2)
           ROLE_ARN=$(grep '^role_arn'          "$VARS" | cut -d'"' -f2)
           PREFIX=$(grep    '^prefix'           "$VARS" | cut -d'"' -f2)
+          ACCOUNT_ID=$(echo "$ROLE_ARN" | cut -d: -f5)
           echo "github_role_arn=$GITHUB_ROLE" >> $GITHUB_OUTPUT
           echo "role_arn=$ROLE_ARN"           >> $GITHUB_OUTPUT
           echo "prefix=$PREFIX"               >> $GITHUB_OUTPUT
+          echo "ecr_image=${ACCOUNT_ID}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/kg-orchestrator:latest" >> $GITHUB_OUTPUT
 
       - name: 🔐 Authenticate via OIDC (GitHub role)
         uses: aws-actions/configure-aws-credentials@v4
@@ -113,6 +115,7 @@ jobs:
           MLFLOW_TRACKING_URI:      ${{ steps.mlflow.outputs.mlflow_uri }}
           MLFLOW_TRACKING_USERNAME: jjfrackowiak
           MLFLOW_TRACKING_PASSWORD: ${{ steps.mlflow.outputs.mlflow_token }}
+          KG_BUILDER_IMAGE: ${{ steps.config.outputs.ecr_image }}
         run: |
           python kg_builder_llm/scripts/sweep.py \
             --configs '${{ github.event.inputs.configs }}' \

@@ -170,7 +170,7 @@ def main():
     parser.add_argument("--configs", required=True, help="JSON array of experiment configs")
     parser.add_argument("--n-workers", type=int, default=2, help="vLLM replicas during sweep")
     parser.add_argument("--n-embedding-workers", type=int, default=2, help="embedding replicas during sweep")
-    parser.add_argument("--image", default="ghcr.io/jjfrackowiak/kg-orchestrator:latest")
+    parser.add_argument("--image", default=os.environ.get("KG_BUILDER_IMAGE", "kg-orchestrator:latest"))
     parser.add_argument("--cpu-request", default="1")
     parser.add_argument("--memory-request", default="2Gi")
     parser.add_argument("--stub", action="store_true", help="use busybox stub instead of real image")
