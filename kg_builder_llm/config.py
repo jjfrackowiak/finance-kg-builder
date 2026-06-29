@@ -121,6 +121,24 @@ class ExperimentConfig:
 
 
 @dataclass
+class BedrockLLMConfig:
+    """Bedrock LLM config for reasoning-heavy calls (ontology evolution)."""
+
+    model_id: str = "qwen.qwen3-32b-v1:0"
+    region: str = "eu-central-1"
+
+    @classmethod
+    def from_env(cls) -> "BedrockLLMConfig":
+        return cls(
+            model_id=os.getenv("ONTOLOGY_LLM_MODEL", "qwen.qwen3-32b-v1:0"),
+            region=os.getenv("AWS_REGION", "eu-central-1"),
+        )
+
+    def base_url(self) -> str:
+        return f"https://bedrock-runtime.{self.region}.amazonaws.com/model/{self.model_id}/converse"
+
+
+@dataclass
 class Config:
     """Main configuration container."""
 
@@ -128,10 +146,13 @@ class Config:
     openai: OpenAIConfig
     experiment: ExperimentConfig
     mlflow: MLflowConfig = None
+    bedrock: BedrockLLMConfig = None
 
     def __post_init__(self) -> None:
         if self.mlflow is None:
             self.mlflow = MLflowConfig()
+        if self.bedrock is None:
+            self.bedrock = BedrockLLMConfig()
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -141,4 +162,5 @@ class Config:
             openai=OpenAIConfig.from_env(),
             experiment=ExperimentConfig.from_env(),
             mlflow=MLflowConfig.from_env(),
+            bedrock=BedrockLLMConfig.from_env(),
         )
