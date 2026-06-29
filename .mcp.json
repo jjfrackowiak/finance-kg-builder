@@ -3,7 +3,13 @@
     "neo4j": {
       "type": "stdio",
       "command": "uvx",
-      "args": ["mcp-neo4j-cypher"]
+      "args": ["mcp-neo4j-cypher"],
+      "env": {
+        "NEO4J_URI": "neo4j+s://6bd54699.databases.neo4j.io",
+        "NEO4J_USERNAME": "6bd54699",
+        "NEO4J_PASSWORD": "TxFiYY4saVubF3g2YIHk8kFxiuGrqV595zY6W8QzqKM",
+        "NEO4J_DATABASE": "6bd54699"
+      }
     },
     "publications-rag": {
       "type": "stdio",

@@ -126,3 +126,10 @@
 2026-06-20 13:05:27 INFO     search() query='how do large language models extract knowledge graphs from text?' files=None n=4
 2026-06-20 13:05:31 INFO     search() returned 4 hits via cosine
 2026-06-24 15:04:39 INFO     publications-rag MCP server initialised
+2026-06-27 20:45:58 INFO     publications-rag MCP server initialised
+2026-06-27 20:46:08 INFO     publications-rag MCP server initialised
+2026-06-28 15:23:01 INFO     publications-rag MCP server initialised
+2026-06-28 15:26:09 INFO     publications-rag MCP server initialised
+2026-06-28 15:28:51 INFO     publications-rag MCP server initialised
+2026-06-28 15:30:11 INFO     publications-rag MCP server initialised
+2026-06-28 15:36:40 INFO     publications-rag MCP server initialised
