@@ -21,10 +21,10 @@ spec:
         resources:
           requests:
             nvidia.com/gpu: "1"
-            memory: "20Gi"
+            memory: "12Gi"
           limits:
             nvidia.com/gpu: "1"
-            memory: "22Gi"
+            memory: "14Gi"
         volumeMounts:
         - name: model-cache
           mountPath: /root/.cache/huggingface
