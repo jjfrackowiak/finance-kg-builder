@@ -66,7 +66,7 @@ class MlflowClient:
         })
 
     def end_run(self, run_id: str, status: str = "FINISHED"):
-        self._patch("runs/update", {
+        self._post("runs/update", {
             "run_id": run_id,
             "status": status,
             "end_time": int(time.time() * 1000),
