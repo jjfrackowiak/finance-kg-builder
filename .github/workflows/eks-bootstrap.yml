@@ -63,6 +63,10 @@ jobs:
             --name "${{ steps.config.outputs.prefix }}-eks" \
             --region ${{ env.AWS_REGION }}
 
+      - name: 🎮 Install NVIDIA device plugin
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.17.0/deployments/static/nvidia-device-plugin.yml
+
       - name: 📦 Apply k8s overlay
         run: kubectl apply -k k8s/overlays/aws
 
