@@ -54,6 +54,7 @@ kg-builder = "kg_builder.main:main"
 
 [tool.uv]
 # python-version is not a valid uv config, use requires-python in [project] instead
+no-build-isolation-package = ["pandas"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
