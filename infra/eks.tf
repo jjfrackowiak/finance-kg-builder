@@ -163,11 +163,6 @@ resource "aws_launch_template" "gpu" {
       delete_on_termination = true
     }
   }
-
-  tag_specifications {
-    resource_type = "instance"
-    tags          = var.tags
-  }
 }
 
 resource "aws_eks_node_group" "gpu" {
