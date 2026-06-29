@@ -92,7 +92,7 @@ jobs:
             --query SecretString \
             --output text)
           URI=$(echo "$SECRET"   | python3 -c "import sys,json; print(json.load(sys.stdin)['MLFLOW_TRACKING_URI'])")
-          TOKEN=$(echo "$SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['MLFLOW_TRACKING_TOKEN'])")
+          TOKEN=$(echo "$SECRET" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('MLFLOW_TRACKING_TOKEN') or d.get('MLFLOW_TRACKING_PASSWORD',''))")
           echo "::add-mask::$TOKEN"
           echo "mlflow_uri=$URI"     >> $GITHUB_OUTPUT
           echo "mlflow_token=$TOKEN" >> $GITHUB_OUTPUT
