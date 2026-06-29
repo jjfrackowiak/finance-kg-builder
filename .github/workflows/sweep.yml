@@ -131,6 +131,16 @@ jobs:
       - name: 🧹 Scale down (always runs — failure, cancel, or success)
         if: always()
         run: |
+          CREDS=$(aws sts assume-role \
+            --role-arn "${{ steps.config.outputs.role_arn }}" \
+            --role-session-name sweep-cleanup \
+            --output json)
+          export AWS_ACCESS_KEY_ID=$(echo "$CREDS"     | jq -r .Credentials.AccessKeyId)
+          export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r .Credentials.SecretAccessKey)
+          export AWS_SESSION_TOKEN=$(echo "$CREDS"     | jq -r .Credentials.SessionToken)
+          aws eks update-kubeconfig \
+            --name "${{ steps.config.outputs.prefix }}-eks" \
+            --region ${{ env.AWS_REGION }}
           kubectl scale deployment vllm embeddings --replicas=0 -n kg-experiments || true
           aws eks update-nodegroup-config \
             --cluster-name "${{ steps.config.outputs.prefix }}-eks" \
