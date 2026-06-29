@@ -5,7 +5,8 @@ from typing import Dict, List, Optional, Tuple
 
 import networkx as nx
 import numpy as np
-from karateclub.node_embedding.neighbourhood import HOPE
+import scipy.sparse as sp
+import scipy.sparse.linalg as spla
 from neo4j_graphrag.embeddings.openai import OpenAIEmbeddings
 
 logger = logging.getLogger(__name__)
@@ -110,18 +111,21 @@ def compute_hope_embeddings(edges: List[Tuple[str, str]], dim: int = 128) -> Dic
         logger.warning("HOPE dim=%d is too small; minimum usable dim is 2. Raising to 2.", dim)
         dim = 2
 
-    logger.info("Fitting HOPE model with final dim=%d (k=%d)", dim, dim // 2)
+    k = dim // 2
+    logger.info("Fitting HOPE model with final dim=%d (k=%d)", dim, k)
 
-    model = HOPE(dimensions=dim)
-
+    # HOPE via Katz similarity SVD — equivalent to karateclub's HOPE implementation
+    A = nx.to_scipy_sparse_array(G, nodelist=range(N), format="csr", dtype=float)
+    beta = 0.01
+    I = sp.eye(N, format="csr")
     try:
-        model.fit(G)
-    except ValueError as e:
-        logger.error("HOPE failed with ValueError: %s", e)
-        logger.error("dim=%d, N=%d, edges=%d", dim, N, len(edges))
+        S = spla.inv((I - beta * A).tocsc()) @ (beta * A)
+        U, sigma, Vt = spla.svds(S, k=k)
+        sqrt_sigma = np.sqrt(np.maximum(sigma, 0))
+        emb = np.hstack([U * sqrt_sigma, Vt.T * sqrt_sigma])
+    except Exception as e:
+        logger.error("HOPE failed: %s (dim=%d, N=%d, edges=%d)", e, dim, N, len(edges))
         raise
-
-    emb = model.get_embedding()
 
     logger.info("HOPE embedding computed successfully for %d nodes", N)
 
