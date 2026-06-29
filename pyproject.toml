@@ -29,6 +29,7 @@ dependencies = [
     "networkx>=2.6,<3.0",
     "numpy<2.0",
     "rapidfuzz>=3.0",
+    "spacy>=3.0",
     "yfinance>=0.2.0",
     "mlflow>=2.13",
     "boto3>=1.34",

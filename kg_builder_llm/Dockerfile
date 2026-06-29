@@ -12,6 +12,6 @@ COPY kg_builder_llm/ ./kg_builder_llm/
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Smoke-test: catch missing imports at build time, not at runtime in prod
-RUN python -c "from kg_builder_llm.pipeline.orchestrator import Orchestrator; from kg_builder_llm.mutations.base import build_kg_incremental_candidate; print('imports OK')"
+RUN python -c "from kg_builder_llm.pipeline.orchestrator import Orchestrator; from kg_builder_llm.mutations.base import build_kg_incremental_candidate; from kg_builder_llm.main import main; print('imports OK')"
 
 ENTRYPOINT ["python", "-m", "kg_builder_llm.main"]
