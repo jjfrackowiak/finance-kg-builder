@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN pip install uv
+RUN pip install uv setuptools
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
