@@ -89,13 +89,11 @@ jobs:
             --secret-id "${PREFIX}/kg-credentials" \
             --query SecretString \
             --output text)
-          URI=$(echo "$SECRET"      | python3 -c "import sys,json; print(json.load(sys.stdin)['MLFLOW_TRACKING_URI'])")
-          USER=$(echo "$SECRET"     | python3 -c "import sys,json; print(json.load(sys.stdin)['MLFLOW_TRACKING_USERNAME'])")
-          PASSWORD=$(echo "$SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['MLFLOW_TRACKING_PASSWORD'])")
-          echo "::add-mask::$PASSWORD"
-          echo "mlflow_uri=$URI"           >> $GITHUB_OUTPUT
-          echo "mlflow_username=$USER"     >> $GITHUB_OUTPUT
-          echo "mlflow_password=$PASSWORD" >> $GITHUB_OUTPUT
+          URI=$(echo "$SECRET"   | python3 -c "import sys,json; print(json.load(sys.stdin)['MLFLOW_TRACKING_URI'])")
+          TOKEN=$(echo "$SECRET" | python3 -c "import sys,json; print(json.load(sys.stdin)['MLFLOW_TRACKING_TOKEN'])")
+          echo "::add-mask::$TOKEN"
+          echo "mlflow_uri=$URI"     >> $GITHUB_OUTPUT
+          echo "mlflow_token=$TOKEN" >> $GITHUB_OUTPUT
 
       - name: ⚡ Scale up GPU node group
         run: |
@@ -113,8 +111,8 @@ jobs:
       - name: 🧪 Run sweep
         env:
           MLFLOW_TRACKING_URI:      ${{ steps.mlflow.outputs.mlflow_uri }}
-          MLFLOW_TRACKING_USERNAME: ${{ steps.mlflow.outputs.mlflow_username }}
-          MLFLOW_TRACKING_PASSWORD: ${{ steps.mlflow.outputs.mlflow_password }}
+          MLFLOW_TRACKING_USERNAME: jjfrackowiak
+          MLFLOW_TRACKING_PASSWORD: ${{ steps.mlflow.outputs.mlflow_token }}
         run: |
           python kg_builder_llm/scripts/sweep.py \
             --configs '${{ github.event.inputs.configs }}' \
