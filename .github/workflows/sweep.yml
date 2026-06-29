@@ -106,7 +106,7 @@ jobs:
             --region ${{ env.AWS_REGION }}
           echo "Waiting for GPU node to join cluster (timeout 10m)..."
           DEADLINE=$((SECONDS + 600))
-          until kubectl get nodes -l node-role=gpu 2>/dev/null | grep -q gpu; do
+          until kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -q .; do
             [ $SECONDS -ge $DEADLINE ] && echo "Timed out waiting for GPU node to join" && exit 1
             sleep 10
           done
