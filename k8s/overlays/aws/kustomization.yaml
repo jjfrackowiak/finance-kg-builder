@@ -11,7 +11,7 @@ patches:
   target:
     kind: PersistentVolumeClaim
     name: model-cache
-- path: patches/embeddings-gpu.yaml
+- path: patches/embeddings-aws.yaml
   target:
     kind: Deployment
     name: embeddings
