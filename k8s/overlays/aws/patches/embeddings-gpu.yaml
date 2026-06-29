@@ -12,7 +12,14 @@ spec:
         resources:
           requests:
             memory: "2Gi"
-            cpu: "2"
+            cpu: "1"
           limits:
             memory: "4Gi"
-            cpu: "4"
+            cpu: "2"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          failureThreshold: 18

@@ -14,7 +14,7 @@ on:
       n_embedding_workers:
         description: 'Embedding replicas during sweep'
         required: false
-        default: '2'
+        default: '1'
       time_window_days:
         description: 'Time window in days for each experiment'
         required: false
