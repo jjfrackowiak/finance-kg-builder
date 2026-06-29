@@ -89,6 +89,20 @@ def scale_deployment(apps_v1: client.AppsV1Api, name: str, replicas: int):
     print(f"{name} scaled to {replicas} replicas")
 
 
+def wait_for_deployment_ready(apps_v1: client.AppsV1Api, name: str, timeout: int = 300):
+    print(f"Waiting for {name} to be ready...")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        dep = apps_v1.read_namespaced_deployment(name=name, namespace=NAMESPACE)
+        ready = dep.status.ready_replicas or 0
+        desired = dep.spec.replicas or 0
+        if desired > 0 and ready >= desired:
+            print(f"{name} is ready ({ready}/{desired})")
+            return
+        time.sleep(10)
+    raise TimeoutError(f"{name} not ready after {timeout}s")
+
+
 def build_job_manifest(
     sweep_id: str,
     run_index: int,
@@ -205,7 +219,8 @@ def main():
     if args.n_workers > 0:
         scale_deployment(apps_v1, VLLM_DEPLOYMENT, args.n_workers)
         scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, args.n_embedding_workers)
-        time.sleep(10)
+        wait_for_deployment_ready(apps_v1, VLLM_DEPLOYMENT, timeout=600)
+        wait_for_deployment_ready(apps_v1, EMBEDDINGS_DEPLOYMENT, timeout=300)
 
     job_names = []
     for i, cfg in enumerate(configs):
