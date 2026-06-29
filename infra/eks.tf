@@ -158,6 +158,7 @@ resource "aws_eks_node_group" "gpu" {
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = aws_subnet.private[*].id
   instance_types  = ["g5.xlarge"]
+  ami_type        = "AL2023_x86_64_NVIDIA"
 
   scaling_config {
     desired_size = 0
