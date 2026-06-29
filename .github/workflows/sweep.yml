@@ -19,6 +19,10 @@ on:
         description: 'Time window in days for each experiment'
         required: false
         default: '150'
+      gpu_nodes:
+        description: 'Number of GPU nodes (g5.xlarge) to provision'
+        required: false
+        default: '1'
       timeout_minutes:
         description: 'Workflow timeout in minutes (default 360 = 6h)'
         required: false
@@ -93,6 +97,16 @@ jobs:
           echo "mlflow_username=$USER"     >> $GITHUB_OUTPUT
           echo "mlflow_password=$PASSWORD" >> $GITHUB_OUTPUT
 
+      - name: ⚡ Scale up GPU node group
+        run: |
+          aws eks update-nodegroup-config \
+            --cluster-name "${{ steps.config.outputs.prefix }}-eks" \
+            --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" \
+            --scaling-config desiredSize=${{ github.event.inputs.gpu_nodes }} \
+            --region ${{ env.AWS_REGION }}
+          echo "Waiting for GPU node to be Ready..."
+          kubectl wait node -l node-role=gpu --for=condition=Ready --timeout=300s
+
       - name: 📦 Install dependencies
         run: pip install kubernetes
 
@@ -111,3 +125,8 @@ jobs:
         if: always()
         run: |
           kubectl scale deployment vllm embeddings --replicas=0 -n kg-experiments || true
+          aws eks update-nodegroup-config \
+            --cluster-name "${{ steps.config.outputs.prefix }}-eks" \
+            --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" \
+            --scaling-config desiredSize=0 \
+            --region ${{ env.AWS_REGION }} || true
