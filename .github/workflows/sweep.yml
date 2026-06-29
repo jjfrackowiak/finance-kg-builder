@@ -104,7 +104,9 @@ jobs:
             --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" \
             --scaling-config desiredSize=${{ github.event.inputs.gpu_nodes }} \
             --region ${{ env.AWS_REGION }}
-          echo "Waiting for GPU node to be Ready..."
+          echo "Waiting for GPU node to join cluster..."
+          until kubectl get nodes -l node-role=gpu 2>/dev/null | grep -q gpu; do sleep 10; done
+          echo "Node joined — waiting for Ready..."
           kubectl wait node -l node-role=gpu --for=condition=Ready --timeout=300s
 
       - name: 📦 Install dependencies
