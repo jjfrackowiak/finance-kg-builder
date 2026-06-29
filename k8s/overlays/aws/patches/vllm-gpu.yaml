@@ -13,7 +13,7 @@ spec:
         - --model
         - $(LLM_MODEL)
         - --quantization
-        - bitsandbytes
+        - awq
         - --max-model-len
         - "4096"
         - --port
