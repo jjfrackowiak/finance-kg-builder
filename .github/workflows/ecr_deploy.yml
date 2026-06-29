@@ -1,6 +1,7 @@
 name: 🐳 Build & Push ECR
 
 on:
+  workflow_dispatch:
   push:
     branches: [dev, prod, qa]
     paths:
