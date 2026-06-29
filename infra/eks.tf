@@ -162,7 +162,7 @@ resource "aws_eks_node_group" "gpu" {
   scaling_config {
     desired_size = 0
     min_size     = 0
-    max_size     = 3
+    max_size     = 10
   }
 
   labels = { node-role = "gpu" }
@@ -240,6 +240,43 @@ resource "aws_iam_role" "efs_csi" {
 resource "aws_iam_role_policy_attachment" "efs_csi" {
   role       = aws_iam_role.efs_csi.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy"
+}
+
+# ── IRSA — kg-builder (Bedrock access) ───────────────────────────────────────
+
+resource "aws_iam_role" "kg_builder" {
+  name = "${var.prefix}-kg-builder"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = aws_iam_openid_connect_provider.eks.arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kg-experiments:sweep-runner"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "kg_builder_bedrock" {
+  name = "bedrock-invoke"
+  role = aws_iam_role.kg_builder.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+      Resource = "arn:aws:bedrock:${var.region}::foundation-model/qwen.qwen3-32b-v1:0"
+    }]
+  })
+}
+
+output "kg_builder_role_arn" {
+  value = aws_iam_role.kg_builder.arn
 }
 
 # ── outputs ───────────────────────────────────────────────────────────────────

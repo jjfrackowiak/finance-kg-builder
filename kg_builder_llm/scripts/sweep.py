@@ -207,7 +207,7 @@ def main():
         scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, args.n_embedding_workers)
         time.sleep(10)
 
-    failed_count = 0
+    job_names = []
     for i, cfg in enumerate(configs):
         print(f"\n[{i+1}/{len(configs)}] Submitting: {cfg}")
         job = build_job_manifest(
@@ -217,11 +217,14 @@ def main():
             memory_request=args.memory_request,
             stub=args.stub,
         )
-        job_name = job.metadata.name
         batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job)
-        success = wait_for_job(batch_v1, job_name)
-        if not success:
-            failed_count += 1
+        job_names.append(job.metadata.name)
+
+    print(f"\nAll {len(job_names)} jobs submitted — waiting for completion...")
+    failed_count = sum(
+        0 if wait_for_job(batch_v1, name) else 1
+        for name in job_names
+    )
 
     if args.n_workers > 0:
         scale_deployment(apps_v1, VLLM_DEPLOYMENT, 0)

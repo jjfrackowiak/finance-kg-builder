@@ -13,7 +13,7 @@ spec:
         - --model
         - $(LLM_MODEL)
         - --quantization
-        - bitsandbytes
+        - awq
         - --max-model-len
         - "4096"
         - --port
@@ -21,10 +21,10 @@ spec:
         resources:
           requests:
             nvidia.com/gpu: "1"
-            memory: "20Gi"
+            memory: "8Gi"
           limits:
             nvidia.com/gpu: "1"
-            memory: "22Gi"
+            memory: "10Gi"
         volumeMounts:
         - name: model-cache
           mountPath: /root/.cache/huggingface

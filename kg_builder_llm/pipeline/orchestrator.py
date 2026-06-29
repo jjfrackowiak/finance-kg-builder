@@ -54,14 +54,43 @@ class Orchestrator:
         self.driver = driver
         self.llm = llm
         self.embedder = embedder
+        ontology_llm = self._build_ontology_llm(config)
         self.evolution_agent = OntologyEvolutionAgent(
-            llm,
+            ontology_llm,
             prompt_template_path=config.experiment.evolution_prompt_template,
         )
         self.results = {}
         self.candidates_per_step: Dict[int, List[OntologyCandidate]] = {}
         self.ontologies_dir = Path("results/ontologies")
         self._mlflow_run_ids: Dict[str, str] = {}
+
+    @staticmethod
+    def _build_ontology_llm(config: Config):
+        """Return an LLM for ontology reasoning.
+
+        Uses Bedrock (Qwen3-32B) when AWS credentials with a session token are
+        present (i.e. running on EKS with IRSA), falls back to the same vLLM
+        endpoint used for extraction when running locally.
+        """
+        from kg_builder_llm.core.bedrock_llm import BedrockLLM
+        import boto3
+        try:
+            creds = boto3.session.Session().get_credentials().get_frozen_credentials()
+            if not creds or not creds.token:
+                raise RuntimeError("no IAM session token")
+            logger.info("Using Bedrock %s for ontology evolution", config.bedrock.model_id)
+            return BedrockLLM(
+                model_id=config.bedrock.model_id,
+                region=config.bedrock.region,
+            )
+        except Exception:
+            logger.info("Bedrock unavailable — falling back to vLLM for ontology LLM")
+            return OpenAILLM(
+                model_name=config.openai.model_name,
+                model_params={"temperature": 0.1},
+                api_key=config.openai.api_key,
+                base_url=config.openai.base_url,
+            )
 
     async def run(self, articles_df: pd.DataFrame, price_df: pd.DataFrame) -> dict:
         """Run the experiment.
