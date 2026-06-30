@@ -102,9 +102,14 @@ jobs:
             echo "::add-mask::$(echo "$SECRET" | jq -r ".$key")"
           done
 
+          NEO4J_URI="$(echo "$SECRET" | jq -r .NEO4J_URI)"
+          NEO4J_USERNAME="$(echo "$NEO4J_URI" | sed 's|neo4j+s://||' | cut -d. -f1)"
+
           kubectl create secret generic kg-secrets \
             --namespace kg-experiments \
-            --from-literal=NEO4J_URI="$(echo "$SECRET"             | jq -r .NEO4J_URI)" \
+            --from-literal=NEO4J_URI="$NEO4J_URI" \
+            --from-literal=NEO4J_USERNAME="$NEO4J_USERNAME" \
+            --from-literal=NEO4J_DATABASE="$NEO4J_USERNAME" \
             --from-literal=NEO4J_PASSWORD="$(echo "$SECRET"        | jq -r .NEO4J_PASSWORD)" \
             --from-literal=MLFLOW_TRACKING_URI="$(echo "$SECRET"   | jq -r .MLFLOW_TRACKING_URI)" \
             --from-literal=MLFLOW_TRACKING_TOKEN="$(echo "$SECRET" | jq -r .MLFLOW_TRACKING_TOKEN)" \
