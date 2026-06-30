@@ -376,7 +376,7 @@ def load_and_prepare_data(
     """
     # Load articles
     logger.info(f"Loading articles from {args.data}...")
-    if not Path(args.data).exists():
+    if not args.data.startswith("s3://") and not Path(args.data).exists():
         raise FileNotFoundError(f"Data file not found: {args.data}")
 
     articles_df = load_articles(args.data, limit=args.limit)
