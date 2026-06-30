@@ -176,9 +176,9 @@ Examples:
     embed_group.add_argument(
         "--embedding-type",
         type=str,
-        default="local",
-        choices=["local", "openai"],
-        help="Embedding type: 'local' (sentence-transformers, free) or 'openai' (API, paid) (default: local)",
+        default=os.environ.get("EMBEDDING_TYPE", "local"),
+        choices=["local", "openai", "remote"],
+        help="Embedding type: 'local', 'openai', or 'remote' (text-embeddings-inference sidecar) (default: EMBEDDING_TYPE env var)",
     )
     embed_group.add_argument(
         "--local-model",

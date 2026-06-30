@@ -66,7 +66,7 @@ def get_embedding_dim(embedding_type: str = "local", local_model: str = "all-Min
     if embedding_type == "local":
         model = get_local_embedder(local_model)
         return model.get_sentence_embedding_dimension()
-    return 1536  # OpenAI text-embedding-3-small
+    return 1536  # openai / remote (text-embeddings-inference default)
 
 
 def compute_hope_embeddings(edges: List[Tuple[str, str]], dim: int = 128) -> Dict[str, np.ndarray]:
@@ -150,8 +150,16 @@ def embed_text_deterministic(text: str, api_key: str = None, model: str = "text-
     """
     if embedding_type == "local":
         return embed_text_local(text, model_name=local_model)
-    
-    # OpenAI embedding
+
+    if embedding_type == "remote":
+        import os
+        from openai import OpenAI
+        base_url = os.getenv("EMBEDDING_BASE_URL", "").rstrip("/") + "/v1"
+        client = OpenAI(api_key="na", base_url=base_url)
+        response = client.embeddings.create(input=text, model=os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"))
+        return np.array(response.data[0].embedding, dtype=np.float32)
+
+    # openai embedding
     import os
     from openai import OpenAI
     
