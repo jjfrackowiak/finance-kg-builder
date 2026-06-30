@@ -118,13 +118,3 @@ jobs:
             --from-literal=HF_TOKEN="$(echo "$SECRET"            | jq -r .HF_TOKEN)" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: 🔗 Annotate sweep-runner SA with Bedrock IAM role
-        run: |
-          PREFIX="${{ steps.config.outputs.prefix }}"
-          KG_BUILDER_ROLE=$(aws iam get-role \
-            --role-name "${PREFIX}-kg-builder" \
-            --query Role.Arn --output text)
-          kubectl annotate serviceaccount sweep-runner \
-            --namespace kg-experiments \
-            eks.amazonaws.com/role-arn="$KG_BUILDER_ROLE" \
-            --overwrite

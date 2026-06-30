@@ -48,8 +48,8 @@ resource "aws_iam_role_policy_attachment" "eks_ecr" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-resource "aws_iam_role_policy" "eks_nodes_s3_efs" {
-  name = "${var.prefix}-eks-nodes-s3-efs"
+resource "aws_iam_role_policy" "eks_nodes_s3_efs_bedrock" {
+  name = "${var.prefix}-eks-nodes-s3-efs-bedrock"
   role = aws_iam_role.eks_nodes.id
   policy = jsonencode({
     Version = "2012-10-17"
@@ -70,6 +70,11 @@ resource "aws_iam_role_policy" "eks_nodes_s3_efs" {
           "elasticfilesystem:DescribeMountTargets"
         ]
         Resource = aws_efs_file_system.model_cache.arn
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+        Resource = "arn:aws:bedrock:${var.region}::foundation-model/qwen.qwen3-32b-v1:0"
       }
     ]
   })
@@ -259,59 +264,6 @@ resource "aws_iam_role" "efs_csi" {
 resource "aws_iam_role_policy_attachment" "efs_csi" {
   role       = aws_iam_role.efs_csi.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy"
-}
-
-# ── IRSA — kg-builder (Bedrock access) ───────────────────────────────────────
-
-resource "aws_iam_role" "kg_builder" {
-  name = "${var.prefix}-kg-builder"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Federated = aws_iam_openid_connect_provider.eks.arn }
-      Action    = "sts:AssumeRoleWithWebIdentity"
-      Condition = {
-        StringEquals = {
-          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kg-experiments:sweep-runner"
-          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
-        }
-      }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "kg_builder_bedrock" {
-  name = "bedrock-invoke"
-  role = aws_iam_role.kg_builder.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
-      Resource = "arn:aws:bedrock:${var.region}::foundation-model/qwen.qwen3-32b-v1:0"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "kg_builder_s3" {
-  name = "s3-data-read"
-  role = aws_iam_role.kg_builder.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:GetObject", "s3:ListBucket"]
-      Resource = [
-        aws_s3_bucket.data.arn,
-        "${aws_s3_bucket.data.arn}/*",
-      ]
-    }]
-  })
-}
-
-output "kg_builder_role_arn" {
-  value = aws_iam_role.kg_builder.arn
 }
 
 # ── outputs ───────────────────────────────────────────────────────────────────
