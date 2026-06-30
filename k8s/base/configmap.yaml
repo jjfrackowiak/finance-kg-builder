@@ -9,4 +9,4 @@ data:
   EMBEDDING_TYPE: "remote"
   EMBEDDING_BASE_URL: "http://embeddings-svc:8080"
   EMBEDDING_MODEL: "sentence-transformers/all-MiniLM-L6-v2"
-  DATA_URI: "s3://kg-experiments-data-039293892587/fnspid_sample_nasdaq_long_text.csv"
+  DATA_URI: "s3://kg-experiments-data-039293892587/data/fnspid_sample_nasdaq_long_text.csv"
