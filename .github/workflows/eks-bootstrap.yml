@@ -104,16 +104,18 @@ jobs:
 
           NEO4J_URI="$(echo "$SECRET" | jq -r .NEO4J_URI)"
           NEO4J_USERNAME="$(echo "$NEO4J_URI" | sed 's|neo4j+s://||' | cut -d. -f1)"
+          MLFLOW_TOKEN="$(echo "$SECRET" | jq -r .MLFLOW_TRACKING_TOKEN)"
 
           kubectl create secret generic kg-secrets \
             --namespace kg-experiments \
             --from-literal=NEO4J_URI="$NEO4J_URI" \
             --from-literal=NEO4J_USERNAME="$NEO4J_USERNAME" \
             --from-literal=NEO4J_DATABASE="$NEO4J_USERNAME" \
-            --from-literal=NEO4J_PASSWORD="$(echo "$SECRET"        | jq -r .NEO4J_PASSWORD)" \
-            --from-literal=MLFLOW_TRACKING_URI="$(echo "$SECRET"   | jq -r .MLFLOW_TRACKING_URI)" \
-            --from-literal=MLFLOW_TRACKING_TOKEN="$(echo "$SECRET" | jq -r .MLFLOW_TRACKING_TOKEN)" \
-            --from-literal=HF_TOKEN="$(echo "$SECRET"              | jq -r .HF_TOKEN)" \
+            --from-literal=NEO4J_PASSWORD="$(echo "$SECRET"      | jq -r .NEO4J_PASSWORD)" \
+            --from-literal=MLFLOW_TRACKING_URI="$(echo "$SECRET" | jq -r .MLFLOW_TRACKING_URI)" \
+            --from-literal=MLFLOW_TRACKING_TOKEN="$MLFLOW_TOKEN" \
+            --from-literal=MLFLOW_TRACKING_PASSWORD="$MLFLOW_TOKEN" \
+            --from-literal=HF_TOKEN="$(echo "$SECRET"            | jq -r .HF_TOKEN)" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       - name: 🔗 Annotate sweep-runner SA with Bedrock IAM role
