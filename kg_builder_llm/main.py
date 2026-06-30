@@ -6,7 +6,6 @@ import datetime
 import json
 import logging
 import sys
-from contextlib import nullcontext
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -482,17 +481,12 @@ def _log_data_stats(
     )
 
 
-def _setup_mlflow(config: Config) -> bool:
-    """Configure MLflow tracking URI and experiment. Returns False if tracking unavailable."""
+def _setup_mlflow(config: Config) -> None:
+    """Configure MLflow tracking URI and experiment."""
     if config.mlflow.tracking_uri:
         mlflow.set_tracking_uri(config.mlflow.tracking_uri)
         logger.info("MLflow tracking URI: %s", config.mlflow.tracking_uri)
-    try:
-        mlflow.set_experiment(config.mlflow.experiment_name)
-        return True
-    except Exception as e:
-        logger.warning("MLflow unavailable (%s) — running without tracking", e)
-        return False
+    mlflow.set_experiment(config.mlflow.experiment_name)
 
 
 def _make_run_name(args: argparse.Namespace, config: Config) -> str:
@@ -591,7 +585,7 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
         logger.info("✓ LLM and embedder initialized")
 
         # 5. Setup MLflow
-        mlflow_enabled = _setup_mlflow(config)
+        _setup_mlflow(config)
 
         # 6. Create orchestrator and run experiment
         logger.info("Creating orchestrator...")
@@ -602,13 +596,11 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
         logger.info(f"Starting experiment: {args.steps} steps, {args.candidates} candidates/step")
         logger.info("=" * 80)
 
-        with (mlflow.start_run(run_name=_make_run_name(args, config)) if mlflow_enabled else nullcontext()) as run:
-            if mlflow_enabled:
-                _log_params(args, config)
-                _log_data_stats(articles_df, price_df, config.experiment.feature.train_ratio)
+        with mlflow.start_run(run_name=_make_run_name(args, config)) as run:
+            _log_params(args, config)
+            _log_data_stats(articles_df, price_df, config.experiment.feature.train_ratio)
             results = await orchestrator.run(articles_df, price_df)
-            if mlflow_enabled:
-                logger.info("MLflow run: %s", run.info.run_id)
+            logger.info("MLflow run: %s", run.info.run_id)
 
         logger.info("=" * 80)
         logger.info("✓ Experiment completed!")
