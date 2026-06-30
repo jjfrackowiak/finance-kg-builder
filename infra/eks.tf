@@ -294,6 +294,22 @@ resource "aws_iam_role_policy" "kg_builder_bedrock" {
   })
 }
 
+resource "aws_iam_role_policy" "kg_builder_s3" {
+  name = "s3-data-read"
+  role = aws_iam_role.kg_builder.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:GetObject", "s3:ListBucket"]
+      Resource = [
+        aws_s3_bucket.data.arn,
+        "${aws_s3_bucket.data.arn}/*",
+      ]
+    }]
+  })
+}
+
 output "kg_builder_role_arn" {
   value = aws_iam_role.kg_builder.arn
 }
