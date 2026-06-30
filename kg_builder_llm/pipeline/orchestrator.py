@@ -84,13 +84,15 @@ class Orchestrator:
                 region=config.bedrock.region,
             )
         except Exception:
-            logger.info("Bedrock unavailable — falling back to vLLM for ontology LLM")
-            return OpenAILLM(
+            logger.info("Bedrock unavailable — falling back to OpenAI for ontology LLM")
+            kwargs = dict(
                 model_name=config.openai.model_name,
                 model_params={"temperature": 0.1},
                 api_key=config.openai.api_key,
-                base_url=config.openai.base_url,
             )
+            if config.openai.base_url:
+                kwargs["base_url"] = config.openai.base_url
+            return OpenAILLM(**kwargs)
 
     async def run(self, articles_df: pd.DataFrame, price_df: pd.DataFrame) -> dict:
         """Run the experiment.
@@ -139,8 +141,8 @@ class Orchestrator:
         baseline_metrics = evaluate_article_text_baseline(
             self.driver,
             day_labels=self._extract_day_labels(price_df),
-            lookback_days=self.config.experiment.lookback_days,
-            train_ratio=self.config.experiment.train_ratio,
+            lookback_days=self.config.experiment.feature.lookback_days,
+            train_ratio=self.config.experiment.feature.train_ratio,
         )
         self.results["baseline_article_embedding"] = baseline_metrics
         logger.info(
@@ -194,8 +196,8 @@ class Orchestrator:
         from kg_builder_llm.ml.embeddings import embed_text_deterministic
 
         api_key = os.getenv("OPENAI_API_KEY")
-        embedding_type = self.config.experiment.embedding_type
-        local_model = self.config.experiment.local_model_name
+        embedding_type = self.config.experiment.feature.embedding_type
+        local_model = self.config.experiment.feature.local_model_name
 
         if embedding_type == "openai" and not api_key:
             logger.warning("OPENAI_API_KEY not set — skipping article embedding, baseline will be 0")
@@ -353,15 +355,15 @@ class Orchestrator:
                 day_labels,
                 price_df,
                 allowed_tags=allowed_tags_for_eval,
-                embedding_type=self.config.experiment.embedding_type,
-                local_model=self.config.experiment.local_model_name,
-                lookback_days=self.config.experiment.lookback_days,
-                min_chain_hops=self.config.experiment.min_chain_hops,
-                max_chain_hops=self.config.experiment.max_chain_hops,
-                path_uniqueness=self.config.experiment.path_uniqueness,
-                feature_mode=self.config.experiment.feature_mode,
-                max_metapath_hops=self.config.experiment.max_metapath_hops,
-                train_ratio=self.config.experiment.train_ratio,
+                embedding_type=self.config.experiment.feature.embedding_type,
+                local_model=self.config.experiment.feature.local_model_name,
+                lookback_days=self.config.experiment.feature.lookback_days,
+                min_chain_hops=self.config.experiment.feature.min_chain_hops,
+                max_chain_hops=self.config.experiment.feature.max_chain_hops,
+                path_uniqueness=self.config.experiment.feature.path_uniqueness,
+                feature_mode=self.config.experiment.feature.feature_mode,
+                max_metapath_hops=self.config.experiment.feature.max_metapath_hops,
+                train_ratio=self.config.experiment.feature.train_ratio,
             )
 
             self.results[candidate.candidate_tag] = metrics
