@@ -115,8 +115,8 @@ Examples:
     data_group.add_argument(
         "--data",
         type=str,
-        default="data/fnspid_sample_nasdaq_long_text.csv",
-        help="Path to articles CSV file (default: data/fnspid_sample_nasdaq_long_text.csv)",
+        default=os.environ.get("DATA_URI", "data/fnspid_sample_nasdaq_long_text.csv"),
+        help="Path to articles CSV file or s3:// URI (default: DATA_URI env var)",
     )
     data_group.add_argument(
         "--time-window-days",

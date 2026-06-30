@@ -114,14 +114,12 @@ def build_job_manifest(
     stub: bool,
 ) -> client.V1Job:
     job_name = f"kg-builder-{sweep_id}-{run_index}"
-    data_uri = os.environ.get("DATA_URI", "data/fnspid_sample_nasdaq_long_text.csv")
     if stub:
         container_args = None
         command = ["sh", "-c", f"echo 'stub job {run_index} cfg={cfg}'; sleep 5; echo done"]
     else:
         command = None
         container_args = [
-            "--data", data_uri,
             "--steps", str(cfg.get("steps", 1)),
             "--candidates", str(cfg.get("candidates", 1)),
             "--feature-mode", cfg.get("feature_mode", "path"),
