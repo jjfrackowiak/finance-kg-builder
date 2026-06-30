@@ -128,6 +128,13 @@ jobs:
             --n-workers ${{ github.event.inputs.n_workers }} \
             --n-embedding-workers ${{ github.event.inputs.n_embedding_workers }}
 
+      - name: 🔐 Re-authenticate for cleanup
+        if: always()
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ steps.config.outputs.github_role_arn }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: 🧹 Scale down (always runs — failure, cancel, or success)
         if: always()
         run: |
