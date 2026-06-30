@@ -122,10 +122,10 @@ def build_job_manifest(
         command = None
         container_args = [
             "--data", data_uri,
-            "--steps", str(cfg.get("steps", 3)),
-            "--candidates", str(cfg.get("candidates", 2)),
+            "--steps", str(cfg.get("steps", 1)),
+            "--candidates", str(cfg.get("candidates", 1)),
             "--feature-mode", cfg.get("feature_mode", "path"),
-            "--time-window-days", str(cfg.get("time_window_days", 150)),
+            "--time-window-days", str(cfg.get("time_window_days", 30)),
         ]
     return client.V1Job(
         api_version="batch/v1",

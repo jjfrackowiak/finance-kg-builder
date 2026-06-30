@@ -6,11 +6,11 @@ on:
       configs:
         description: 'JSON array of experiment configs'
         required: true
-        default: '[{"steps":3,"feature_mode":"path"},{"steps":3,"feature_mode":"subgraph"}]'
+        default: '[{"steps":1,"candidates":1,"feature_mode":"path"},{"steps":1,"candidates":1,"feature_mode":"subgraph"}]'
       n_workers:
         description: 'vLLM replicas during sweep'
         required: false
-        default: '2'
+        default: '1'
       n_embedding_workers:
         description: 'Embedding replicas during sweep'
         required: false
@@ -18,7 +18,7 @@ on:
       time_window_days:
         description: 'Time window in days for each experiment'
         required: false
-        default: '150'
+        default: '30'
       gpu_nodes:
         description: 'Number of GPU nodes (g5.xlarge) to provision'
         required: false
