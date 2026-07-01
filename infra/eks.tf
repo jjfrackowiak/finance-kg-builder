@@ -289,6 +289,45 @@ resource "aws_iam_role_policy_attachment" "efs_csi" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy"
 }
 
+# ── IRSA — kg-builder (sweep-runner SA) ──────────────────────────────────────
+
+resource "aws_iam_role" "kg_builder" {
+  name = "${var.prefix}-kg-builder"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kg-experiments:sweep-runner"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+        }
+      }
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy" "kg_builder_s3" {
+  name = "${var.prefix}-kg-builder-s3"
+  role = aws_iam_role.kg_builder.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:GetObject", "s3:ListBucket"]
+      Resource = [
+        aws_s3_bucket.data.arn,
+        "${aws_s3_bucket.data.arn}/*",
+      ]
+    }]
+  })
+}
+
 # ── outputs ───────────────────────────────────────────────────────────────────
 
 output "eks_cluster_name" {
