@@ -317,14 +317,21 @@ resource "aws_iam_role_policy" "kg_builder_s3" {
   role = aws_iam_role.kg_builder.id
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect   = "Allow"
-      Action   = ["s3:GetObject", "s3:ListBucket"]
-      Resource = [
-        aws_s3_bucket.data.arn,
-        "${aws_s3_bucket.data.arn}/*",
-      ]
-    }]
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:ListBucket"]
+        Resource = [
+          aws_s3_bucket.data.arn,
+          "${aws_s3_bucket.data.arn}/*",
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+        Resource = "arn:aws:bedrock:${var.region}::foundation-model/qwen.qwen3-32b-v1:0"
+      },
+    ]
   })
 }
 
