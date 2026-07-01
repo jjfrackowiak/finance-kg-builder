@@ -183,8 +183,8 @@ def main():
     parser.add_argument("--n-workers", type=int, default=2, help="vLLM replicas during sweep")
     parser.add_argument("--n-embedding-workers", type=int, default=2, help="embedding replicas during sweep")
     parser.add_argument("--image", default=os.environ.get("KG_BUILDER_IMAGE", "kg-orchestrator:latest"))
-    parser.add_argument("--cpu-request", default="250m")
-    parser.add_argument("--memory-request", default="512Mi")
+    parser.add_argument("--cpu-request", default="500m")
+    parser.add_argument("--memory-request", default="2Gi")
     parser.add_argument("--stub", action="store_true", help="use busybox stub instead of real image")
     args = parser.parse_args()
 
@@ -220,7 +220,7 @@ def main():
         wait_for_deployment_ready(apps_v1, VLLM_DEPLOYMENT, timeout=600)
         wait_for_deployment_ready(apps_v1, EMBEDDINGS_DEPLOYMENT, timeout=300)
 
-    job_names = []
+    failed_count = 0
     for i, cfg in enumerate(configs):
         print(f"\n[{i+1}/{len(configs)}] Submitting: {cfg}")
         job = build_job_manifest(
@@ -231,13 +231,8 @@ def main():
             stub=args.stub,
         )
         batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job)
-        job_names.append(job.metadata.name)
-
-    print(f"\nAll {len(job_names)} jobs submitted — waiting for completion...")
-    failed_count = sum(
-        0 if wait_for_job(batch_v1, name) else 1
-        for name in job_names
-    )
+        if not wait_for_job(batch_v1, job.metadata.name):
+            failed_count += 1
 
     if args.n_workers > 0:
         scale_deployment(apps_v1, VLLM_DEPLOYMENT, 0)
