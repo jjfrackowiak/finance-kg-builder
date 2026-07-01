@@ -25,13 +25,27 @@ spec:
           limits:
             nvidia.com/gpu: "1"
             memory: "10Gi"
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - |
+              curl -sf -X POST http://localhost:8000/v1/chat/completions \
+                -H "Content-Type: application/json" \
+                -d "{\"model\":\"$LLM_MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":1}" \
+                > /dev/null
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          failureThreshold: 20
+          timeoutSeconds: 30
         readinessProbe:
           httpGet:
             path: /v1/models
             port: 8000
-          initialDelaySeconds: 90
-          periodSeconds: 15
-          failureThreshold: 40
+          initialDelaySeconds: 0
+          periodSeconds: 10
+          failureThreshold: 3
         livenessProbe:
           httpGet:
             path: /health
