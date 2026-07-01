@@ -9,4 +9,4 @@ spec:
     app: vllm
   ports:
   - port: 8000
-    targetPort: 80
+    targetPort: 8000
