@@ -132,12 +132,29 @@ resource "aws_iam_openid_connect_provider" "eks" {
 
 # ── Node group — CPU (kg-builder, sweep, embeddings) ─────────────────────────
 
+# AL2023 nodes default to IMDS hop limit 1, which blocks containers from reaching
+# the node IAM role. Hop limit 2 allows pods to use node credentials via IMDS.
+resource "aws_launch_template" "cpu" {
+  name_prefix = "${var.prefix}-cpu-"
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+}
+
 resource "aws_eks_node_group" "cpu" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.prefix}-cpu"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = aws_subnet.private[*].id
   instance_types  = ["t3.medium"]
+
+  launch_template {
+    id      = aws_launch_template.cpu.id
+    version = aws_launch_template.cpu.latest_version
+  }
 
   scaling_config {
     desired_size = 1
@@ -167,6 +184,12 @@ resource "aws_launch_template" "gpu" {
       volume_type           = "gp3"
       delete_on_termination = true
     }
+  }
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
   }
 }
 
