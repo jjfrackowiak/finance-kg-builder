@@ -114,17 +114,29 @@ def build_job_manifest(
     stub: bool,
 ) -> client.V1Job:
     job_name = f"kg-builder-{sweep_id}-{run_index}"
+    # One-liner that polls localhost:7687 until Neo4j sidecar accepts connections,
+    # then hands off to the real entrypoint. Uses only stdlib — no nc required.
+    _neo4j_wait = (
+        "python3 -c \""
+        "import socket,time\n"
+        "while True:\n"
+        " try: socket.create_connection(('localhost',7687),2).close(); break\n"
+        " except: time.sleep(2)\n"
+        "\""
+    )
     if stub:
-        container_args = None
         command = ["sh", "-c", f"echo 'stub job {run_index} cfg={cfg}'; sleep 5; echo done"]
+        container_args = None
     else:
-        command = None
-        container_args = [
-            "--steps", str(cfg.get("steps", 1)),
-            "--candidates", str(cfg.get("candidates", 1)),
-            "--feature-mode", cfg.get("feature_mode", "path"),
-            "--time-window-days", str(cfg.get("time_window_days", 30)),
-        ]
+        main_cmd = (
+            f"python -m kg_builder_llm.main"
+            f" --steps {cfg.get('steps', 1)}"
+            f" --candidates {cfg.get('candidates', 1)}"
+            f" --feature-mode {cfg.get('feature_mode', 'path')}"
+            f" --time-window-days {cfg.get('time_window_days', 30)}"
+        )
+        command = ["sh", "-c"]
+        container_args = [f"{_neo4j_wait} && {main_cmd}"]
     return client.V1Job(
         api_version="batch/v1",
         kind="Job",
@@ -140,14 +152,10 @@ def build_job_manifest(
                 spec=client.V1PodSpec(
                     restart_policy="Never",
                     service_account_name="sweep-runner",
-                    # Neo4j as a native K8s sidecar (restartPolicy=Always on an init
-                    # container). K8s starts it first; kg-builder only starts once
-                    # Neo4j's readiness probe passes. Both die together with the pod.
-                    init_containers=[
-                        client.V1InitContainer(
+                    containers=[
+                        client.V1Container(
                             name="neo4j",
                             image="neo4j:5-community",
-                            restart_policy="Always",
                             env=[
                                 client.V1EnvVar(name="NEO4J_AUTH",
                                                 value="neo4j/neo4j"),
@@ -161,12 +169,6 @@ def build_job_manifest(
                                 client.V1EnvVar(name="NEO4J_server_https_enabled", value="false"),
                             ],
                             ports=[client.V1ContainerPort(container_port=7687, name="bolt")],
-                            readiness_probe=client.V1Probe(
-                                tcp_socket=client.V1TCPSocketAction(port=7687),
-                                initial_delay_seconds=30,
-                                period_seconds=5,
-                                failure_threshold=20,
-                            ),
                             resources=client.V1ResourceRequirements(
                                 requests={"cpu": "250m", "memory": "512Mi"},
                                 limits={"cpu": "500m", "memory": "768Mi"},
@@ -176,8 +178,6 @@ def build_job_manifest(
                                 client.V1VolumeMount(name="neo4j-logs", mount_path="/logs"),
                             ],
                         ),
-                    ],
-                    containers=[
                         client.V1Container(
                             name="kg-builder",
                             image=image,
