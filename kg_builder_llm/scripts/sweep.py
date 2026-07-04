@@ -152,6 +152,13 @@ def build_job_manifest(
                 spec=client.V1PodSpec(
                     restart_policy="Never",
                     service_account_name="sweep-runner",
+                    tolerations=[
+                        client.V1Toleration(
+                            key="nvidia.com/gpu",
+                            operator="Exists",
+                            effect="NoSchedule",
+                        ),
+                    ],
                     containers=[
                         client.V1Container(
                             name="neo4j",
