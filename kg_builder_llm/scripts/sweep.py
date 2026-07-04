@@ -165,7 +165,7 @@ def build_job_manifest(
                             image="neo4j:5-community",
                             env=[
                                 client.V1EnvVar(name="NEO4J_AUTH",
-                                                value="neo4j/neo4j"),
+                                                value="neo4j/sweeppass"),
                                 client.V1EnvVar(name="NEO4J_server_memory_heap_initial__size",
                                                 value="128m"),
                                 client.V1EnvVar(name="NEO4J_server_memory_heap_max__size",
@@ -199,7 +199,7 @@ def build_job_manifest(
                                 # Override kg-secrets Neo4j values — point at local sidecar
                                 client.V1EnvVar(name="NEO4J_URI",      value="bolt://localhost:7687"),
                                 client.V1EnvVar(name="NEO4J_USERNAME", value="neo4j"),
-                                client.V1EnvVar(name="NEO4J_PASSWORD", value="neo4j"),
+                                client.V1EnvVar(name="NEO4J_PASSWORD", value="sweeppass"),
                                 client.V1EnvVar(name="NEO4J_DATABASE", value="neo4j"),
                             ],
                             resources=client.V1ResourceRequirements(
