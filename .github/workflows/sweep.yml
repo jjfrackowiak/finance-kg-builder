@@ -23,6 +23,10 @@ on:
         description: 'Number of GPU nodes (g5.xlarge) to provision'
         required: false
         default: '1'
+      neo4j_mode:
+        description: 'Neo4j mode: sidecar (ephemeral per-job) or external (AuraDB from kg-secrets)'
+        required: false
+        default: 'sidecar'
       timeout_minutes:
         description: 'Workflow timeout in minutes (default 360 = 6h)'
         required: false
@@ -134,7 +138,8 @@ jobs:
           python kg_builder_llm/scripts/sweep.py \
             --configs '${{ github.event.inputs.configs }}' \
             --n-workers ${{ github.event.inputs.n_workers }} \
-            --n-embedding-workers ${{ github.event.inputs.n_embedding_workers }}
+            --n-embedding-workers ${{ github.event.inputs.n_embedding_workers }} \
+            --neo4j-mode ${{ github.event.inputs.neo4j_mode }}
 
       - name: 🔐 Re-authenticate for cleanup
         if: always()

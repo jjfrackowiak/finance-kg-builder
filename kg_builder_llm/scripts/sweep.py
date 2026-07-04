@@ -112,33 +112,112 @@ def build_job_manifest(
     cpu_request: str,
     memory_request: str,
     stub: bool,
+    neo4j_mode: str = "sidecar",
 ) -> client.V1Job:
     job_name = f"kg-builder-{sweep_id}-{run_index}"
-    # One-liner that polls localhost:7687 until Neo4j sidecar accepts connections,
-    # then hands off to the real entrypoint. Uses only stdlib — no nc required.
-    _neo4j_wait = (
-        "python3 -c \""
-        "import socket,time\n"
-        "while True:\n"
-        " try: socket.create_connection(('localhost',7687),2).close(); break\n"
-        " except: time.sleep(2)\n"
-        "\""
+
+    main_cmd = (
+        f"python -m kg_builder_llm.main"
+        f" --steps {cfg.get('steps', 1)}"
+        f" --candidates {cfg.get('candidates', 1)}"
+        f" --feature-mode {cfg.get('feature_mode', 'path')}"
+        f" --time-window-days {cfg.get('time_window_days', 30)}"
     )
+
+    use_sidecar = neo4j_mode == "sidecar" and not stub
+
     if stub:
-        command = ["sh", "-c", f"echo 'stub job {run_index} cfg={cfg}'; sleep 5; touch /done/complete; echo done"]
+        command = ["sh", "-c", f"echo 'stub job {run_index} cfg={cfg}'; sleep 5; echo done"]
         container_args = None
-    else:
-        main_cmd = (
-            f"python -m kg_builder_llm.main"
-            f" --steps {cfg.get('steps', 1)}"
-            f" --candidates {cfg.get('candidates', 1)}"
-            f" --feature-mode {cfg.get('feature_mode', 'path')}"
-            f" --time-window-days {cfg.get('time_window_days', 30)}"
+    elif use_sidecar:
+        _neo4j_wait = (
+            "python3 -c \""
+            "import socket,time\n"
+            "while True:\n"
+            " try: socket.create_connection(('localhost',7687),2).close(); break\n"
+            " except: time.sleep(2)\n"
+            "\""
         )
         command = ["sh", "-c"]
-        # After the main command exits (success or failure), touch the sentinel so
-        # the neo4j sidecar sees it and exits — allowing the Job to complete.
         container_args = [f"{_neo4j_wait} && {main_cmd}; RC=$?; touch /done/complete; exit $RC"]
+    else:
+        command = ["sh", "-c"]
+        container_args = [main_cmd]
+
+    # kg-builder env — sidecar mode overrides NEO4J_* to point at localhost
+    kg_builder_env = [
+        client.V1EnvVar(name="MLFLOW_PARENT_RUN_ID", value=parent_run_id),
+    ]
+    if use_sidecar:
+        kg_builder_env += [
+            client.V1EnvVar(name="NEO4J_URI",      value="bolt://localhost:7687"),
+            client.V1EnvVar(name="NEO4J_USERNAME", value="neo4j"),
+            client.V1EnvVar(name="NEO4J_PASSWORD", value="sweeppass"),
+            client.V1EnvVar(name="NEO4J_DATABASE", value="neo4j"),
+        ]
+
+    kg_builder_volume_mounts = (
+        [client.V1VolumeMount(name="done", mount_path="/done")] if use_sidecar else []
+    )
+
+    containers = []
+    volumes = []
+
+    if use_sidecar:
+        containers.append(client.V1Container(
+            name="neo4j",
+            image="neo4j:5-community",
+            command=["sh", "-c"],
+            args=[
+                "/startup/docker-entrypoint.sh neo4j & "
+                "NEO4J_PID=$!; "
+                "until [ -f /done/complete ]; do sleep 2; done; "
+                "kill $NEO4J_PID 2>/dev/null || true; "
+                "wait $NEO4J_PID 2>/dev/null || true; "
+                "exit 0"
+            ],
+            env=[
+                client.V1EnvVar(name="NEO4J_AUTH",                              value="neo4j/sweeppass"),
+                client.V1EnvVar(name="NEO4J_server_memory_heap_initial__size",   value="128m"),
+                client.V1EnvVar(name="NEO4J_server_memory_heap_max__size",       value="512m"),
+                client.V1EnvVar(name="NEO4J_server_memory_pagecache_size",       value="64m"),
+                client.V1EnvVar(name="NEO4J_server_http_enabled",                value="false"),
+                client.V1EnvVar(name="NEO4J_server_https_enabled",               value="false"),
+            ],
+            ports=[client.V1ContainerPort(container_port=7687, name="bolt")],
+            resources=client.V1ResourceRequirements(
+                requests={"cpu": "250m", "memory": "512Mi"},
+                limits={"cpu": "500m", "memory": "768Mi"},
+            ),
+            volume_mounts=[
+                client.V1VolumeMount(name="neo4j-data", mount_path="/data"),
+                client.V1VolumeMount(name="neo4j-logs", mount_path="/logs"),
+                client.V1VolumeMount(name="done",       mount_path="/done"),
+            ],
+        ))
+        volumes += [
+            client.V1Volume(name="neo4j-data", empty_dir=client.V1EmptyDirVolumeSource()),
+            client.V1Volume(name="neo4j-logs", empty_dir=client.V1EmptyDirVolumeSource()),
+            client.V1Volume(name="done",       empty_dir=client.V1EmptyDirVolumeSource()),
+        ]
+
+    containers.append(client.V1Container(
+        name="kg-builder",
+        image=image,
+        command=command,
+        args=container_args,
+        env_from=[
+            client.V1EnvFromSource(config_map_ref=client.V1ConfigMapEnvSource(name="kg-config")),
+            client.V1EnvFromSource(secret_ref=client.V1SecretEnvSource(name="kg-secrets")),
+        ],
+        env=kg_builder_env,
+        resources=client.V1ResourceRequirements(
+            requests={"cpu": cpu_request, "memory": memory_request},
+            limits={"cpu": cpu_request, "memory": memory_request},
+        ),
+        volume_mounts=kg_builder_volume_mounts,
+    ))
+
     return client.V1Job(
         api_version="batch/v1",
         kind="Job",
@@ -161,78 +240,8 @@ def build_job_manifest(
                             effect="NoSchedule",
                         ),
                     ],
-                    containers=[
-                        client.V1Container(
-                            name="neo4j",
-                            image="neo4j:5-community",
-                            # Start neo4j entrypoint in background, then exit once
-                            # kg-builder writes /done/complete sentinel.
-                            command=["sh", "-c"],
-                            args=[
-                                "/startup/docker-entrypoint.sh neo4j & "
-                                "NEO4J_PID=$!; "
-                                "until [ -f /done/complete ]; do sleep 2; done; "
-                                "kill $NEO4J_PID 2>/dev/null || true; "
-                                "wait $NEO4J_PID 2>/dev/null || true; "
-                                "exit 0"
-                            ],
-                            env=[
-                                client.V1EnvVar(name="NEO4J_AUTH",
-                                                value="neo4j/sweeppass"),
-                                client.V1EnvVar(name="NEO4J_server_memory_heap_initial__size",
-                                                value="128m"),
-                                client.V1EnvVar(name="NEO4J_server_memory_heap_max__size",
-                                                value="512m"),
-                                client.V1EnvVar(name="NEO4J_server_memory_pagecache_size",
-                                                value="64m"),
-                                client.V1EnvVar(name="NEO4J_server_http_enabled",  value="false"),
-                                client.V1EnvVar(name="NEO4J_server_https_enabled", value="false"),
-                            ],
-                            ports=[client.V1ContainerPort(container_port=7687, name="bolt")],
-                            resources=client.V1ResourceRequirements(
-                                requests={"cpu": "250m", "memory": "512Mi"},
-                                limits={"cpu": "500m", "memory": "768Mi"},
-                            ),
-                            volume_mounts=[
-                                client.V1VolumeMount(name="neo4j-data", mount_path="/data"),
-                                client.V1VolumeMount(name="neo4j-logs", mount_path="/logs"),
-                                client.V1VolumeMount(name="done", mount_path="/done"),
-                            ],
-                        ),
-                        client.V1Container(
-                            name="kg-builder",
-                            image=image,
-                            command=command,
-                            args=container_args,
-                            env_from=[
-                                client.V1EnvFromSource(config_map_ref=client.V1ConfigMapEnvSource(name="kg-config")),
-                                client.V1EnvFromSource(secret_ref=client.V1SecretEnvSource(name="kg-secrets")),
-                            ],
-                            env=[
-                                client.V1EnvVar(name="MLFLOW_PARENT_RUN_ID", value=parent_run_id),
-                                # Override kg-secrets Neo4j values — point at local sidecar
-                                client.V1EnvVar(name="NEO4J_URI",      value="bolt://localhost:7687"),
-                                client.V1EnvVar(name="NEO4J_USERNAME", value="neo4j"),
-                                client.V1EnvVar(name="NEO4J_PASSWORD", value="sweeppass"),
-                                client.V1EnvVar(name="NEO4J_DATABASE", value="neo4j"),
-                            ],
-                            resources=client.V1ResourceRequirements(
-                                requests={"cpu": cpu_request, "memory": memory_request},
-                                limits={"cpu": cpu_request, "memory": memory_request},
-                            ),
-                            volume_mounts=[
-                                client.V1VolumeMount(name="done", mount_path="/done"),
-                            ],
-                        ),
-                    ],
-                    volumes=[
-                        client.V1Volume(name="neo4j-data",
-                                        empty_dir=client.V1EmptyDirVolumeSource()),
-                        client.V1Volume(name="neo4j-logs",
-                                        empty_dir=client.V1EmptyDirVolumeSource()),
-                        client.V1Volume(name="done",
-                                        empty_dir=client.V1EmptyDirVolumeSource()),
-                    ],
+                    containers=containers,
+                    volumes=volumes or None,
                 )
             ),
         ),
@@ -260,6 +269,12 @@ def main():
     parser.add_argument("--cpu-request", default="500m")
     parser.add_argument("--memory-request", default="2Gi")
     parser.add_argument("--stub", action="store_true", help="use busybox stub instead of real image")
+    parser.add_argument(
+        "--neo4j-mode",
+        choices=["sidecar", "external"],
+        default="sidecar",
+        help="sidecar: ephemeral neo4j per job (default); external: use NEO4J_* from kg-secrets (AuraDB)",
+    )
     args = parser.parse_args()
 
     if args.stub:
@@ -304,6 +319,7 @@ def main():
             cpu_request=args.cpu_request,
             memory_request=args.memory_request,
             stub=args.stub,
+            neo4j_mode=args.neo4j_mode,
         )
         batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job)
         submitted.append(job)
