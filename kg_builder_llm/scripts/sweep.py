@@ -140,12 +140,42 @@ def build_job_manifest(
                 spec=client.V1PodSpec(
                     restart_policy="Never",
                     service_account_name="sweep-runner",
+                    # Neo4j as a native K8s sidecar (restartPolicy=Always on an init
+                    # container). K8s starts it first; kg-builder only starts once
+                    # Neo4j's readiness probe passes. Both die together with the pod.
                     init_containers=[
                         client.V1InitContainer(
-                            name="wait-neo4j",
-                            image="busybox:1.36",
-                            command=["sh", "-c", "until nc -z localhost 7687; do sleep 2; done"],
-                        )
+                            name="neo4j",
+                            image="neo4j:5-community",
+                            restart_policy="Always",
+                            env=[
+                                client.V1EnvVar(name="NEO4J_AUTH",
+                                                value="neo4j/neo4j"),
+                                client.V1EnvVar(name="NEO4J_server_memory_heap_initial__size",
+                                                value="128m"),
+                                client.V1EnvVar(name="NEO4J_server_memory_heap_max__size",
+                                                value="512m"),
+                                client.V1EnvVar(name="NEO4J_server_memory_pagecache_size",
+                                                value="64m"),
+                                client.V1EnvVar(name="NEO4J_server_http_enabled",  value="false"),
+                                client.V1EnvVar(name="NEO4J_server_https_enabled", value="false"),
+                            ],
+                            ports=[client.V1ContainerPort(container_port=7687, name="bolt")],
+                            readiness_probe=client.V1Probe(
+                                tcp_socket=client.V1TCPSocketAction(port=7687),
+                                initial_delay_seconds=30,
+                                period_seconds=5,
+                                failure_threshold=20,
+                            ),
+                            resources=client.V1ResourceRequirements(
+                                requests={"cpu": "250m", "memory": "512Mi"},
+                                limits={"cpu": "500m", "memory": "768Mi"},
+                            ),
+                            volume_mounts=[
+                                client.V1VolumeMount(name="neo4j-data", mount_path="/data"),
+                                client.V1VolumeMount(name="neo4j-logs", mount_path="/logs"),
+                            ],
+                        ),
                     ],
                     containers=[
                         client.V1Container(
@@ -159,7 +189,7 @@ def build_job_manifest(
                             ],
                             env=[
                                 client.V1EnvVar(name="MLFLOW_PARENT_RUN_ID", value=parent_run_id),
-                                # Override kg-secrets Neo4j values — use ephemeral sidecar
+                                # Override kg-secrets Neo4j values — point at local sidecar
                                 client.V1EnvVar(name="NEO4J_URI",      value="bolt://localhost:7687"),
                                 client.V1EnvVar(name="NEO4J_USERNAME", value="neo4j"),
                                 client.V1EnvVar(name="NEO4J_PASSWORD", value="neo4j"),
@@ -169,33 +199,6 @@ def build_job_manifest(
                                 requests={"cpu": cpu_request, "memory": memory_request},
                                 limits={"cpu": cpu_request, "memory": memory_request},
                             ),
-                        ),
-                        client.V1Container(
-                            name="neo4j",
-                            image="neo4j:5-community",
-                            env=[
-                                client.V1EnvVar(name="NEO4J_AUTH",
-                                                value="neo4j/neo4j"),
-                                # Minimal heap/cache for ~few-hundred-node graphs
-                                client.V1EnvVar(name="NEO4J_server_memory_heap_initial__size",
-                                                value="128m"),
-                                client.V1EnvVar(name="NEO4J_server_memory_heap_max__size",
-                                                value="512m"),
-                                client.V1EnvVar(name="NEO4J_server_memory_pagecache_size",
-                                                value="64m"),
-                                # Bolt only — disable HTTP/HTTPS browser interfaces
-                                client.V1EnvVar(name="NEO4J_server_http_enabled",  value="false"),
-                                client.V1EnvVar(name="NEO4J_server_https_enabled", value="false"),
-                            ],
-                            ports=[client.V1ContainerPort(container_port=7687, name="bolt")],
-                            resources=client.V1ResourceRequirements(
-                                requests={"cpu": "250m", "memory": "512Mi"},
-                                limits={"cpu": "500m", "memory": "768Mi"},
-                            ),
-                            volume_mounts=[
-                                client.V1VolumeMount(name="neo4j-data", mount_path="/data"),
-                                client.V1VolumeMount(name="neo4j-logs", mount_path="/logs"),
-                            ],
                         ),
                     ],
                     volumes=[
