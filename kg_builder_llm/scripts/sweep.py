@@ -116,12 +116,16 @@ def build_job_manifest(
 ) -> client.V1Job:
     job_name = f"kg-builder-{sweep_id}-{run_index}"
 
+    if "day_start" in cfg and "day_end" in cfg:
+        date_args = f" --day-start {cfg['day_start']} --day-end {cfg['day_end']}"
+    else:
+        date_args = f" --time-window-days {cfg.get('time_window_days', 30)}"
     main_cmd = (
         f"python -m kg_builder_llm.main"
         f" --steps {cfg.get('steps', 1)}"
         f" --candidates {cfg.get('candidates', 1)}"
         f" --feature-mode {cfg.get('feature_mode', 'path')}"
-        f" --time-window-days {cfg.get('time_window_days', 30)}"
+        f"{date_args}"
     )
 
     use_sidecar = neo4j_mode == "sidecar" and not stub
