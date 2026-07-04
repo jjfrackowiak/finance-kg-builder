@@ -125,7 +125,7 @@ def build_job_manifest(
         "\""
     )
     if stub:
-        command = ["sh", "-c", f"echo 'stub job {run_index} cfg={cfg}'; sleep 5; echo done"]
+        command = ["sh", "-c", f"echo 'stub job {run_index} cfg={cfg}'; sleep 5; touch /done/complete; echo done"]
         container_args = None
     else:
         main_cmd = (
@@ -136,7 +136,9 @@ def build_job_manifest(
             f" --time-window-days {cfg.get('time_window_days', 30)}"
         )
         command = ["sh", "-c"]
-        container_args = [f"{_neo4j_wait} && {main_cmd}"]
+        # After the main command exits (success or failure), touch the sentinel so
+        # the neo4j sidecar sees it and exits — allowing the Job to complete.
+        container_args = [f"{_neo4j_wait} && {main_cmd}; RC=$?; touch /done/complete; exit $RC"]
     return client.V1Job(
         api_version="batch/v1",
         kind="Job",
@@ -163,6 +165,17 @@ def build_job_manifest(
                         client.V1Container(
                             name="neo4j",
                             image="neo4j:5-community",
+                            # Start neo4j entrypoint in background, then exit once
+                            # kg-builder writes /done/complete sentinel.
+                            command=["sh", "-c"],
+                            args=[
+                                "/startup/docker-entrypoint.sh neo4j & "
+                                "NEO4J_PID=$!; "
+                                "until [ -f /done/complete ]; do sleep 2; done; "
+                                "kill $NEO4J_PID 2>/dev/null || true; "
+                                "wait $NEO4J_PID 2>/dev/null || true; "
+                                "exit 0"
+                            ],
                             env=[
                                 client.V1EnvVar(name="NEO4J_AUTH",
                                                 value="neo4j/sweeppass"),
@@ -183,6 +196,7 @@ def build_job_manifest(
                             volume_mounts=[
                                 client.V1VolumeMount(name="neo4j-data", mount_path="/data"),
                                 client.V1VolumeMount(name="neo4j-logs", mount_path="/logs"),
+                                client.V1VolumeMount(name="done", mount_path="/done"),
                             ],
                         ),
                         client.V1Container(
@@ -206,12 +220,17 @@ def build_job_manifest(
                                 requests={"cpu": cpu_request, "memory": memory_request},
                                 limits={"cpu": cpu_request, "memory": memory_request},
                             ),
+                            volume_mounts=[
+                                client.V1VolumeMount(name="done", mount_path="/done"),
+                            ],
                         ),
                     ],
                     volumes=[
                         client.V1Volume(name="neo4j-data",
                                         empty_dir=client.V1EmptyDirVolumeSource()),
                         client.V1Volume(name="neo4j-logs",
+                                        empty_dir=client.V1EmptyDirVolumeSource()),
+                        client.V1Volume(name="done",
                                         empty_dir=client.V1EmptyDirVolumeSource()),
                     ],
                 )
@@ -275,7 +294,8 @@ def main():
         wait_for_deployment_ready(apps_v1, VLLM_DEPLOYMENT, timeout=600)
         wait_for_deployment_ready(apps_v1, EMBEDDINGS_DEPLOYMENT, timeout=300)
 
-    failed_count = 0
+    # Submit all jobs up front, then wait for all in parallel.
+    submitted = []
     for i, cfg in enumerate(configs):
         print(f"\n[{i+1}/{len(configs)}] Submitting: {cfg}")
         job = build_job_manifest(
@@ -286,6 +306,11 @@ def main():
             stub=args.stub,
         )
         batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job)
+        submitted.append(job)
+
+    print(f"\nAll {len(submitted)} jobs submitted — waiting for completion...")
+    failed_count = 0
+    for job in submitted:
         if not wait_for_job(batch_v1, job.metadata.name):
             failed_count += 1
 
