@@ -114,17 +114,29 @@ def build_job_manifest(
     stub: bool,
 ) -> client.V1Job:
     job_name = f"kg-builder-{sweep_id}-{run_index}"
+    # One-liner that polls localhost:7687 until Neo4j sidecar accepts connections,
+    # then hands off to the real entrypoint. Uses only stdlib — no nc required.
+    _neo4j_wait = (
+        "python3 -c \""
+        "import socket,time\n"
+        "while True:\n"
+        " try: socket.create_connection(('localhost',7687),2).close(); break\n"
+        " except: time.sleep(2)\n"
+        "\""
+    )
     if stub:
-        container_args = None
         command = ["sh", "-c", f"echo 'stub job {run_index} cfg={cfg}'; sleep 5; echo done"]
+        container_args = None
     else:
-        command = None
-        container_args = [
-            "--steps", str(cfg.get("steps", 1)),
-            "--candidates", str(cfg.get("candidates", 1)),
-            "--feature-mode", cfg.get("feature_mode", "path"),
-            "--time-window-days", str(cfg.get("time_window_days", 30)),
-        ]
+        main_cmd = (
+            f"python -m kg_builder_llm.main"
+            f" --steps {cfg.get('steps', 1)}"
+            f" --candidates {cfg.get('candidates', 1)}"
+            f" --feature-mode {cfg.get('feature_mode', 'path')}"
+            f" --time-window-days {cfg.get('time_window_days', 30)}"
+        )
+        command = ["sh", "-c"]
+        container_args = [f"{_neo4j_wait} && {main_cmd}"]
     return client.V1Job(
         api_version="batch/v1",
         kind="Job",
@@ -178,6 +190,31 @@ def build_job_manifest(
                         ),
                     ],
                     containers=[
+                        client.V1Container(
+                            name="neo4j",
+                            image="neo4j:5-community",
+                            env=[
+                                client.V1EnvVar(name="NEO4J_AUTH",
+                                                value="neo4j/neo4j"),
+                                client.V1EnvVar(name="NEO4J_server_memory_heap_initial__size",
+                                                value="128m"),
+                                client.V1EnvVar(name="NEO4J_server_memory_heap_max__size",
+                                                value="512m"),
+                                client.V1EnvVar(name="NEO4J_server_memory_pagecache_size",
+                                                value="64m"),
+                                client.V1EnvVar(name="NEO4J_server_http_enabled",  value="false"),
+                                client.V1EnvVar(name="NEO4J_server_https_enabled", value="false"),
+                            ],
+                            ports=[client.V1ContainerPort(container_port=7687, name="bolt")],
+                            resources=client.V1ResourceRequirements(
+                                requests={"cpu": "250m", "memory": "512Mi"},
+                                limits={"cpu": "500m", "memory": "768Mi"},
+                            ),
+                            volume_mounts=[
+                                client.V1VolumeMount(name="neo4j-data", mount_path="/data"),
+                                client.V1VolumeMount(name="neo4j-logs", mount_path="/logs"),
+                            ],
+                        ),
                         client.V1Container(
                             name="kg-builder",
                             image=image,
