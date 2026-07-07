@@ -20,83 +20,19 @@ Use `--day-start` + `--day-end` for exact reproducibility. Avoid `--time-window-
 
 ---
 
-### The validation leakage problem — and whether we need a test set
+### Out-of-sample test step
 
-#### The double-role problem
+After the hyperparameter sweep on the 2022 window selects the best config and its evolved ontology, one additional eval run is done on the 2023-H1 window:
 
-The current design uses one internal train/val split per run. The **validation AUC serves two roles simultaneously**:
+- The **ontology schema is frozen** — the schema learned on 2022 data, no further evolution
+- The **graph is rebuilt from scratch** using 2023-H1 articles and that fixed schema
+- XGBoost is trained and evaluated on 2023-H1 trading days with the same train/val split ratio
+- The same is done for the `steps=0` baseline (empty/initial ontology, same 2023-H1 window)
+- Both AUCs are reported as the final baseline-vs-evolved comparison in the paper
 
-1. **Within-run oracle** — at each evolution step the system picks the candidate ontology that scores highest on val. The winning ontology was literally selected *because* it scored well on val → val AUC for the winner is inflated.
-2. **Cross-run comparison metric** — when comparing hyperparameter configs across the sweep (steps=1 vs steps=2, path vs subgraph), we compare val AUCs. But each run's val AUC is already inflated by role 1, and we then pick the best-looking run → a second layer of optimism.
+This is a single one-shot run — no tuning on 2023 data. It tests whether the ontology structure learned on 2022 generalises to unseen articles.
 
-This is the winner's curse stacked twice: ontology selection inflates val AUC, and then hyperparameter selection inflates it again.
-
-#### Do we actually need a test set?
-
-It depends on the claim:
-
-| Claim type | Test set needed? | Why |
-|------------|-----------------|-----|
-| **Methodological**: "task-aware evolution finds semantically meaningful entity types" | No | The claim is about *what* the system discovered, not *how well* it predicts. The evolved schema's structure is valid regardless of AUC optimism. |
-| **Performance**: "our method achieves AUC X on stock direction" | Yes | Any AUC you report is optimistic. Without a held-out set, a reader cannot interpret the number. |
-| **Comparative**: "steps=2 beats steps=0 (baseline)" | Partially | If baseline (steps=0) uses the same val split but the split doesn't drive its selection (there's nothing to select — it's always the same ontology), the baseline AUC is honest and the evolved AUC is inflated → comparison is biased in favour of evolution. A test set fixes this. |
-
-**Recommendation for this paper:** the primary contribution is methodological — the *process* of linking ontology evolution to task performance, and the semantic analysis of what the system discovers. A leaderboard-style performance number is not the point. Therefore:
-
-- Report val AUC as an **internal evolution signal**, not as a claimed generalisation metric
-- Use the 2023-H1 temporal hold-out as a **single one-shot test** for the final chosen configuration, looked at exactly once, after all hyperparameter choices are locked
-- Be explicit in the paper: *"validation AUC guides ontology selection and is therefore optimistic; we report out-of-sample AUC on a held-out period to bound the generalisation error"*
-
-#### Design options
-
-**Option A — Two-stage temporal split (current design, repaired)**
-
-```
-|── 2022-01-03 ──────── 2023-01-03 ──|── 2023-01-03 ── 2023-07-01 ──|
-         train+val (evolution signal)          test (one shot)
-```
-
-- Sweep runs freely over the train+val window to tune everything
-- After the best config is chosen, run once on 2023 window and report that AUC
-- **Problem**: the 2023 window has a very different regime (AI bull rally) from 2022 (correction) — the gap may be confounded by regime shift, not model quality
-
-**Option B — Three-way split within each run**
-
-Split each run window into train (60%) / val (20%) / test (20%). Val drives ontology selection; test reports the honest run-level AUC.
-
-```
-190 train days / 42 val days / 20 test days   (from 365 calendar days)
-```
-
-- 20 test trading days → AUC CI ≈ ±0.10 — **too few for reliable reporting**
-- Not viable at our data size
-
-**Option C — Walk-forward cross-validation (honest but expensive)**
-
-Roll a 6-month train window forward month by month, evaluate on the next month. Aggregate AUC over 6 folds → less variance, no snooping on any single val set.
-
-- Each fold requires a full pipeline run (LLM calls, graph build, train) — ~6× cost
-- Works for baseline comparison (steps=0 folds = clean AUC); evolved folds still have within-run ontology snooping, just spread across time
-- Best option if performance claim is central to the paper
-
-**Option D — Reframe: no test set, embrace methodological framing**
-
-Do not report a generalisation AUC at all. Instead:
-
-- Report val AUC *trends* (does evolution improve over baseline consistently across tickers?)
-- Report the semantic analysis (which categories contribute, evolution trace)
-- Note the leakage explicitly as a limitation and motivate Option C as future work
-
-This is defensible: many KG + finance papers (including ding2015stock, ding2016kgeventstock) report validation-era performance and frame the result as *"the model learned useful structure"*, not *"use this in production"*.
-
-#### Recommended approach for the paper
-
-1. **Primary evaluation frame**: methodological and structural — what did the ontology evolve to, which semantic categories carry signal (Semantic-Metric Analysis section above)
-2. **Secondary evaluation frame**: val AUC trends across configs, explicitly labelled as "optimistic upper bound" in the paper
-3. **One honest number**: run the final winning config on the 2023-H1 hold-out, report it as *"out-of-sample AUC"* with the caveat that the window has a different regime
-4. **Limitation**: acknowledge the within-run val leakage; propose walk-forward CV as future work
-
-This avoids needing a formal test set while being honest about what the numbers mean.
+**Implementation note:** requires a `--fixed-ontology <path>` argument in `main.py` so the test job can load the evolved schema without triggering the ontology LLM.
 
 ---
 
