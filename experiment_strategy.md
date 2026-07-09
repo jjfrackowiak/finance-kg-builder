@@ -18,21 +18,39 @@
 
 Use `--day-start` + `--day-end` for exact reproducibility. Avoid `--time-window-days` alone in final experiments.
 
+### Final window selection
+
+All three tickers use **identical dates** — chosen to maximise common coverage (intersection of all three coverages) with a 4-month out-of-sample hold-out.
+
+| Period | Start | End | Business days |
+|--------|-------|-----|---------------|
+| **Training** (hparam sweep) | 2022-05-02 | 2023-08-16 | 338 |
+| **Out-of-sample** (one-shot test) | 2023-08-16 | 2023-12-16 | 88 |
+
+```
+--day-start 2022-05-02 --day-end 2023-08-16   # training / sweep
+--day-start 2023-08-16 --day-end 2023-12-16   # OOS test (one shot, after config is locked)
+```
+
+Rationale: 2022-05-02 is the earliest date all three tickers have coverage (TSLA starts 2022-05-02). 2023-12-16 is the end of the dataset. 4 months OOS gives 88 business days — enough for a stable AUC estimate while keeping 338 days for the sweep.
+
+Within the training window, XGBoost uses the default 75/25 train/val split — approximately 254 train days / 84 val days per run.
+
 ---
 
 ### Out-of-sample test step
 
-After the hyperparameter sweep on the 2022 window selects the best config and its evolved ontology, one additional eval run is done on the 2023-H1 window:
+After the hyperparameter sweep selects the best config and its evolved ontology:
 
-- The **ontology schema is frozen** — the schema learned on 2022 data, no further evolution
-- The **graph is rebuilt from scratch** using 2023-H1 articles and that fixed schema
-- XGBoost is trained and evaluated on 2023-H1 trading days with the same train/val split ratio
-- The same is done for the `steps=0` baseline (empty/initial ontology, same 2023-H1 window)
-- Both AUCs are reported as the final baseline-vs-evolved comparison in the paper
+- The **ontology schema is frozen** — no further evolution
+- The **graph is rebuilt from scratch** from 2023-08-16→2023-12-16 articles using that fixed schema
+- XGBoost is trained and evaluated on those 88 OOS trading days
+- The same is done for the `steps=0` baseline on the identical OOS window
+- Both AUCs reported as the final baseline-vs-evolved comparison in the paper
 
-This is a single one-shot run — no tuning on 2023 data. It tests whether the ontology structure learned on 2022 generalises to unseen articles.
+This is a single one-shot run — no tuning touches OOS data.
 
-**Implementation note:** requires a `--fixed-ontology <path>` argument in `main.py` so the test job can load the evolved schema without triggering the ontology LLM.
+**Implementation note:** requires a `--fixed-ontology <path>` argument in `main.py` so the OOS job loads the evolved schema without triggering the ontology LLM.
 
 ---
 
