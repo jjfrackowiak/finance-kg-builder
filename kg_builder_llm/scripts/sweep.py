@@ -152,6 +152,8 @@ def build_job_manifest(
     kg_builder_env = [
         client.V1EnvVar(name="MLFLOW_PARENT_RUN_ID", value=parent_run_id),
     ]
+    if "ticker" in cfg:
+        kg_builder_env.append(client.V1EnvVar(name="TARGET_TICKER", value=cfg["ticker"]))
     if use_sidecar:
         kg_builder_env += [
             client.V1EnvVar(name="NEO4J_URI",      value="bolt://localhost:7687"),

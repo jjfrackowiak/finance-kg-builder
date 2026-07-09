@@ -54,177 +54,75 @@ This is a single one-shot run — no tuning touches OOS data.
 
 ---
 
-### How to pick the best days
+## Ticker Selection
 
-Choosing dates is not arbitrary — bad choices produce uninterpretable AUC and inflate or mask the KG's contribution. The criteria below guide selection.
+**NVDA is excluded as a primary ticker.** During the training window (2022-05-02 → 2023-08-16) NVDA undergoes a near-4× rally driven by the AI macro narrative — direction is dominated by fundamental sector demand, not article-level graph signal. This makes the prediction either trivially easy or impossible, neither of which is an interesting result.
 
-#### Criterion 1 — Sufficient validation sample size
+**Primary tickers: MSFT and TSLA.**
+- **MSFT**: stable large-cap, mixed correction + recovery regime, credible finance benchmark, AI-adjacent without being the pure play
+- **TSLA**: volatile, Elon/sentiment-driven, exactly the case where entity-relationship graph structure should add value over bag-of-words
 
-The XGBoost model is evaluated on held-out trading days. AUC on fewer than ~50 days has high variance (±0.05 swings from 10-day differences are common). Minimum thresholds:
+NVDA is kept in the dataset table and figure for completeness but is not used in the main experiments.
 
-| Val days | Minimum total window | Notes |
-|----------|---------------------|-------|
-| 50 | ~200 calendar days | Lower bound; AUC CI ≈ ±0.07 |
-| 62 | ~365 calendar days | Safe for reporting; 75/25 split of ~252 trading days |
-| 100+ | ~550 calendar days | For tight CIs or significance testing |
-
-Our 75/25 split means: `val_trading_days ≈ window_calendar_days × (252/365) × 0.25`
-
-#### Criterion 2 — Regime homogeneity
-
-Mixing bull-market and bear-market regimes in a single window degrades the signal — the model must learn two different regimes simultaneously. Prefer windows where the price trend is roughly monotone (sustained up or sustained down), not a V-shape.
-
-**Check:** Plot the daily closing price for the ticker over the candidate window before committing. Look for:
-- Single dominant trend (avoid windows that cross a major inflection by more than 20% of the range)
-- No data gaps > 5 trading days (earnings blackouts, halts)
-
-For NVDA specifically:
-- **2021-08** → **2022-01**: strong bull (avoid — short, ends at peak)
-- **2022-01** → **2023-01**: sustained correction then partial recovery — **heterogeneous but high volume**; acceptable because the vol itself is informative
-- **2023-01** → **2023-07**: AI-driven bull rally — high information content, directional
-- **2022-07** → **2023-07**: straddles inflection — best for generalization tests (forces robustness)
-
-#### Criterion 3 — News volume per day
-
-The KG is only as good as the extraction input. Thin news days produce sparse graphs with no signal.
-
-**Check** (run locally before committing a window):
-```bash
-python - <<'EOF'
-import pandas as pd
-df = pd.read_csv("data/fnspid_sample_nasdaq_long_text.csv", parse_dates=["Date"])
-df = df[df["Ticker"] == "NVDA"]
-df = df[(df["Date"] >= "2022-01-03") & (df["Date"] < "2023-01-03")]
-print(df.groupby("Date").size().describe())
-EOF
-```
-Accept windows where **p25 ≥ 3 articles/day** and **mean ≥ 6 articles/day**. Below p25 < 2, many training days produce no graph and XGBoost sees NaN rows.
-
-#### Criterion 4 — Avoid earnings confounders at window boundaries
-
-Starting or ending a window immediately before/after an earnings release creates a distributional shift at the boundary (spike in articles + discontinuous price move). The model may learn the spike, not the KG. Leave ≥ 3 weeks buffer from major earnings dates.
-
-NVDA earnings dates (approximate): Feb 16, May 24, Aug 23, Nov 16 (repeat annually).
-
-#### Criterion 5 — Cross-ticker alignment
-
-When comparing NVDA, MSFT, TSLA, use the **same calendar window** for all three. Different windows → different regimes → incomparable AUC. The cross-ticker window must be contained within each ticker's coverage.
-
-All three tickers have data from 2022-07-01 onward → use that as the universal start for comparisons.
-
----
-
-### Recommended windows (final)
-
-#### Development / smoke-test
-```
---day-start 2021-08-17 --day-end 2021-09-17   # 30 days, NVDA only, ~70 articles
-```
-Purpose: fast iteration, CI validation. **Not used in paper.**
-
-#### Main experiment window (NVDA)
-```
---day-start 2022-01-03 --day-end 2023-01-03   # calendar year 2022, ~365 days
-```
-- ~3,000 articles (up to 10/day via `--articles-per-day 10`)
-- ~252 trading days → ~190 train / ~62 val at 75/25 split
-- Criterion check: vol + correction regime ✓; p25 news volume ✓; no major boundary confounders ✓
-
-#### Out-of-sample hold-out (NVDA)
-```
---day-start 2023-01-03 --day-end 2023-07-01   # H1 2023, ~180 days
-```
-- Used for final model evaluation only — never tuned on this.
-- AI-driven bull regime: tests whether KG learned structural signal, not regime-specific bias.
-
-#### Cross-ticker validation
-```
-MSFT: --day-start 2022-07-01 --day-end 2023-07-01
-TSLA: --day-start 2022-07-01 --day-end 2023-07-01
-NVDA: --day-start 2022-07-01 --day-end 2023-07-01  # (same window for comparability)
-```
-- Tests generalization of best ontology/feature config to other tickers.
-- All three windows are identical calendar → AUC is directly comparable across tickers.
-
-#### How to validate a candidate window before running a sweep
-
+**Implementation:** ticker is set via `TARGET_TICKER` env var (default `TSLA` in `config.py`). Add one line to `sweep.py` `build_job_manifest()` to override it per job:
 ```python
-import pandas as pd
-import yfinance as yf  # or use pre-downloaded price CSV
-
-df = pd.read_csv("data/fnspid_sample_nasdaq_long_text.csv", parse_dates=["Date"])
-ticker = "NVDA"; start = "2022-01-03"; end = "2023-01-03"
-
-articles = df[(df.Ticker == ticker) & (df.Date >= start) & (df.Date < end)]
-daily = articles.groupby("Date").size()
-print("Articles/day:", daily.describe())
-
-# Price check
-px = yf.download(ticker, start=start, end=end)["Close"]
-print("Price range:", px.min().item(), "–", px.max().item())
-print("Max drawdown:", ((px / px.cummax()) - 1).min().item())
+if "ticker" in cfg:
+    kg_builder_env.append(client.V1EnvVar(name="TARGET_TICKER", value=cfg["ticker"]))
 ```
-
-Accept the window if:
-- `daily.quantile(0.25) >= 3`
-- `daily.mean() >= 6`
-- `len(px) >= 180` (trading days)
-- Inspect the price plot for obvious V-shapes spanning >50% of window
 
 ---
 
-## Hyperparameter Grid
+## Sweep Configs
 
-### Phase 1 — Feature mode & ontology depth (main ablation)
+All configs use the finalised common window. `candidates=2` throughout Phase 1.
 
-Fixed: `--day-start 2022-01-03 --day-end 2023-01-03 --candidates 2 --articles-per-day 10`
+### Phase 1 — Ablation: feature mode × ontology depth (24 jobs)
 
-| `steps` | `feature_mode` | Configs |
-|---------|---------------|---------|
-| 0       | path, subgraph, hybrid | 3 |
-| 1       | path, subgraph, hybrid | 3 |
-| 2       | path, subgraph, hybrid | 3 |
-| 3       | path, subgraph, hybrid | 3 |
+Both tickers × all steps × all feature modes run in parallel.
 
-**Total: 12 jobs.** This is the core ablation: does adding evolution steps help, and which feature representation benefits most?
-
-Sweep config JSON:
 ```json
 [
-  {"steps":0,"candidates":2,"feature_mode":"path",    "day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":0,"candidates":2,"feature_mode":"subgraph","day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":0,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":1,"candidates":2,"feature_mode":"path",    "day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":1,"candidates":2,"feature_mode":"subgraph","day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":1,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":2,"candidates":2,"feature_mode":"path",    "day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":2,"candidates":2,"feature_mode":"subgraph","day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":2,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":3,"candidates":2,"feature_mode":"path",    "day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":3,"candidates":2,"feature_mode":"subgraph","day_start":"2022-01-03","day_end":"2023-01-03"},
-  {"steps":3,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-01-03","day_end":"2023-01-03"}
+  {"ticker":"MSFT","steps":0,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":0,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":0,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":1,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":1,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":1,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":2,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":2,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":2,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":3,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":3,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":3,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":0,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":0,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":0,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":1,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":1,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":1,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":2,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":2,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":2,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":3,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":3,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":3,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10}
 ]
 ```
 
-### Phase 2 — Feature engineering hyperparameters (best config from Phase 1)
+### Phase 2 — OOS test (after Phase 1 config is locked, 4 jobs)
 
-Fixed: best `steps` + `feature_mode` from Phase 1.
+Best `steps` + `feature_mode` from Phase 1, both tickers, evolved vs. baseline:
 
-| `lookback_days` | `min_chain_hops` | `max_chain_hops` |
-|----------------|-----------------|-----------------|
-| 1              | 3               | 5               |
-| 2              | 4               | 6               |
-| 3              | 5               | 7               |
+```json
+[
+  {"ticker":"MSFT","steps":0,        "candidates":2,"feature_mode":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":10},
+  {"ticker":"MSFT","steps":"<best>", "candidates":2,"feature_mode":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":0,        "candidates":2,"feature_mode":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":10},
+  {"ticker":"TSLA","steps":"<best>", "candidates":2,"feature_mode":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":10}
+]
+```
 
-**Total: 9 jobs** (3×3 grid, other dim fixed at default).
-
-### Phase 3 — Candidates per step (best config from Phase 2)
-
-| `candidates` | Note |
-|-------------|------|
-| 1           | greedy (current) |
-| 2           | current default |
-| 3           | more exploration |
+The evolved runs use `--fixed-ontology <path>` to load the schema from Phase 1 without re-running the LLM.
 
 **Total: 3 jobs.**
 
