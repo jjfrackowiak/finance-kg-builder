@@ -130,3 +130,20 @@ jobs:
             eks.amazonaws.com/role-arn="$KG_BUILDER_ROLE" \
             --overwrite
 
+      - name: 🔥 Configure GPU nodegroup warm pool (1 stopped instance)
+        run: |
+          PREFIX="${{ steps.config.outputs.prefix }}"
+          ASG_NAME=$(aws eks describe-nodegroup \
+            --cluster-name "${PREFIX}-eks" \
+            --nodegroup-name "${PREFIX}-gpu" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'nodegroup.resources.autoScalingGroups[0].name' \
+            --output text)
+          echo "Configuring warm pool on ASG: $ASG_NAME"
+          aws autoscaling put-warm-pool \
+            --auto-scaling-group-name "$ASG_NAME" \
+            --min-size 1 \
+            --pool-state Stopped \
+            --region ${{ env.AWS_REGION }}
+          echo "Warm pool configured — 1 stopped g5.xlarge kept ready (~\$1-3/month EBS cost)"
+

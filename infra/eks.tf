@@ -233,20 +233,6 @@ resource "aws_eks_node_group" "gpu" {
   ]
 }
 
-# Keep 1 stopped g5.xlarge in a warm pool so scale-up takes ~2 min instead of ~12 min.
-# Stopped instances incur only EBS storage cost (~$1-3/month).
-resource "aws_autoscaling_warm_pool" "gpu" {
-  autoscaling_group_name = aws_eks_node_group.gpu.resources[0].autoscaling_groups[0].name
-
-  min_size = 1
-
-  pool_state = "Stopped"
-
-  instance_reuse_policy {
-    reuse_on_scale_in = true
-  }
-}
-
 # ── EKS add-ons ───────────────────────────────────────────────────────────────
 
 resource "aws_eks_addon" "vpc_cni" {
