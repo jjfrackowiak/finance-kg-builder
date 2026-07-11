@@ -4,7 +4,7 @@ extraArgs:
 - --quantization
 - bitsandbytes
 - --max-model-len
-- "4096"
+- "8192"
 resources:
   limits:
     nvidia.com/gpu: "1"

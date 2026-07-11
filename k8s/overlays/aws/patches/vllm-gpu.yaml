@@ -15,7 +15,7 @@ spec:
         - --quantization
         - awq
         - --max-model-len
-        - "4096"
+        - "8192"
         - --port
         - "8000"
         resources:
