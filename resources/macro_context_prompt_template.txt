@@ -1,0 +1,66 @@
+You are a knowledge graph ontology designer optimizing for financial news analysis.
+
+TASK: Evolve the following ontology by ADDING NEW entity types and relationships not present in the current schema.
+
+Previous ontology:
+```json
+{schema_json}
+```
+
+EXISTING ENTITY TYPES IN CURRENT SCHEMA:
+{existing_nodes}
+
+EXISTING RELATIONSHIP TYPES:
+{existing_rels}
+
+Performance metrics:
+- AUC: {auc:.4f}
+- F1: {f1:.4f}
+- Max hops in training period: {max_hops_train}
+- Max hops in validation period: {max_hops_val}
+
+Variant index: {variant_index}
+
+CRITICAL INSTRUCTIONS FOR EVOLUTION:
+1. MUST ADD NEW entity types that are NOT in the existing nodes list
+2. For property types, ONLY use: STRING, INTEGER, FLOAT, BOOLEAN
+3. NEVER use NUMBER - use FLOAT or INTEGER instead
+4. MUST ADD NEW relationships involving the new entity types
+5. Keep all existing node_types and relationship_types
+6. Patterns MUST be formatted as ["NodeA", "RELATIONSHIP", "NodeB"]
+7. Return ONLY valid JSON with all required fields
+
+STRATEGY — Macro Context:
+Focus on entity types that place the company within its broader market and
+macroeconomic environment. These entities appear in articles that discuss market
+conditions, index movements, interest rates, sector dynamics, and fund flows —
+context that determines whether company-specific news is amplified or muted by
+the prevailing market regime.
+
+For variant {variant_index}:
+- If metrics.auc < 0.55: Add market structure entities NOT already in the schema.
+  Priority types: MarketIndex (name STRING, region STRING, change_pct FLOAT),
+  Sector (name STRING, classification STRING),
+  ETF (ticker STRING, aum_bn FLOAT, category STRING),
+  MarketCapSegment (label STRING, threshold_bn FLOAT).
+  Relationships to add: (Company)-[MEMBER_OF]->(MarketIndex), (Company)-[BELONGS_TO]->(Sector),
+  (ETF)-[HOLDS]->(Company), (Company)-[CLASSIFIED_AS]->(MarketCapSegment).
+
+- If 0.55 <= metrics.auc < 0.60: Add macroeconomic indicator entities NOT already in the schema.
+  Priority types: InterestRateDecision (authority STRING, rate_pct FLOAT, direction STRING, date STRING),
+  InflationReport (measure STRING, value_pct FLOAT, period STRING),
+  BondYield (maturity STRING, yield_pct FLOAT, change_bps FLOAT).
+  Relationships to add: (InterestRateDecision)-[ISSUED_BY]->(RegulatoryBody),
+  (InterestRateDecision)-[AFFECTS]->(Sector),
+  (BondYield)-[COMPETES_WITH]->(MarketIndex).
+
+- If metrics.auc >= 0.60: Add aggregate market dynamics entities NOT already in the schema.
+  Priority types: SectorRotation (from_sector STRING, to_sector STRING, magnitude STRING),
+  FundFlow (fund_type STRING, direction STRING, amount_bn FLOAT, period STRING),
+  VolatilityRegime (index STRING, level FLOAT, regime STRING).
+  Relationships to add: (SectorRotation)-[BENEFITS]->(Sector),
+  (SectorRotation)-[HURTS]->(Sector),
+  (FundFlow)-[INTO]->(Sector),
+  (VolatilityRegime)-[CHARACTERIZES]->(MarketIndex).
+
+Return ONLY valid JSON, no prose.

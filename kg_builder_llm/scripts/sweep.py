@@ -18,9 +18,11 @@ class MlflowClient:
 
     def __init__(self):
         self.base_url = os.environ.get("MLFLOW_TRACKING_URI", "").rstrip("/")
+        # DagsHub accepts token as password for HTTP basic auth
+        password = os.environ.get("MLFLOW_TRACKING_PASSWORD") or os.environ.get("MLFLOW_TRACKING_TOKEN", "")
         self.auth = (
             os.environ.get("MLFLOW_TRACKING_USERNAME", ""),
-            os.environ.get("MLFLOW_TRACKING_PASSWORD", ""),
+            password,
         )
 
     def _post(self, path: str, body: dict) -> dict:
@@ -116,12 +118,26 @@ def build_job_manifest(
 ) -> client.V1Job:
     job_name = f"kg-builder-{sweep_id}-{run_index}"
 
+    if "day_start" in cfg and "day_end" in cfg:
+        date_args = f" --day-start {cfg['day_start']} --day-end {cfg['day_end']}"
+    else:
+        date_args = f" --time-window-days {cfg.get('time_window_days', 30)}"
+    articles_per_day_arg = (
+        f" --articles-per-day {cfg['articles_per_day']}"
+        if "articles_per_day" in cfg else ""
+    )
+    evolution_prompt_arg = (
+        f" --evolution-prompt {cfg['evolution_prompt']}"
+        if "evolution_prompt" in cfg else ""
+    )
     main_cmd = (
         f"python -m kg_builder_llm.main"
         f" --steps {cfg.get('steps', 1)}"
         f" --candidates {cfg.get('candidates', 1)}"
         f" --feature-mode {cfg.get('feature_mode', 'path')}"
-        f" --time-window-days {cfg.get('time_window_days', 30)}"
+        f"{date_args}"
+        f"{articles_per_day_arg}"
+        f"{evolution_prompt_arg}"
     )
 
     use_sidecar = neo4j_mode == "sidecar" and not stub
@@ -148,6 +164,8 @@ def build_job_manifest(
     kg_builder_env = [
         client.V1EnvVar(name="MLFLOW_PARENT_RUN_ID", value=parent_run_id),
     ]
+    if "ticker" in cfg:
+        kg_builder_env.append(client.V1EnvVar(name="TARGET_TICKER", value=cfg["ticker"]))
     if use_sidecar:
         kg_builder_env += [
             client.V1EnvVar(name="NEO4J_URI",      value="bolt://localhost:7687"),

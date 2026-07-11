@@ -137,6 +137,12 @@ Examples:
         help="Window start date in YYYY-MM-DD format (default: earliest date in dataset)",
     )
     data_group.add_argument(
+        "--day-end",
+        type=str,
+        default=None,
+        help="Window end date in YYYY-MM-DD format (exclusive). Overrides --time-window-days.",
+    )
+    data_group.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -360,6 +366,28 @@ def _parse_day_start(day_start_str: str | None) -> "datetime.date | None":
         raise ValueError(f"--day-start must be YYYY-MM-DD, got: {day_start_str!r}")
 
 
+def _resolve_time_window(args: argparse.Namespace) -> int:
+    """Compute effective time_window_days from --day-start / --day-end / --time-window-days.
+
+    Priority: if --day-end is given, derive window from (day_end - day_start).
+    Falls back to --time-window-days otherwise.
+    """
+    if args.day_end is None:
+        return args.time_window_days
+    end = datetime.date.fromisoformat(args.day_end)
+    start = (
+        datetime.date.fromisoformat(args.day_start)
+        if args.day_start
+        else None
+    )
+    if start is None:
+        raise ValueError("--day-end requires --day-start to be set")
+    delta = (end - start).days
+    if delta <= 0:
+        raise ValueError(f"--day-end ({args.day_end}) must be after --day-start ({args.day_start})")
+    return delta
+
+
 def load_and_prepare_data(
     args: argparse.Namespace,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -388,17 +416,18 @@ def load_and_prepare_data(
     logger.info("✓ Prepared articles")
 
     # Filter to date window
+    effective_days = _resolve_time_window(args)
     logger.info(
-        f"Filtering to {args.time_window_days} days with max {args.articles_per_day or 'unlimited'} articles/day..."
+        f"Filtering to {effective_days} days with max {args.articles_per_day or 'unlimited'} articles/day..."
     )
     articles_df = filter_articles_by_date_window(
         articles_df,
-        num_days=args.time_window_days,
+        num_days=effective_days,
         articles_per_day=args.articles_per_day,
         start_date=_parse_day_start(args.day_start),
     )
     logger.info(
-        f"✓ Filtered to {len(articles_df)} articles in {args.time_window_days}-day window"
+        f"✓ Filtered to {len(articles_df)} articles in {effective_days}-day window"
     )
 
     # Fetch price data
@@ -492,9 +521,18 @@ def _setup_mlflow(config: Config) -> None:
 
 def _make_run_name(args: argparse.Namespace, config: Config) -> str:
     """Build a human-readable run name from key CLI args."""
-    date_str = datetime.date.today().isoformat()
     ticker = config.experiment.target_ticker
-    return f"{ticker}-steps{args.steps}-cands{args.candidates}-{args.feature_mode}-{date_str}"
+    day_start = args.day_start or f"w{_resolve_time_window(args)}d"
+    prompt = args.evolution_prompt
+    if prompt and prompt != "default":
+        from pathlib import Path as _Path
+        prompt_label = _Path(prompt).stem.replace("_prompt_template", "")
+    else:
+        prompt_label = "default"
+    return (
+        f"{ticker}-steps{args.steps}-cands{args.candidates}"
+        f"-{args.feature_mode}-{prompt_label}-{day_start}"
+    )
 
 
 def _log_params(args: argparse.Namespace, config: Config) -> None:
@@ -503,7 +541,8 @@ def _log_params(args: argparse.Namespace, config: Config) -> None:
         # --- data ---
         "data_file": args.data,
         "day_start": args.day_start or "earliest",
-        "time_window_days": args.time_window_days,
+        "day_end": args.day_end or "derived",
+        "time_window_days": _resolve_time_window(args),
         "articles_per_day": args.articles_per_day,
         # --- experiment ---
         "ticker": config.experiment.target_ticker,
