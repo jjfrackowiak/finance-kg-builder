@@ -430,8 +430,11 @@ def load_and_prepare_data(
         f"✓ Filtered to {len(articles_df)} articles in {effective_days}-day window"
     )
 
-    # Fetch price data
-    ticker = articles_df["ticker"].iloc[0] if "ticker" in articles_df.columns else "TSLA"
+    # Fetch price data — TARGET_TICKER env var takes precedence over CSV column
+    ticker = (
+        os.getenv("TARGET_TICKER")
+        or (articles_df["ticker"].iloc[0] if "ticker" in articles_df.columns else "TSLA")
+    )
     price_raw = fetch_stooq_prices(ticker)
     price_df = build_return_labels(price_raw)
 

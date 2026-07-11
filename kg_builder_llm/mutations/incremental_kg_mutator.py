@@ -140,6 +140,9 @@ class IncrementalArticleKGMutator:
         Key normalization is handled automatically by the system, but LLM is
         instructed to create consistent, identifier-like keys for better deduplication.
         """
+        # ~800 token prompt overhead; keep article under 6000 tokens (~24000 chars) for 8192 limit
+        text = text[:24000]
+
         prompt = f"""Extract entities and relationships from the text below using the provided ontology. Return ONLY valid JSON — no prose, no markdown.
 
 ONTOLOGY:
