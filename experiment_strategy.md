@@ -72,64 +72,115 @@ if "ticker" in cfg:
 
 ---
 
+## Research Hypotheses
+
+The sweep is organised around the following testable claims. Each hypothesis isolates one hyperparameter dimension; the **Symmetry Principle** (below) ensures all other free dimensions co-vary uniformly across every group.
+
+**H1 — Market memory (lookback window)**  
+`--lookback-days` ∈ {1, 3, 5, 7}  
+AUC peaks at 3–5 days then drops. News older than ~1 week is too stale to carry directional signal in the graph.
+
+**H2 — Evolution depth is the core claim**  
+`--steps` ∈ {0, 3, 4, 5}  
+AUC increases with steps up to a convergence point. steps=0 is the no-evolution baseline the method must beat.
+
+**H3 — Multi-hop paths carry more signal than shallow ones**  
+`--min-chain-hops` = `--max-chain-hops` ∈ {4, 5, 6}  
+Deeper chains outperform shallower ones. Indirect entity chains encode signal not visible in direct mentions.
+
+**H4 — Exploration breadth (candidates per step)**  
+`--candidates` ∈ {1, 2, 3}  
+More candidates → better ontology selected per step → better AUC. Primarily a cost/quality tradeoff.
+
+**H6 — News volume per day**  
+`--articles-per-day` ∈ {3, 5, 10, 20}  
+AUC improves up to ~10 articles/day then saturates. Data efficiency: how much news does the graph need?
+
+**H7a — Which entity categories drive performance (post-hoc, zero extra jobs)**  
+Extracted from evolved ontologies after H1–H6 runs complete.  
+XGBoost feature importances aggregated by semantic category (corporate-fundamental, event-driven, macro-structural) reveal which ontology additions are responsible for AUC gains. Requires adding `feature/importances` artifact logging.
+
+**H7b — Evolution prompt strategy**  
+`--evolution-prompt` ∈ {default, fundamental, event-driven, macro-context}  
+Biasing ontology evolution toward corporate-fundamental entities outperforms the unstructured default. Each prompt uses the same AUC-gated threshold logic but guides the LLM toward a different semantic category cluster when proposing new types. Embedded as a co-varying dimension across **all** hypothesis groups (see Symmetry Principle below).
+
+---
+
+## Symmetry Principle
+
+Each hypothesis group varies **exactly one dimension** at a time. All other free dimensions are held at their reference value.
+
+**Evolution prompt (H7b) is not an isolated group — it co-varies with every other group.** Every config in every hypothesis group is replicated across all four prompt variants. This guarantees:
+
+1. The effect of any single hparam is not confounded with prompt choice
+2. H7b can be answered from the data of every hypothesis group, not a dedicated subset
+3. The full sweep is a clean factorial: (hypothesis dimension) × prompt × ticker
+
+**Reference values** (fixed except when explicitly varied):
+
+| Dimension | Reference |
+|-----------|-----------|
+| `steps` | 3 |
+| `lookback_days` | 3 |
+| `min_chain_hops` / `max_chain_hops` | 5 / 5 |
+| `candidates` | 2 |
+| `articles_per_day` | 5 |
+| `feature_mode` | path |
+
+**Dimensions always crossed with every group:**
+
+| Dimension | Values |
+|-----------|--------|
+| `evolution_prompt` | default, fundamental, event-driven, macro-context |
+| `ticker` | MSFT, TSLA |
+
+**Exception — steps=0 baseline:** the evolution prompt is never called at steps=0, so all four prompt variants would produce identical runs. Run 1 job per ticker (2 jobs total) as the baseline rather than 4 × 2 = 8 redundant jobs.
+
+**Job count per hypothesis group:**
+
+| Hypothesis | Varied dim | Values | Formula | Jobs |
+|------------|-----------|--------|---------|------|
+| H1 | lookback_days | {1, 3, 5, 7} | 4 × 4 prompts × 2 tickers | 32 |
+| H2 | steps | {0, 3, 4, 5} | 2 (baseline) + 3 × 4 × 2 | 26 |
+| H3 | chain hops (min=max) | {4, 5, 6} | 3 × 4 × 2 | 24 |
+| H4 | candidates | {1, 2, 3} | 3 × 4 × 2 | 24 |
+| H6 | articles_per_day | {3, 5, 10, 20} | 4 × 4 × 2 | 32 |
+| **Total** | | | | **138 jobs** |
+
+---
+
 ## Sweep Configs
 
-All configs use the finalised common window. `candidates=2` throughout Phase 1.
+All configs use the finalised common training window (`2022-05-02 → 2023-08-16`) unless otherwise noted. Configs are generated per hypothesis group following the Symmetry Principle above; see `kg_builder_llm/scripts/sweep.py`.
 
-### Phase 1 — Ablation: feature mode × ontology depth (24 jobs)
+### Phase 1 — Hypothesis sweep (138 jobs)
 
-Both tickers × all steps × all feature modes run in parallel.
+Generated as one JSON array, submitted in parallel. Grouped here for readability.
+
+**Common fields for all jobs:**
+```json
+"feature_mode": "path",
+"day_start": "2022-05-02",
+"day_end": "2023-08-16"
+```
+
+The four `evolution_prompt` values are: `default`, `fundamental`, `event-driven`, `macro-context`.  
+Full config JSON to be generated after prompt files are written (see H7b prompt files in `resources/`).
+
+### Phase 2 — OOS test (4 jobs, after Phase 1 config is locked)
+
+Best `steps` + `evolution_prompt` from Phase 1, both tickers, evolved vs. baseline:
 
 ```json
 [
-  {"ticker":"MSFT","steps":0,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":0,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":0,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":1,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":1,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":1,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":2,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":2,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":2,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":3,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":3,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":3,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":0,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":0,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":0,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":1,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":1,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":1,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":2,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":2,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":2,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":3,"candidates":2,"feature_mode":"path",    "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":3,"candidates":2,"feature_mode":"subgraph","day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":3,"candidates":2,"feature_mode":"hybrid",  "day_start":"2022-05-02","day_end":"2023-08-16","articles_per_day":10}
+  {"ticker":"MSFT","steps":0,        "candidates":2,"feature_mode":"path","evolution_prompt":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":5},
+  {"ticker":"MSFT","steps":"<best>", "candidates":2,"feature_mode":"path","evolution_prompt":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":5},
+  {"ticker":"TSLA","steps":0,        "candidates":2,"feature_mode":"path","evolution_prompt":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":5},
+  {"ticker":"TSLA","steps":"<best>", "candidates":2,"feature_mode":"path","evolution_prompt":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":5}
 ]
 ```
 
-### Phase 2 — OOS test (after Phase 1 config is locked, 4 jobs)
-
-Best `steps` + `feature_mode` from Phase 1, both tickers, evolved vs. baseline:
-
-```json
-[
-  {"ticker":"MSFT","steps":0,        "candidates":2,"feature_mode":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":10},
-  {"ticker":"MSFT","steps":"<best>", "candidates":2,"feature_mode":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":0,        "candidates":2,"feature_mode":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":10},
-  {"ticker":"TSLA","steps":"<best>", "candidates":2,"feature_mode":"<best>","day_start":"2023-08-16","day_end":"2023-12-16","articles_per_day":10}
-]
-```
-
-The evolved runs use `--fixed-ontology <path>` to load the schema from Phase 1 without re-running the LLM.
-
-**Total: 3 jobs.**
-
-### Phase 4 — Cross-ticker (best full config)
-
-Run the winning config from Phase 3 on MSFT and TSLA windows.  
-**Total: 2 jobs.**
+The evolved runs use `--fixed-ontology <path>` to load the schema from Phase 1 without re-running the LLM. **Total: 4 jobs.**
 
 ---
 

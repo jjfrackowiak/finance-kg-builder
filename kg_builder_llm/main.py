@@ -521,9 +521,18 @@ def _setup_mlflow(config: Config) -> None:
 
 def _make_run_name(args: argparse.Namespace, config: Config) -> str:
     """Build a human-readable run name from key CLI args."""
-    date_str = datetime.date.today().isoformat()
     ticker = config.experiment.target_ticker
-    return f"{ticker}-steps{args.steps}-cands{args.candidates}-{args.feature_mode}-{date_str}"
+    day_start = args.day_start or f"w{_resolve_time_window(args)}d"
+    prompt = args.evolution_prompt
+    if prompt and prompt != "default":
+        from pathlib import Path as _Path
+        prompt_label = _Path(prompt).stem.replace("_prompt_template", "")
+    else:
+        prompt_label = "default"
+    return (
+        f"{ticker}-steps{args.steps}-cands{args.candidates}"
+        f"-{args.feature_mode}-{prompt_label}-{day_start}"
+    )
 
 
 def _log_params(args: argparse.Namespace, config: Config) -> None:

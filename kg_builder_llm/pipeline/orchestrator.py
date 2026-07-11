@@ -368,9 +368,15 @@ class Orchestrator:
 
             self.results[candidate.candidate_tag] = metrics
             logger.info(
-                "Candidate %s: AUC=%.4f, F1=%.4f", candidate.candidate_tag, metrics.auc, metrics.f1
+                "Candidate %s: AUC=%.4f, F1=%.4f, Precision=%.4f, Recall=%.4f",
+                candidate.candidate_tag, metrics.auc, metrics.f1,
+                getattr(metrics, "precision", 0.0), getattr(metrics, "recall", 0.0),
             )
-            self._log_candidate_to_mlflow(candidate, metrics, step, idx)
+            self._log_candidate_to_mlflow(
+                candidate, metrics, step, idx,
+                nodes_added=nodes_added, rels_added=rels_added,
+                nodes_total=nodes_after, rels_total=rels_after,
+            )
 
         # Prune tags of losing candidates
         if self.results and self.candidates_per_step[step]:
@@ -746,7 +752,15 @@ class Orchestrator:
         try:
             with mlflow.start_run(run_name="baseline_article_embedding", nested=True):
                 mlflow.log_params({"candidate_tag": "baseline_article_embedding", "step": 0})
-                mlflow.log_metrics({"auc": metrics.auc, "f1": metrics.f1})
+                mlflow.log_metrics({
+                    "auc": metrics.auc,
+                    "f1": metrics.f1,
+                    "precision": getattr(metrics, "precision", 0.0),
+                    "recall": getattr(metrics, "recall", 0.0),
+                    "brier_score": getattr(metrics, "brier_score", 0.0),
+                    "n_train_days": getattr(metrics, "n_train_days", 0),
+                    "n_val_days": getattr(metrics, "n_val_days", 0),
+                }, step=0)
                 mlflow.set_tag("winner", "false")
         except Exception as e:
             logger.warning("MLflow baseline logging failed: %s", e)
@@ -757,8 +771,16 @@ class Orchestrator:
         metrics,
         step: int,
         variant_idx: int,
+        nodes_added: int = 0,
+        rels_added: int = 0,
+        nodes_total: int = 0,
+        rels_total: int = 0,
     ) -> None:
         """Log a single candidate's metrics and ontology params as a nested MLflow run."""
+        import json
+        import os
+        import tempfile
+
         try:
             node_labels = [
                 n.get("label", "") if isinstance(n, dict) else str(n)
@@ -768,6 +790,7 @@ class Orchestrator:
                 r.get("label", "") if isinstance(r, dict) else str(r)
                 for r in candidate.schema.get("relationship_types", [])
             ]
+            prev_node_types = len(candidate.schema.get("node_types", [])) - nodes_added
             with mlflow.start_run(run_name=candidate.candidate_tag, nested=True) as run:
                 mlflow.log_params({
                     "candidate_tag": candidate.candidate_tag,
@@ -783,9 +806,49 @@ class Orchestrator:
                 mlflow.log_metrics({
                     "auc": metrics.auc,
                     "f1": metrics.f1,
+                    "precision": getattr(metrics, "precision", 0.0),
+                    "recall": getattr(metrics, "recall", 0.0),
+                    "brier_score": getattr(metrics, "brier_score", 0.0),
                     "max_hops_train": metrics.max_hops_train,
                     "max_hops_val": metrics.max_hops_val,
-                })
+                    "n_train_days": getattr(metrics, "n_train_days", 0),
+                    "n_val_days": getattr(metrics, "n_val_days", 0),
+                    "graph/n_nodes": nodes_total,
+                    "graph/n_edges": rels_total,
+                    "graph/nodes_added": nodes_added,
+                    "graph/rels_added": rels_added,
+                }, step=step)
+
+                # Feature importances artifact
+                fi = getattr(metrics, "feature_importances", None)
+                if fi:
+                    with tempfile.NamedTemporaryFile(
+                        mode="w", suffix=".json", delete=False,
+                        prefix=f"fi_step{step}_v{variant_idx}_",
+                    ) as f:
+                        json.dump({"feature_importances": fi}, f)
+                        tmp_fi = f.name
+                    mlflow.log_artifact(tmp_fi, artifact_path="feature_importances")
+                    os.unlink(tmp_fi)
+
+                # Per-candidate ontology snapshot (survives mid-run failure)
+                ontology_snapshot = {
+                    "candidate_tag": candidate.candidate_tag,
+                    "step": step,
+                    "schema": candidate.schema,
+                    "description": candidate.description,
+                    "metrics": {"auc": metrics.auc, "f1": metrics.f1,
+                                "precision": getattr(metrics, "precision", 0.0)},
+                }
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".json", delete=False,
+                    prefix=f"ontology_step{step}_v{variant_idx}_",
+                ) as f:
+                    json.dump(ontology_snapshot, f, indent=2, default=str)
+                    tmp_ont = f.name
+                mlflow.log_artifact(tmp_ont, artifact_path="ontologies")
+                os.unlink(tmp_ont)
+
                 self._mlflow_run_ids[candidate.candidate_tag] = run.info.run_id
         except Exception as e:
             logger.warning("MLflow logging failed for %s: %s", candidate.candidate_tag, e)

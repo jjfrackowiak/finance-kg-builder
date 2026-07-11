@@ -1,0 +1,62 @@
+You are a knowledge graph ontology designer optimizing for financial news analysis.
+
+TASK: Evolve the following ontology by ADDING NEW entity types and relationships not present in the current schema.
+
+Previous ontology:
+```json
+{schema_json}
+```
+
+EXISTING ENTITY TYPES IN CURRENT SCHEMA:
+{existing_nodes}
+
+EXISTING RELATIONSHIP TYPES:
+{existing_rels}
+
+Performance metrics:
+- AUC: {auc:.4f}
+- F1: {f1:.4f}
+- Max hops in training period: {max_hops_train}
+- Max hops in validation period: {max_hops_val}
+
+Variant index: {variant_index}
+
+CRITICAL INSTRUCTIONS FOR EVOLUTION:
+1. MUST ADD NEW entity types that are NOT in the existing nodes list
+2. For property types, ONLY use: STRING, INTEGER, FLOAT, BOOLEAN
+3. NEVER use NUMBER - use FLOAT or INTEGER instead
+4. MUST ADD NEW relationships involving the new entity types
+5. Keep all existing node_types and relationship_types
+6. Patterns MUST be formatted as ["NodeA", "RELATIONSHIP", "NodeB"]
+7. Return ONLY valid JSON with all required fields
+
+STRATEGY — Event-Driven:
+Focus on entity types representing discrete, time-anchored events that can move a
+stock price on a specific day. These are identifiable occurrences reported in news
+articles: deals, executive actions, product milestones, regulatory decisions. Each
+entity should be extractable from a single article with a clear date and participants.
+
+For variant {variant_index}:
+- If metrics.auc < 0.55: Add corporate transaction and agreement entities NOT already in the schema.
+  Priority types: Deal (type STRING, value_usd FLOAT, status STRING),
+  Acquisition (target STRING, acquirer STRING, value_usd FLOAT, status STRING),
+  Partnership (parties STRING, domain STRING, duration_years FLOAT).
+  Relationships to add: (Company)-[ANNOUNCED]->(Deal), (Company)-[ACQUIRING]->(Acquisition),
+  (Company)-[ENTERED]->(Partnership), (Deal)-[INVOLVES]->(Company).
+
+- If 0.55 <= metrics.auc < 0.60: Add company-initiated event entities NOT already in the schema.
+  Priority types: ProductLaunch (name STRING, category STRING, market STRING),
+  ExecutiveStatement (speaker STRING, topic STRING, sentiment STRING),
+  ShareholderMeeting (date STRING, agenda STRING, outcome STRING).
+  Relationships to add: (Company)-[LAUNCHED]->(ProductLaunch),
+  (Executive)-[STATED]->(ExecutiveStatement), (ExecutiveStatement)-[CONCERNS]->(Company),
+  (Company)-[HELD]->(ShareholderMeeting).
+
+- If metrics.auc >= 0.60: Add external event entities affecting the company NOT already in the schema.
+  Priority types: Regulation (authority STRING, scope STRING, effective_date STRING, direction STRING),
+  LegalProceeding (type STRING, plaintiff STRING, status STRING, potential_impact FLOAT),
+  GovernmentContract (value_usd FLOAT, agency STRING, duration_years FLOAT).
+  Relationships to add: (Regulation)-[AFFECTS]->(Company), (Company)-[SUBJECT_TO]->(LegalProceeding),
+  (Company)-[AWARDED]->(GovernmentContract).
+
+Return ONLY valid JSON, no prose.

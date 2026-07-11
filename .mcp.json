@@ -28,6 +28,13 @@
       "type": "stdio",
       "command": "npx",
       "args": ["@drawio/mcp"]
+    },
+    "mlflow-mcp": {
+      "command": "uv",
+      "args": ["run", "--with", "mlflow[mcp]>=3.5.1", "mlflow", "mcp", "run"],
+      "env": {
+        "MLFLOW_TRACKING_URI": "https://dagshub.com/jjfrackowiak/finance-kg-builder.mlflow"
+      }
     }
   }
 }

@@ -1,0 +1,58 @@
+You are a knowledge graph ontology designer optimizing for financial news analysis.
+
+TASK: Evolve the following ontology by ADDING NEW entity types and relationships not present in the current schema.
+
+Previous ontology:
+```json
+{schema_json}
+```
+
+EXISTING ENTITY TYPES IN CURRENT SCHEMA:
+{existing_nodes}
+
+EXISTING RELATIONSHIP TYPES:
+{existing_rels}
+
+Performance metrics:
+- AUC: {auc:.4f}
+- F1: {f1:.4f}
+- Max hops in training period: {max_hops_train}
+- Max hops in validation period: {max_hops_val}
+
+Variant index: {variant_index}
+
+CRITICAL INSTRUCTIONS FOR EVOLUTION:
+1. MUST ADD NEW entity types that are NOT in the existing nodes list
+2. For property types, ONLY use: STRING, INTEGER, FLOAT, BOOLEAN
+3. NEVER use NUMBER - use FLOAT or INTEGER instead
+4. MUST ADD NEW relationships involving the new entity types
+5. Keep all existing node_types and relationship_types
+6. Patterns MUST be formatted as ["NodeA", "RELATIONSHIP", "NodeB"]
+7. Return ONLY valid JSON with all required fields
+
+STRATEGY — Corporate Fundamentals:
+Focus on entity types derived from company-specific financial performance information
+found in earnings reports, analyst coverage, and corporate guidance. These entities
+have a direct, time-anchored relationship to individual stock price movement.
+
+For variant {variant_index}:
+- If metrics.auc < 0.55: Add corporate financial performance entities that are NOT already in the schema.
+  Priority types: EarningsReport (properties: eps_actual FLOAT, eps_estimate FLOAT, revenue FLOAT, period STRING),
+  RevenueGrowth (yoy_pct FLOAT, qoq_pct FLOAT), EPSEstimate (value FLOAT, analyst_count INTEGER).
+  Relationships to add: (Company)-[REPORTED]->(EarningsReport), (EarningsReport)-[BEAT_BY]->(EPSEstimate).
+
+- If 0.55 <= metrics.auc < 0.60: Add analyst signal entities that are NOT already in the schema.
+  Priority types: AnalystRating (action STRING, rating STRING, firm STRING),
+  PriceTarget (value FLOAT, direction STRING, firm STRING),
+  ConsensusEstimate (mean FLOAT, high FLOAT, low FLOAT, analyst_count INTEGER).
+  Relationships to add: (Analyst)-[ISSUED]->(AnalystRating), (AnalystRating)-[TARGETS]->(Company),
+  (AnalystRating)-[SETS]->(PriceTarget).
+
+- If metrics.auc >= 0.60: Add fine-grained corporate signalling entities NOT already in the schema.
+  Priority types: EarningsSurprise (magnitude FLOAT, direction STRING),
+  GuidanceRevision (type STRING, direction STRING, magnitude FLOAT),
+  InstitutionalHolder (name STRING, stake_pct FLOAT, change_pct FLOAT).
+  Relationships to add: (EarningsReport)-[PRODUCED]->(EarningsSurprise),
+  (Company)-[REVISED]->(GuidanceRevision), (InstitutionalHolder)-[HOLDS]->(Company).
+
+Return ONLY valid JSON, no prose.

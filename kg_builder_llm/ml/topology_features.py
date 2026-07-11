@@ -1,7 +1,8 @@
 """Local topology feature extraction for temporal graph analysis."""
 
 import logging
-from typing import Dict, List
+from datetime import date as python_date
+from typing import Dict
 
 import numpy as np
 
@@ -15,55 +16,63 @@ def compute_topology_features(
     eval_date: str,
     lookback_days: int = 2,
 ) -> Dict[str, np.ndarray]:
-    """
-    Compute local topology features for entities mentioned in recent time window.
-    
-    Features per entity:
-    - in_degree: number of incoming relationships
-    - out_degree: number of outgoing relationships
-    - unique_in_neighbors: count of unique source nodes
-    - unique_out_neighbors: count of unique target nodes
-    - relation_type_diversity: number of distinct relationship types
-    - mention_count: how many articles mention this entity in window
-    - days_since_first_mention: novelty score (negative = older)
-    - mention_frequency_trend: mention count increasing/decreasing
-    
+    """Compute local topology features for entities mentioned in recent time window.
+
+    Single Cypher query returns all 7 raw stats per entity; Python computes derived features.
+
+    Feature vector (8 dims) per entity:
+      [in_degree, out_degree, unique_in_neighbors, unique_out_neighbors,
+       rel_type_diversity, mention_count_in_window, days_since_first_mention, total_degree]
+
     Args:
         driver: GraphDriver instance
-        eval_date: Evaluation date (YYYY-MM-DD format)
+        eval_date: Evaluation date (YYYY-MM-DD)
         lookback_days: Number of days before eval_date to include
-    
+
     Returns:
-        Dict mapping node_id → feature_vector (np.ndarray of shape (8,))
+        Dict mapping node_id → np.ndarray of shape (8,)
     """
     logger.info(
         "Computing topology features for eval_date=%s, lookback_days=%d",
         eval_date,
         lookback_days,
     )
-    
-    # Query all entities mentioned in the lookback window
+
     query = """
     MATCH (article:Article)
     WHERE article.date >= date($eval_date) - duration({days: $lookback_days})
-      AND article.date <= $eval_date
+      AND article.date <= date($eval_date)
     MATCH (n)-[:MENTIONED_IN]->(article)
     WITH DISTINCT n
-    
-    // Compute in/out degrees (only past edges)
-    OPTIONAL MATCH (n)<-[r_in]-(other)
-    WHERE other.date <= $eval_date AND r_in.date <= $eval_date
-    OPTIONAL MATCH (n)-[r_out]->(other2)
-    WHERE other2.date <= $eval_date AND r_out.date <= $eval_date
-    
-    RETURN 
-        elementId(n) as node_id,
-        count(DISTINCT r_in) as in_degree,
-        count(DISTINCT r_out) as out_degree,
-        count(DISTINCT other) as unique_in_neighbors,
-        count(DISTINCT other2) as unique_out_neighbors
+
+    // Mention count in the lookback window
+    OPTIONAL MATCH (n)-[:MENTIONED_IN]->(win_art:Article)
+    WHERE win_art.date >= date($eval_date) - duration({days: $lookback_days})
+      AND win_art.date <= date($eval_date)
+    WITH n, count(DISTINCT win_art) AS mention_count
+
+    // First-ever mention date (entity novelty)
+    OPTIONAL MATCH (n)-[:MENTIONED_IN]->(any_art:Article)
+    WITH n, mention_count, min(any_art.date) AS first_date
+
+    // In-degree (all relationships in graph — temporal isolation handled by allowed_tags)
+    OPTIONAL MATCH (n)<-[r_in]-(src)
+    WITH n, mention_count, first_date,
+         count(DISTINCT r_in) AS in_degree,
+         count(DISTINCT src)  AS unique_in_neighbors
+
+    // Out-degree
+    OPTIONAL MATCH (n)-[r_out]->(tgt)
+    RETURN
+        elementId(n)          AS node_id,
+        in_degree,
+        count(DISTINCT r_out) AS out_degree,
+        unique_in_neighbors,
+        count(DISTINCT tgt)   AS unique_out_neighbors,
+        mention_count,
+        first_date
     """
-    
+
     try:
         results = driver.run_query(
             query,
@@ -72,70 +81,40 @@ def compute_topology_features(
     except Exception as e:
         logger.error("Error querying topology features: %s", str(e))
         return {}
-    
-    features_dict = {}
-    
+
     if not results:
         logger.warning("No topology features found for eval_date=%s", eval_date)
-        return features_dict
-    
+        return {}
+
+    eval_dt = python_date.fromisoformat(eval_date)
+    features_dict = {}
+
     for row in results:
         node_id = row.get("node_id")
-        in_deg = float(row.get("in_degree", 0))
-        out_deg = float(row.get("out_degree", 0))
-        in_neighbors = float(row.get("unique_in_neighbors", 0))
-        out_neighbors = float(row.get("unique_out_neighbors", 0))
-        
-        # Compute additional features
+        in_deg = float(row.get("in_degree") or 0)
+        out_deg = float(row.get("out_degree") or 0)
+        in_neighbors = float(row.get("unique_in_neighbors") or 0)
+        out_neighbors = float(row.get("unique_out_neighbors") or 0)
+        mention_count = float(row.get("mention_count") or 0)
+
         rel_diversity = (in_deg + out_deg) / max(in_neighbors + out_neighbors, 1)
-        
-        # Count mentions in window
-        mention_query = """
-        MATCH (n)-[:MENTIONED_IN]->(a:Article)
-        WHERE elementId(n) = $node_id 
-          AND a.date >= date($eval_date) - duration({days: $lookback_days})
-          AND a.date <= $eval_date
-        RETURN count(DISTINCT a) as mention_count
-        """
-        
-        mention_result = driver.run_query(
-            mention_query,
-            parameters={"node_id": node_id, "eval_date": eval_date, "lookback_days": lookback_days},
-        )
-        mention_count = float(mention_result[0].get("mention_count", 0)) if mention_result else 0
-        
-        # Days since first mention (novelty)
-        first_mention_query = """
-        MATCH (n)-[:MENTIONED_IN]->(a:Article)
-        WHERE elementId(n) = $node_id
-        RETURN min(a.date) as first_date
-        """
-        
-        first_result = driver.run_query(first_mention_query, parameters={"node_id": node_id})
-        if first_result and first_result[0].get("first_date"):
-            # Simple: negative days since first mention
-            days_since = 0  # Could compute from dates if needed
+
+        first_date = row.get("first_date")
+        if first_date is not None:
+            try:
+                first_dt = python_date(first_date.year, first_date.month, first_date.day)
+                days_since = float((eval_dt - first_dt).days)
+            except Exception:
+                days_since = 0.0
         else:
-            days_since = -999  # Never mentioned before
-        
-        # Create feature vector: [in_deg, out_deg, in_neighbors, out_neighbors, rel_div, mention_count, days_since, node_degree_sum]
-        feature_vector = np.array(
-            [
-                in_deg,
-                out_deg,
-                in_neighbors,
-                out_neighbors,
-                rel_diversity,
-                mention_count,
-                days_since,
-                in_deg + out_deg,  # Total degree
-            ],
+            days_since = 0.0
+
+        features_dict[node_id] = np.array(
+            [in_deg, out_deg, in_neighbors, out_neighbors,
+             rel_diversity, mention_count, days_since, in_deg + out_deg],
             dtype=np.float32,
         )
-        
-        features_dict[node_id] = feature_vector
-        logger.debug("Node %s: features=%s", node_id[:8], feature_vector)
-    
+
     logger.info("Computed topology features for %d entities", len(features_dict))
     return features_dict
 

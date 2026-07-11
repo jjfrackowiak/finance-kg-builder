@@ -18,9 +18,11 @@ class MlflowClient:
 
     def __init__(self):
         self.base_url = os.environ.get("MLFLOW_TRACKING_URI", "").rstrip("/")
+        # DagsHub accepts token as password for HTTP basic auth
+        password = os.environ.get("MLFLOW_TRACKING_PASSWORD") or os.environ.get("MLFLOW_TRACKING_TOKEN", "")
         self.auth = (
             os.environ.get("MLFLOW_TRACKING_USERNAME", ""),
-            os.environ.get("MLFLOW_TRACKING_PASSWORD", ""),
+            password,
         )
 
     def _post(self, path: str, body: dict) -> dict:
@@ -124,6 +126,10 @@ def build_job_manifest(
         f" --articles-per-day {cfg['articles_per_day']}"
         if "articles_per_day" in cfg else ""
     )
+    evolution_prompt_arg = (
+        f" --evolution-prompt {cfg['evolution_prompt']}"
+        if "evolution_prompt" in cfg else ""
+    )
     main_cmd = (
         f"python -m kg_builder_llm.main"
         f" --steps {cfg.get('steps', 1)}"
@@ -131,6 +137,7 @@ def build_job_manifest(
         f" --feature-mode {cfg.get('feature_mode', 'path')}"
         f"{date_args}"
         f"{articles_per_day_arg}"
+        f"{evolution_prompt_arg}"
     )
 
     use_sidecar = neo4j_mode == "sidecar" and not stub

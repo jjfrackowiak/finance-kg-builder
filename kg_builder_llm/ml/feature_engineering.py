@@ -209,7 +209,10 @@ def build_day_feature_vector(
     
     if not articles:
         logger.warning("No articles found in window, returning zero vector")
-        return np.zeros(embed_dim + 8, dtype=np.float32), 0, 0  # embed_dim chains + 8 topology (no text), 0 chains, 0 max_hops
+        use_path = feature_mode in {"path", "hybrid"}
+        use_subgraph = feature_mode in {"subgraph", "hybrid"}
+        zero_dim = (embed_dim if use_path else 0) + (96 if use_subgraph else 0) + 8
+        return np.zeros(zero_dim, dtype=np.float32), 0, 0
     
     # Skip text embedding - current representation uses structural signals only.
     logger.info("Skipping text embeddings - using structural feature blocks")

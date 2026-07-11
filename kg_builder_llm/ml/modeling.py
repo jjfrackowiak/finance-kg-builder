@@ -1,12 +1,18 @@
 """Model training and evaluation."""
 
 import logging
-from dataclasses import dataclass
-from typing import Dict, Tuple
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import f1_score, roc_auc_score
+from sklearn.metrics import (
+    brier_score_loss,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from xgboost import XGBClassifier
 
 logger = logging.getLogger(__name__)
@@ -20,6 +26,12 @@ class ModelMetrics:
     f1: float
     max_hops_train: int
     max_hops_val: int
+    precision: float = 0.0
+    recall: float = 0.0
+    brier_score: float = 0.0
+    n_train_days: int = 0
+    n_val_days: int = 0
+    feature_importances: Optional[List[float]] = None
 
 
 def build_day_embedding_frame(
@@ -71,47 +83,6 @@ def build_day_embedding_frame(
         missing,
     )
     return df
-
-
-def temporal_train_val_split(
-    df: pd.DataFrame,
-    train_fraction: float = 0.7,
-) -> tuple:
-    """Temporal split by day: first N_train days for train, remaining for validation.
-
-    Args:
-        df: DataFrame with 'day' column
-        train_fraction: Fraction of days for training (default 0.7)
-
-    Returns:
-        (train_df, val_df)
-    """
-    if df.empty:
-        raise ValueError("Input DataFrame is empty. Cannot perform temporal train/val split.")
-
-    logger.info("Performing temporal train/val split")
-
-    df_sorted = df.sort_values("day").reset_index(drop=True)
-    unique_days = sorted(df_sorted["day"].unique().tolist())
-    n_days = len(unique_days)
-
-    logger.debug("Found %d unique days in dataset", n_days)
-
-    n_train_days = max(1, int(train_fraction * n_days))
-    train_days = set(unique_days[:n_train_days])
-
-    train_df = df_sorted[df_sorted["day"].isin(train_days)].copy()
-    val_df = df_sorted[~df_sorted["day"].isin(train_days)].copy()
-
-    logger.info(
-        "Temporal split: %d train days (%d rows), %d validation days (%d rows)",
-        n_train_days,
-        len(train_df),
-        n_days - n_train_days,
-        len(val_df),
-    )
-
-    return train_df, val_df
 
 
 def temporal_train_val_split(
@@ -250,17 +221,33 @@ def train_classifier_on_embeddings(
     # Metrics
     if len(np.unique(y_val)) > 1:
         auc = roc_auc_score(y_val, y_proba)
+        brier = brier_score_loss(y_val, y_proba)
     else:
         auc = float("nan")
+        brier = float("nan")
     f1 = f1_score(y_val, y_pred, zero_division=0.0)
+    prec = precision_score(y_val, y_pred, zero_division=0.0)
+    rec = recall_score(y_val, y_pred, zero_division=0.0)
 
-    logger.info("Validation metrics — AUC: %.4f, F1 Score: %.4f", auc, f1)
+    n_train_days = train_df["day"].nunique() if "day" in train_df.columns else len(train_df)
+    n_val_days = val_df["day"].nunique() if "day" in val_df.columns else len(val_df)
+
+    logger.info(
+        "Validation metrics — AUC: %.4f, F1: %.4f, Precision: %.4f, Recall: %.4f, Brier: %.4f",
+        auc, f1, prec, rec, brier,
+    )
 
     return ModelMetrics(
         auc=auc,
         f1=f1,
+        precision=prec,
+        recall=rec,
+        brier_score=brier,
         max_hops_train=len(train_df),
         max_hops_val=len(val_df),
+        n_train_days=n_train_days,
+        n_val_days=n_val_days,
+        feature_importances=model.feature_importances_.tolist(),
     )
 
 
