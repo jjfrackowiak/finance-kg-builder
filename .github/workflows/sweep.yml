@@ -116,14 +116,13 @@ jobs:
             --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" \
             --scaling-config desiredSize=${{ github.event.inputs.gpu_nodes }} \
             --region ${{ env.AWS_REGION }}
-          echo "Waiting for fresh GPU node to join cluster (timeout 15m)..."
+          echo "Waiting for at least 1 GPU node to be Ready (timeout 15m)..."
           DEADLINE=$((SECONDS + 900))
-          until kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -q .; do
-            [ $SECONDS -ge $DEADLINE ] && echo "Timed out waiting for GPU node to join" && exit 1
+          until kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -qE "^\S+\s+Ready\s"; do
+            [ $SECONDS -ge $DEADLINE ] && echo "Timed out waiting for Ready GPU node" && exit 1
             sleep 10
           done
-          echo "Node joined — waiting for Ready (timeout 15m)..."
-          kubectl wait node -l node-role=gpu --for=condition=Ready --timeout=900s
+          echo "GPU node is Ready"
 
       - name: 📦 Install dependencies
         run: pip install kubernetes
