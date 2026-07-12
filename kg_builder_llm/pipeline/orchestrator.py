@@ -124,6 +124,8 @@ class Orchestrator:
                     "precision": getattr(metrics, "precision", 0.0),
                     "recall": getattr(metrics, "recall", 0.0),
                     "brier_score": getattr(metrics, "brier_score", 0.0),
+                    "max_hops_train": getattr(metrics, "max_hops_train", 0),
+                    "max_hops_val": getattr(metrics, "max_hops_val", 0),
                     "n_train_days": getattr(metrics, "n_train_days", 0),
                     "graph/n_nodes": getattr(metrics, "n_nodes_total", 0),
                     "graph/n_edges": getattr(metrics, "n_rels_total", 0),
