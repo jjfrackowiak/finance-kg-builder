@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import Dict, List
 
@@ -106,6 +107,31 @@ class Orchestrator:
         """
         logger.info("Starting experiment with %d articles", len(articles_df))
 
+        # Capture parent run ID early so we can log step-level metrics to it
+        # (inside nested child runs the parent is no longer the active run)
+        _parent_run = mlflow.active_run()
+        _parent_run_id = _parent_run.info.run_id if _parent_run else None
+        _mlflow_client = MlflowClient() if _parent_run_id else None
+
+        def _log_to_parent(metrics, step: int) -> None:
+            if not (_mlflow_client and _parent_run_id):
+                return
+            try:
+                ts = int(time.time() * 1000)
+                for key, val in {
+                    "auc": metrics.auc,
+                    "f1": metrics.f1,
+                    "precision": getattr(metrics, "precision", 0.0),
+                    "recall": getattr(metrics, "recall", 0.0),
+                    "brier_score": getattr(metrics, "brier_score", 0.0),
+                    "n_train_days": getattr(metrics, "n_train_days", 0),
+                    "graph/n_nodes": getattr(metrics, "n_nodes_total", 0),
+                    "graph/n_edges": getattr(metrics, "n_rels_total", 0),
+                }.items():
+                    _mlflow_client.log_metric(_parent_run_id, key, float(val), timestamp=ts, step=step)
+            except Exception as e:
+                logger.warning("MLflow parent step logging failed at step %d: %s", step, e)
+
         # Clear the graph completely for clean state
         logger.info("Clearing Neo4j graph...")
         self.driver.run_query("MATCH (n) DETACH DELETE n")
@@ -151,6 +177,7 @@ class Orchestrator:
             baseline_metrics.f1,
         )
         self._log_baseline_to_mlflow(baseline_metrics)
+        _log_to_parent(baseline_metrics, step=0)
 
         # STEP 1+: Evolve and evaluate ontologies using incremental mutation
         # num_steps=0 means only base, num_steps=1 means base + 1 evolution step, etc.
@@ -171,6 +198,7 @@ class Orchestrator:
 
             # Select best from THIS step only (not global)
             best_candidate = self._select_best_candidate_from_current_step(step)
+            _log_to_parent(self.results.get(best_candidate.candidate_tag), step=step)
 
         logger.info("Experiment completed")
 
