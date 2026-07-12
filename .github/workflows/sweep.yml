@@ -122,10 +122,17 @@ jobs:
             --scaling-config desiredSize=${{ github.event.inputs.gpu_nodes }} \
             --region ${{ env.AWS_REGION }}
 
+          echo "Waiting for CPU nodegroup to be ACTIVE before scaling..."
+          CPU_NG="${{ steps.config.outputs.prefix }}-cpu"
+          DEADLINE=$((SECONDS + 300))
+          until [ "$(aws eks describe-nodegroup --cluster-name "${{ steps.config.outputs.prefix }}-eks" --nodegroup-name "$CPU_NG" --query 'nodegroup.status' --output text --region ${{ env.AWS_REGION }} 2>/dev/null)" = "ACTIVE" ]; do
+            [ $SECONDS -ge $DEADLINE ] && echo "Timeout waiting for CPU nodegroup ACTIVE" && break
+            sleep 15
+          done
           echo "Scaling CPU node group to ${{ github.event.inputs.cpu_nodes }}..."
           aws eks update-nodegroup-config \
             --cluster-name "${{ steps.config.outputs.prefix }}-eks" \
-            --nodegroup-name "${{ steps.config.outputs.prefix }}-cpu" \
+            --nodegroup-name "$CPU_NG" \
             --scaling-config desiredSize=${{ github.event.inputs.cpu_nodes }} \
             --region ${{ env.AWS_REGION }}
 
@@ -182,13 +189,18 @@ jobs:
             --name "${{ steps.config.outputs.prefix }}-eks" \
             --region ${{ env.AWS_REGION }}
           kubectl scale deployment vllm embeddings --replicas=0 -n kg-experiments || true
-          aws eks update-nodegroup-config \
-            --cluster-name "${{ steps.config.outputs.prefix }}-eks" \
-            --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" \
-            --scaling-config desiredSize=0 \
-            --region ${{ env.AWS_REGION }} || true
-          aws eks update-nodegroup-config \
-            --cluster-name "${{ steps.config.outputs.prefix }}-eks" \
-            --nodegroup-name "${{ steps.config.outputs.prefix }}-cpu" \
-            --scaling-config desiredSize=1 \
-            --region ${{ env.AWS_REGION }} || true
+          CLUSTER="${{ steps.config.outputs.prefix }}-eks"
+          REGION="${{ env.AWS_REGION }}"
+
+          wait_active() {
+            local ng="$1" deadline=$((SECONDS + 300))
+            until [ "$(aws eks describe-nodegroup --cluster-name "$CLUSTER" --nodegroup-name "$ng" --query 'nodegroup.status' --output text --region "$REGION" 2>/dev/null)" = "ACTIVE" ]; do
+              [ $SECONDS -ge $deadline ] && echo "Timeout waiting for $ng ACTIVE, skipping scale" && return 1
+              sleep 15
+            done
+          }
+
+          wait_active "${{ steps.config.outputs.prefix }}-gpu" && \
+            aws eks update-nodegroup-config --cluster-name "$CLUSTER" --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" --scaling-config desiredSize=0 --region "$REGION" || true
+          wait_active "${{ steps.config.outputs.prefix }}-cpu" && \
+            aws eks update-nodegroup-config --cluster-name "$CLUSTER" --nodegroup-name "${{ steps.config.outputs.prefix }}-cpu" --scaling-config desiredSize=1 --region "$REGION" || true
