@@ -23,6 +23,10 @@ on:
         description: 'Number of GPU nodes (g5.xlarge) to provision'
         required: false
         default: '1'
+      cpu_nodes:
+        description: 'Number of CPU nodes (t3.xlarge) to provision for jobs (1–12)'
+        required: false
+        default: '1'
       neo4j_mode:
         description: 'Neo4j mode: sidecar (ephemeral per-job) or external (AuraDB from kg-secrets)'
         required: false
@@ -101,7 +105,7 @@ jobs:
           echo "mlflow_uri=$URI"     >> $GITHUB_OUTPUT
           echo "mlflow_token=$TOKEN" >> $GITHUB_OUTPUT
 
-      - name: ⚡ Scale up GPU node group
+      - name: ⚡ Scale up GPU and CPU node groups
         run: |
           echo "Draining stale GPU nodes (timeout 3m)..."
           DRAIN_DEADLINE=$((SECONDS + 180))
@@ -110,12 +114,21 @@ jobs:
               kubectl delete node -l node-role=gpu --ignore-not-found && break
             sleep 10
           done
+
           echo "Scaling GPU node group to ${{ github.event.inputs.gpu_nodes }}..."
           aws eks update-nodegroup-config \
             --cluster-name "${{ steps.config.outputs.prefix }}-eks" \
             --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" \
             --scaling-config desiredSize=${{ github.event.inputs.gpu_nodes }} \
             --region ${{ env.AWS_REGION }}
+
+          echo "Scaling CPU node group to ${{ github.event.inputs.cpu_nodes }}..."
+          aws eks update-nodegroup-config \
+            --cluster-name "${{ steps.config.outputs.prefix }}-eks" \
+            --nodegroup-name "${{ steps.config.outputs.prefix }}-cpu" \
+            --scaling-config desiredSize=${{ github.event.inputs.cpu_nodes }} \
+            --region ${{ env.AWS_REGION }}
+
           echo "Waiting for at least 1 GPU node to be Ready (timeout 15m)..."
           DEADLINE=$((SECONDS + 900))
           until kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -qE "^\S+\s+Ready\s"; do
@@ -123,6 +136,14 @@ jobs:
             sleep 10
           done
           echo "GPU node is Ready"
+
+          echo "Waiting for ${{ github.event.inputs.cpu_nodes }} CPU nodes to be Ready (timeout 5m)..."
+          DEADLINE=$((SECONDS + 300))
+          until [ "$(kubectl get nodes -l node-role=cpu --no-headers 2>/dev/null | grep -c 'Ready')" -ge "${{ github.event.inputs.cpu_nodes }}" ]; do
+            [ $SECONDS -ge $DEADLINE ] && echo "Warning: not all CPU nodes ready yet, continuing anyway" && break
+            sleep 10
+          done
+          echo "CPU nodes ready"
 
       - name: 📦 Install dependencies
         run: pip install kubernetes
@@ -165,4 +186,9 @@ jobs:
             --cluster-name "${{ steps.config.outputs.prefix }}-eks" \
             --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" \
             --scaling-config desiredSize=0 \
+            --region ${{ env.AWS_REGION }} || true
+          aws eks update-nodegroup-config \
+            --cluster-name "${{ steps.config.outputs.prefix }}-eks" \
+            --nodegroup-name "${{ steps.config.outputs.prefix }}-cpu" \
+            --scaling-config desiredSize=1 \
             --region ${{ env.AWS_REGION }} || true

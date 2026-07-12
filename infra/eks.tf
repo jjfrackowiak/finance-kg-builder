@@ -149,7 +149,7 @@ resource "aws_eks_node_group" "cpu" {
   node_group_name = "${var.prefix}-cpu"
   node_role_arn   = aws_iam_role.eks_nodes.arn
   subnet_ids      = aws_subnet.private[*].id
-  instance_types  = ["t3.medium"]
+  instance_types  = ["t3.xlarge"]
 
   launch_template {
     id      = aws_launch_template.cpu.id
@@ -159,11 +159,14 @@ resource "aws_eks_node_group" "cpu" {
   scaling_config {
     desired_size = 1
     min_size     = 1
-    max_size     = 3
+    max_size     = 12
   }
 
   labels = { node-role = "cpu" }
-  tags   = var.tags
+  tags   = merge(var.tags, {
+    "k8s.io/cluster-autoscaler/enabled"           = "true"
+    "k8s.io/cluster-autoscaler/${var.prefix}-eks" = "owned"
+  })
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node,
