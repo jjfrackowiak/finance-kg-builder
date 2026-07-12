@@ -1,3 +1,87 @@
-% 05_experiments — stub
-\TODO{Write this section}
-DATA description for sure, experimental setup baseline...
+\subsection{Data}
+\label{sec:data}
+
+We use a subset of the FNSPID dataset~\citep{dong2024fnspid} covering three Nasdaq tickers ---
+NVDA, MSFT, and TSLA --- comprising 26{,}165 news articles (8{,}716, 8{,}737, and 8{,}712
+articles respectively) with full article text, headline, and timestamp.
+For each ticker we define a common in-sample window from 2 May 2022 to 16 August 2023 (338
+trading days), used for the ontology-evolution sweep and the temporal train/validation split of
+Section~\ref{sec:eval-protocol}, and hold out a subsequent 4-month out-of-sample window from 16
+August 2023 to 16 December 2023 (88 trading days) that is not seen during ontology search and is
+reserved for final evaluation of the selected ontology.
+News coverage is sparse in early 2022 for MSFT and TSLA (fewer than 10 articles/day in the 25th
+percentile), which motivates aligning the common window on TSLA's first coverage date rather than
+on the full price history.
+Figure~\ref{fig:windows} shows adjusted close price and daily article volume for each ticker over
+the full history, with the in-sample and out-of-sample windows overlaid.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/experiment_windows.png}
+  \caption{FNSPID price history and news coverage, with experiment windows.}
+  \label{fig:windows}
+\end{figure}
+
+\subsection{Baselines}
+\label{sec:baselines}
+
+We compare against two reference conditions.
+The \emph{text-only baseline} of Section~\ref{sec:eval-protocol} isolates the contribution of
+graph structure by replacing KG-derived features with mean-pooled article text embeddings under
+an identical day set and temporal split.
+The \emph{static-ontology baseline} targeted by H\ref{hyp:accuracy} freezes the schema at the seed
+ontology of Section~\ref{sec:ontology-repr} for the full step budget, so that no evolution takes
+place; this isolates the contribution of the feedback loop itself from that of KG construction in
+general.
+% TODO: report static-ontology baseline run count/seeds once the dedicated control run completes.
+
+\subsection{Models}
+\label{sec:models}
+
+The pipeline separates two LLM roles that differ in required capacity and call volume.
+
+\paragraph{Extraction SLM}
+The KG Builder Agent (Section~\ref{sec:construction}) issues one extraction call per article and
+is the highest-volume LLM consumer in the loop.
+We serve it with an AWQ-quantized small language model, \texttt{Qwen2.5-7B-Instruct-AWQ}, through
+a self-hosted vLLM server exposing an OpenAI-compatible API on a single GPU node (8192-token
+context), trading model capacity for the throughput needed to run many candidates in parallel
+under the sweep budget.
+
+\paragraph{Ontology Evolution LLM}
+The Ontology Evolution Agent (Section~\ref{sec:evolution}) issues one proposal call per step and
+reasons over the aggregated feedback signal from all candidates at that step, a lower-volume,
+higher-reasoning task.
+We serve this role with \texttt{qwen.qwen3-32b-v1:0} via AWS Bedrock rather than the local vLLM
+deployment.
+
+\paragraph{Embeddings}
+Article and node text embeddings (feature construction and the text-only baseline) use
+\texttt{sentence-transformers/all-MiniLM-L6-v2}, served through Hugging Face Text Embeddings
+Inference (TEI) on a CPU node.
+
+\subsection{Sweep Configuration}
+\label{sec:sweep-config}
+
+Each run of the ontology-evolution loop is configured by a target ticker, a number of evolution
+steps, and a number of candidate ontologies proposed per step; the sweep reported in
+Section~\ref{sec:results} runs all three tickers independently under matched step and candidate
+budgets so that results are comparable across tickers.
+
+\subsection{Infrastructure}
+\label{sec:infrastructure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{figures/infrastructure.png}
+  \caption{Experimental infrastructure.}
+  \label{fig:infrastructure}
+\end{figure}
+
+The ontology-evolution sweep is run on the cloud pipeline shown in Figure~\ref{fig:infrastructure}:
+a push to the \texttt{finance-kg-builder} repository triggers a GitHub Actions workflow that
+provisions the Amazon EKS cluster via Terraform, builds and pushes the orchestrator image, and
+launches the sweep as parallel Kubernetes jobs, each pairing a KG Builder job pod with a Neo4j
+sidecar, a CPU node group serving embeddings, and a GPU node group serving the extraction SLM
+(Section~\ref{sec:models}); run metrics are logged to DagsHub MLflow, and ontology-proposal calls
+are routed to AWS Bedrock.
