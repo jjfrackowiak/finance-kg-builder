@@ -119,6 +119,58 @@ Each sweep job tests one semantic category by biasing the evolution prompt:
 
 ---
 
+## Idea 5 — Population-Level Category–AUC Correlation (no schema changes required)
+
+**What it shows:** Whether candidates whose model relies more heavily on a given semantic
+category of KG features tend to achieve higher AUC — using only signals every sweep run already
+produces, or can produce with a one-line addition: final validation AUC, the trained classifier's
+`feature_importances_`, and the candidate's persisted ontology definition. Unlike Ideas 1, 3, and
+4, this requires no evolution-prompt constraint, no structured `hypothesis`/`semantic_category`
+LLM output, and no masked-feature ablation re-evaluation — it is purely observational, computed
+after the sweep has already run.
+
+**Mechanism:**
+1. *Offline bucket labelling, no runtime changes.* For each completed candidate, load its stored
+   ontology JSON (`T_N ∪ T_R` types) and forward-hash every type string through the same
+   `_hash_bucket` function already used in `ml/subgraph_features.py`, producing a
+   `bucket → {type_name, ...}` map specific to that candidate. This is possible without any new
+   instrumentation because the full type vocabulary is already persisted per candidate
+   (`core/ontology_io.py`) — nothing needs to be logged that isn't logged today. Reuse the
+   `SEMANTIC_CATEGORY_MAP` from Idea 2 to fold buckets into coarse categories.
+2. *Feature importances, one-line addition.* Extract `model.feature_importances_` right after
+   `model.fit()` in `ml/modeling.py` — no architecture or LLM-output change, just persisting an
+   array that already exists in memory at evaluation time.
+3. *Per-candidate category score.* Sum `feature_importances_` over the buckets attributed to each
+   category (step 1), giving one importance share per category per candidate.
+4. *Population-level correlation.* Across all completed sweep candidates (pooled, not a single
+   step-by-step trace), correlate each category's importance share with candidate AUC — Spearman
+   correlation or a simple OLS per category is enough; no need to fit anything more complex.
+
+**Caveats to state honestly:**
+- Only meaningful for `subgraph`/`hybrid` feature-mode runs; the `path` mode's 384-dim embedding
+  vector isn't hash-bucketed to types and can't be labelled this way.
+- Node-type (16 buckets) and relation-type (24 buckets) histograms have low collision risk for
+  typical ontology sizes; metapath buckets (48) are far more collision-prone given the
+  combinatorial number of possible typed 2-/3-hop paths — treat metapath-bucket attributions as
+  noisier than node/relation-type ones, not as ground truth.
+- This is correlational across the candidate population, not a causal per-type attribution (that
+  is what Idea 3's ablation is for) — report as "associated with," not "causes."
+
+**Files to modify:**
+- `kg_builder_llm/ml/subgraph_features.py` — add `bucket_to_type(ontology_dict, buckets) ->
+  dict[int, list[str]]`, forward-hashing every type string from a stored ontology definition
+  (reuses `_hash_bucket`); reuse/extend `SEMANTIC_CATEGORY_MAP` from Idea 2.
+- `kg_builder_llm/ml/modeling.py` — persist `feature_importances_` alongside AUC/F1 after
+  `model.fit()`.
+- new `kg_builder_llm/scripts/semantic_category_auc_correlation.py` — post-hoc script: pull AUC +
+  feature importances + ontology JSON per candidate from MLflow/Neo4j, apply `bucket_to_type`,
+  aggregate by category, compute correlation with AUC across the full sweep.
+
+**Paper artefact:** bar chart, semantic category on the x-axis, correlation with candidate AUC on
+the y-axis, computed across the full sweep (MSFT and TSLA shown separately or pooled).
+
+---
+
 ## Implementation Priority
 
 | Priority | Work item | Effort | Files |
@@ -131,5 +183,9 @@ Each sweep job tests one semantic category by biasing the evolution prompt:
 | **P2** | Ablation evaluator (mask per entity type) | High | `evaluator.py`, `orchestrator.py` |
 | **P2** | Semantic network plot script | Medium | new `scripts/plot_semantic_network.py` |
 | **P3** | Per-category hypothesis prompt variants | Low | `resources/hypothesis_*.txt` |
+| **P0'** | Bucket→type labelling + feature-importance logging (Idea 5) | Low | `subgraph_features.py`, `modeling.py`, new `scripts/semantic_category_auc_correlation.py` |
 
-**Sequence:** P0 first (shapes data collected from next sweep), then P1 (adds logging only), then P2/P3 for paper figures.
+**Sequence:** P0 first (shapes data collected from next sweep), then P1 (adds logging only), then
+P2/P3 for paper figures. P0' (Idea 5) needs no prompt/schema changes and works retroactively on
+any already-completed sweep — it can run in parallel with P0, ahead of Ideas 1–4, as a cheap first
+result to validate before investing in the heavier LLM-output changes.

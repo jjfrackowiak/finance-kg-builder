@@ -56,7 +56,7 @@ More candidates → better ontology selected per step → better AUC. Primarily 
 `--articles-per-day` ∈ {3, 5, 10, 20}  
 AUC improves up to ~10 articles/day then saturates. Data efficiency: how much news does the graph need?
 
-**H7a — Which entity categories drive performance (post-hoc, zero extra jobs)**  
+**H7a — Which entity categories drive performance (post-hoc)**  
 Extracted from evolved ontologies after H1–H6 runs complete.  
 XGBoost feature importances aggregated by semantic category (corporate-fundamental, event-driven, macro-structural) reveal which ontology additions are responsible for AUC gains. Requires adding `feature/importances` artifact logging.
 
@@ -146,7 +146,13 @@ Source: `feature/importances` artifact.
 
 ---
 
-See `planning/POST_HOC_SEMANTIC_COMPARISON.md` for post-hoc analysis ideas and implementation plan.
+## Post-hoc Semantic Attribution
+
+**Per-candidate category importance.** Label each hash bucket in the subgraph feature vector with
+the entity/relationship type(s) that map to it by forward-hashing the ontology's known type
+vocabulary, then aggregate the trained XGBoost `feature_importances_` by semantic category
+(corporate fundamentals, macro, supply chain, etc.) for a single evaluated candidate. Needs a
+one-line addition to persist `feature_importances_` and a bucket→type labelling utility.
 
 ---
 
