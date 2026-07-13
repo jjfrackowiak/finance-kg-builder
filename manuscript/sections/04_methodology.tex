@@ -191,6 +191,28 @@ single 384-dimensional path vector $\mathbf{p}_d \in \mathbb{R}^{384}$.
 As the ontology evolves and relationship types become more semantically specific, the chain strings
 become more discriminative, directly linking ontology quality to feature quality.
 
+\paragraph{Subgraph histograms.}
+An alternative, purely count-based block avoids embedding chain text altogether.
+For entities mentioned in the lookback window, three hash-bucketed histograms are built by
+deterministically mapping tokens to buckets via truncated MD5 hashing --- the first 8 hex digits
+of the token's MD5 digest are read as an integer and reduced modulo the bucket count, giving a
+bucket index in $[0, \text{buckets})$ regardless of the token's length or vocabulary: a node-type
+histogram (16 buckets), a relationship-type histogram (24 buckets, restricted to relationships
+tagged with the ontology candidate under evaluation), and a histogram of typed 2- and 3-hop
+metapaths (48 buckets, node-and-relationship-type sequences such as
+\texttt{Company>MENTIONS>Article>WRITTEN\_BY>Author}).
+Because tokens are hashed rather than looked up in a fixed vocabulary, the vector dimensionality
+is identical across candidates regardless of how many distinct types each ontology introduces.
+The bucket a given token maps to is otherwise arbitrary, but the mapping is fixed for a token
+across days and steps, so the resulting counts are a consistent, reproducible signal for the
+classifier to exploit even though individual buckets carry no inherent semantic label.
+Eight further temporal-novelty statistics summarise the window without hashing: article count,
+mentioned-entity count, new/recurring/undated entity counts (relative to each entity's first
+mention date, enforcing the same temporal integrity as the topology features below), the
+resulting novelty and recurrence ratios, and entities per article.
+Concatenating these four components yields a 96-dimensional subgraph vector
+$\mathbf{s}_d \in \mathbb{R}^{96}$.
+
 \paragraph{Topology features.}
 For each entity mentioned in the lookback window, eight local graph statistics are computed against
 the graph state up to and including day $d$, enforcing temporal integrity.
@@ -201,12 +223,19 @@ connectivity is), mention count (number of articles in the window that reference
 days since first mention (an entity recency proxy), and total degree.
 These per-entity vectors are mean-aggregated across all entities mentioned in the window to produce
 a topology vector $\mathbf{t}_d \in \mathbb{R}^{8}$.
-Unlike path embeddings, topology features are schema-agnostic by construction: they count
-relationships without inspecting their types and therefore remain comparable across all ontology
-candidates.
+Unlike the path and subgraph blocks, topology features are schema-agnostic by construction: the
+underlying query counts relationships without filtering by candidate tag or inspecting relationship
+types, so $\mathbf{t}_d$ is identical across ontology candidates and any AUC difference between
+candidates cannot be attributed to it.
 
-The final day-level feature vector is the concatenation
-$\mathbf{x}_d = [\,\mathbf{p}_d \;\|\; \mathbf{t}_d\,] \in \mathbb{R}^{392}$.
+\paragraph{Feature modes.}
+The path, subgraph, and topology blocks are combined according to one of three feature modes,
+selected per run and swept as an ablation dimension (Section~\ref{sec:sweep-config}):
+\texttt{path} ($\mathbf{x}_d = [\,\mathbf{p}_d \,\|\, \mathbf{t}_d\,] \in \mathbb{R}^{392}$),
+\texttt{subgraph} ($\mathbf{x}_d = [\,\mathbf{s}_d \,\|\, \mathbf{t}_d\,] \in \mathbb{R}^{104}$), and
+\texttt{hybrid} ($\mathbf{x}_d = [\,\mathbf{p}_d \,\|\, \mathbf{s}_d \,\|\, \mathbf{t}_d\,] \in
+\mathbb{R}^{488}$), which concatenates all three and is the reference feature mode
+(Table~\ref{tab:sweep-dims}).
 
 \subsection{Downstream Classifier and Evaluation Protocol}
 \label{sec:eval-protocol}

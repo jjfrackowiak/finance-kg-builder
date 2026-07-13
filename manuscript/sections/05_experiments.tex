@@ -5,15 +5,17 @@ We use a subset of the FNSPID dataset~\citep{dong2024fnspid} covering three Nasd
 NVDA, MSFT, and TSLA --- comprising 26{,}165 news articles (8{,}716, 8{,}737, and 8{,}712
 articles respectively) with full article text, headline, and timestamp.
 For each ticker we define a common in-sample window from 2 May 2022 to 16 August 2023 (338
-trading days), used for the ontology-evolution sweep and the temporal train/validation split of
+trading days), used for the ontology-evolution sweep and the temporal train/validation split defined in
 Section~\ref{sec:eval-protocol}, and hold out a subsequent 4-month out-of-sample window from 16
 August 2023 to 16 December 2023 (88 trading days) that is not seen during ontology search and is
 reserved for final evaluation of the selected ontology.
-News coverage is sparse in early 2022 for MSFT and TSLA (fewer than 10 articles/day in the 25th
-percentile), which motivates aligning the common window on TSLA's first coverage date rather than
-on the full price history.
+The window starts at TSLA's first coverage date (2 May 2022), where all three tickers reach
+consistently dense article volume; earlier months are excluded due to sparse MSFT and TSLA
+coverage (fewer than 10 articles/day at the 25th percentile).
 Figure~\ref{fig:windows} shows adjusted close price and daily article volume for each ticker over
 the full history, with the in-sample and out-of-sample windows overlaid.
+NVDA is retained here for descriptive completeness but excluded from the primary sweep
+(Section~\ref{sec:sweep-config}).
 
 \begin{figure}[t]
   \centering
@@ -25,15 +27,15 @@ the full history, with the in-sample and out-of-sample windows overlaid.
 \subsection{Baselines}
 \label{sec:baselines}
 
-We compare against two reference conditions.
-The \emph{text-only baseline} of Section~\ref{sec:eval-protocol} isolates the contribution of
-graph structure by replacing KG-derived features with mean-pooled article text embeddings under
-an identical day set and temporal split.
-The \emph{static-ontology baseline} targeted by H\ref{hyp:accuracy} freezes the schema at the seed
-ontology of Section~\ref{sec:ontology-repr} for the full step budget, so that no evolution takes
-place; this isolates the contribution of the feedback loop itself from that of KG construction in
-general.
-% TODO: report static-ontology baseline run count/seeds once the dedicated control run completes.
+We compare against two reference conditions, both targeted by H\ref{hyp:accuracy}.
+The text-only baseline, described in Section~\ref{sec:eval-protocol}, isolates the
+contribution of graph structure by replacing KG-derived features with mean-pooled article text
+embeddings under an identical day set and temporal split.
+The static-ontology baseline is an independently constructed graph, built by the same KG Builder
+Agent and LLM extraction pipeline as the task-aware candidates (Section~\ref{sec:construction})
+using the default construction method, but never revised by the Ontology Evolution Agent in
+response to the downstream feedback signal; this isolates the contribution of the feedback loop
+itself from that of KG construction in general.
 
 \subsection{Models}
 \label{sec:models}
@@ -63,10 +65,42 @@ Inference (TEI) on a CPU node.
 \subsection{Sweep Configuration}
 \label{sec:sweep-config}
 
-Each run of the ontology-evolution loop is configured by a target ticker, a number of evolution
-steps, and a number of candidate ontologies proposed per step; the sweep reported in
-Section~\ref{sec:results} runs all three tickers independently under matched step and candidate
-budgets so that results are comparable across tickers.
+Rather than a full grid search, the sweep is organized as single-dimension ablations around one
+reference configuration (3 evolution steps, 3-day lookback, chain hops fixed at 5, 2 candidates
+per step, 5 articles/day, hybrid feature mode of Section~\ref{sec:features}): each group varies
+exactly one dimension while holding all others at their reference value, so that per-dimension
+effects are not confounded by simultaneous changes elsewhere.
+Table~\ref{tab:sweep-dims} lists the swept dimensions.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lll}
+\toprule
+Dimension & Values swept & Reference \\
+\midrule
+Evolution steps & 0, 3, 4, 5 & 3 \\
+Lookback window (days) & 1, 3, 5, 7 & 3 \\
+Chain hops (min = max) & 4, 5, 6 & 5 \\
+Candidates per step & 1, 2, 3 & 2 \\
+Articles per day & 3, 5, 10, 20 & 5 \\
+\bottomrule
+\end{tabular}
+\caption{Dimensions ablated in the sweep and the reference value each is held at when another
+dimension is varied.}
+\label{tab:sweep-dims}
+\end{table}
+
+Every configuration in every group is further crossed with four evolution-prompt variants
+(\texttt{default}, \texttt{fundamental}, \texttt{event-driven}, \texttt{macro-context}), which
+bias the Ontology Evolution Agent toward different semantic categories when proposing new node
+and relationship types, and with two tickers, MSFT and TSLA.
+NVDA is excluded from the primary sweep: over the training window it undergoes a near-4$\times$
+rally driven by the AI sector narrative, so next-day direction is dominated by macro demand rather
+than article-level graph signal, making the prediction task either trivially easy or
+uninformative.
+Combined, this design totals 138 jobs: 32 for the lookback sweep, 26 for the evolution-depth sweep
+(2 no-evolution jobs plus 24 evolved), 24 for the chain-hop sweep, 24 for the candidate-breadth
+sweep, and 32 for the articles-per-day sweep.
 
 \subsection{Infrastructure}
 \label{sec:infrastructure}
@@ -80,8 +114,8 @@ budgets so that results are comparable across tickers.
 
 The ontology-evolution sweep is run on the cloud pipeline shown in Figure~\ref{fig:infrastructure}:
 a push to the \texttt{finance-kg-builder} repository triggers a GitHub Actions workflow that
-provisions the Amazon EKS cluster via Terraform, builds and pushes the orchestrator image, and
-launches the sweep as parallel Kubernetes jobs, each pairing a KG Builder job pod with a Neo4j
+provisions the Amazon EKS cluster via Terraform, builds and pushes the orchestrator image. A separate 
+dispatch workflow launches the sweep as parallel Kubernetes jobs, each pairing a KG Builder job pod with a Neo4j
 sidecar, a CPU node group serving embeddings, and a GPU node group serving the extraction SLM
 (Section~\ref{sec:models}); run metrics are logged to DagsHub MLflow, and ontology-proposal calls
 are routed to AWS Bedrock.

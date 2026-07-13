@@ -8,14 +8,19 @@ accuracy, graph efficiency, and structural informativeness.
 
 \begin{hypothesis}\label{hyp:accuracy}
 Task-aware knowledge graph construction improves prediction accuracy in node-level
-price movement classification compared to static graph construction approaches.
+price movement classification compared to both (i) a static, unoptimized knowledge
+graph built once under a fixed base ontology and (ii) a graph-free baseline using
+mean-pooled article text embeddings.
 \end{hypothesis}
 
 Ontology configurations that are better aligned with the prediction objective should
-produce graph-derived features with higher discriminative power. H\ref{hyp:accuracy}
-is evaluated by comparing AUC and F1-score of the downstream classifier trained on
-features extracted from task-aware KG variants against a static baseline in which the
-ontology is fixed throughout (Section~\ref{sec:results}).
+produce graph-derived features with higher discriminative power than both an
+unoptimized graph and raw article text alone. H\ref{hyp:accuracy} is evaluated by
+comparing AUC and F1-score of the downstream classifier trained on features extracted
+from task-aware KG variants against the static-ontology baseline, a graph built once
+under the fixed base schema of Section~\ref{sec:ontology-repr} and never revised, and
+against the text-only baseline, which uses mean-pooled article embeddings with no
+graph at all (Section~\ref{sec:baselines}, Section~\ref{sec:results}).
 
 \begin{hypothesis}\label{hyp:efficiency}
 Task-aware optimization enables smaller knowledge graphs while maintaining or
