@@ -109,6 +109,34 @@ Each hypothesis group varies **exactly one dimension** at a time. All other free
 
 ---
 
+## Open Design Questions
+
+**Subgroup averaging instead of a single reference run.** The Symmetry Principle currently
+compares every swept value against one fixed pseudo-default configuration (`steps=3,
+lookback_days=3, chain hops=5, candidates=2, articles_per_day=5`), so each ablation's effect is
+read off relative to a single arbitrary point rather than the spread of outcomes when other
+dimensions vary too. Since `evolution_prompt` and `ticker` are already crossed with every group,
+we could instead compare a swept value's mean AUC across its 8 replicate runs (4 prompts × 2
+tickers) against the mean AUC of other subgroups that are otherwise identical, rather than
+collapsing each group to the single reference config's AUC — this is less sensitive to the
+reference point being an unrepresentative pick.
+
+**One node+relationship pair per evolution step.** Extend the single-addition constraint (see
+`planning/POST_HOC_SEMANTIC_COMPARISON.md` Idea 1) so each step proposes exactly one new node
+type *and* the one relationship type that connects it, as a single coupled addition, rather than
+a node type or a relationship type alone. A relationship type with no new node to reach isn't
+independently attributable, and a new node type with no new relationship reaching it is inert —
+pairing them keeps each step's causal unit clean and directly attributable to one ΔAUC.
+
+**Drop non-improving winners for monotonic AUC.** Each step currently advances to the candidate
+with the highest validation AUC even when that AUC is below the current best-so-far, so
+step-by-step AUC plots can be non-monotonic and muddy the "evolution helps" narrative. Add a
+gating rule: only adopt a step's winning candidate as the new base ontology if its AUC exceeds
+the current best; otherwise keep the ontology unchanged for that step. This makes the AUC-vs-step
+curve monotonic by construction, at the cost of some steps producing no schema change.
+
+---
+
 ## Paper Figures & Tables
 
 ### Table 1 — Main ablation (from Phase 1)
