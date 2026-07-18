@@ -38,6 +38,9 @@ class OntologyCandidate:
     description: str = "Ontology candidate"
     parent_tag: Optional[str] = None
     step_index: int = 0
+    # Set in single-addition mode: the one schema change vs the parent,
+    # e.g. {"node": "CreditRating", "relationship": "RATED_BY", "patterns": [...]}
+    addition: Optional[Dict[str, Any]] = None
 
 
 def create_base_ontology() -> OntologyCandidate:

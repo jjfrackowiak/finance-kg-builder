@@ -41,6 +41,7 @@ if env_path.exists():
 # Helper Functions - Data
 # ============================================================================
 
+
 def fetch_stooq_prices(symbol: str = "TSLA") -> pd.DataFrame:
     """Fetch daily OHLC data via yfinance.
 
@@ -97,6 +98,7 @@ def build_return_labels(price_df: pd.DataFrame) -> pd.DataFrame:
 # CLI Argument Parsing
 # ============================================================================
 
+
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -111,7 +113,7 @@ Examples:
     )
 
     # === Data Arguments ===
-    data_group = parser.add_argument_group('data arguments', 'Input data configuration')
+    data_group = parser.add_argument_group("data arguments", "Input data configuration")
     data_group.add_argument(
         "--data",
         type=str,
@@ -150,7 +152,9 @@ Examples:
     )
 
     # === Experiment Arguments ===
-    exp_group = parser.add_argument_group('experiment arguments', 'Ontology evolution configuration')
+    exp_group = parser.add_argument_group(
+        "experiment arguments", "Ontology evolution configuration"
+    )
     exp_group.add_argument(
         "--steps",
         type=int,
@@ -188,9 +192,15 @@ Examples:
         default=0.0,
         help="Allowed AUC regression before a step is dropped by the acceptance gate (default: 0.0)",
     )
+    exp_group.add_argument(
+        "--single-addition",
+        action="store_true",
+        help="Each candidate proposes exactly one new node type + one new relationship "
+        "type per step; per-addition ΔAUC is tracked and logged to MLflow",
+    )
 
     # === Embedding Arguments ===
-    embed_group = parser.add_argument_group('embedding arguments', 'Text embedding configuration')
+    embed_group = parser.add_argument_group("embedding arguments", "Text embedding configuration")
     embed_group.add_argument(
         "--embedding-type",
         type=str,
@@ -206,7 +216,9 @@ Examples:
     )
 
     # === Feature Engineering Hyperparameters ===
-    feat_group = parser.add_argument_group('feature engineering', 'Feature extraction hyperparameters')
+    feat_group = parser.add_argument_group(
+        "feature engineering", "Feature extraction hyperparameters"
+    )
     feat_group.add_argument(
         "--lookback-days",
         type=int,
@@ -229,7 +241,14 @@ Examples:
         "--path-uniqueness",
         type=str,
         default="NODE_PATH",
-        choices=["NODE_PATH", "NODE_GLOBAL", "RELATIONSHIP_PATH", "RELATIONSHIP_GLOBAL", "NODE_LEVEL", "NONE"],
+        choices=[
+            "NODE_PATH",
+            "NODE_GLOBAL",
+            "RELATIONSHIP_PATH",
+            "RELATIONSHIP_GLOBAL",
+            "NODE_LEVEL",
+            "NONE",
+        ],
         help="APOC path uniqueness mode for chain extraction (default: NODE_PATH)",
     )
     feat_group.add_argument(
@@ -247,7 +266,7 @@ Examples:
         help="Maximum hop count for temporal subgraph metapath features (default: 2)",
     )
     # === Model Training Hyperparameters ===
-    model_group = parser.add_argument_group('model training', 'Model training hyperparameters')
+    model_group = parser.add_argument_group("model training", "Model training hyperparameters")
     model_group.add_argument(
         "--train-ratio",
         type=float,
@@ -256,7 +275,7 @@ Examples:
     )
 
     # === Output Arguments ===
-    output_group = parser.add_argument_group('output arguments', 'Results and logging')
+    output_group = parser.add_argument_group("output arguments", "Results and logging")
     output_group.add_argument(
         "--output",
         type=str,
@@ -278,12 +297,13 @@ Examples:
 # Helper Functions - Configuration
 # ============================================================================
 
+
 def setup_config(args: argparse.Namespace) -> Config:
     """Load and configure the application configuration.
-    
+
     Args:
         args: Parsed command line arguments
-        
+
     Returns:
         Configured Config object
     """
@@ -297,6 +317,7 @@ def setup_config(args: argparse.Namespace) -> Config:
     config.experiment.evolution_prompt_template = args.evolution_prompt
     config.experiment.drop_regressing_steps = not args.keep_regressing_steps
     config.experiment.auc_drop_tolerance = args.auc_drop_tolerance
+    config.experiment.single_addition = args.single_addition
     config.experiment.feature.embedding_type = args.embedding_type
     config.experiment.feature.local_model_name = args.local_model
     config.experiment.feature.lookback_days = args.lookback_days
@@ -316,41 +337,45 @@ def setup_config(args: argparse.Namespace) -> Config:
     if config.experiment.feature.embedding_type == "local":
         logger.info(f"  - LOCAL_MODEL={config.experiment.feature.local_model_name}")
     logger.info(f"  - LOOKBACK_DAYS={config.experiment.feature.lookback_days}")
-    logger.info(f"  - CHAIN_HOPS={config.experiment.feature.min_chain_hops}-{config.experiment.feature.max_chain_hops}")
+    logger.info(
+        f"  - CHAIN_HOPS={config.experiment.feature.min_chain_hops}-{config.experiment.feature.max_chain_hops}"
+    )
     logger.info(f"  - PATH_UNIQUENESS={config.experiment.feature.path_uniqueness}")
     logger.info(f"  - FEATURE_MODE={config.experiment.feature.feature_mode}")
     logger.info(f"  - MAX_METAPATH_HOPS={config.experiment.feature.max_metapath_hops}")
     logger.info(f"  - TRAIN_RATIO={config.experiment.feature.train_ratio:.2f}")
     logger.info(f"  - EVOLUTION_PROMPT={config.experiment.evolution_prompt_template}")
-    
+
     return config
 
 
 def validate_config(config: Config) -> None:
     """Validate configuration has required values.
-    
+
     Args:
         config: Configuration to validate
-        
+
     Raises:
         ValueError: If required configuration is missing
     """
     if config.experiment.feature.embedding_type == "openai" and not config.openai.api_key:
-        raise ValueError("OPENAI_API_KEY not set in environment (required for openai embedding type)")
-    
+        raise ValueError(
+            "OPENAI_API_KEY not set in environment (required for openai embedding type)"
+        )
+
     if not config.neo4j.password:
         raise ValueError("NEO4J_PASSWORD not set in environment")
 
 
 def initialize_driver(config: Config) -> GraphDriver:
     """Initialize and test Neo4j driver connection.
-    
+
     Args:
         config: Configuration with Neo4j settings
-        
+
     Returns:
         Connected GraphDriver instance
-        
+
     Raises:
         ConnectionError: If connection to Neo4j fails
     """
@@ -361,7 +386,7 @@ def initialize_driver(config: Config) -> GraphDriver:
         password=config.neo4j.password,
         database=config.neo4j.database,
     )
-    
+
     try:
         driver.run_query("RETURN 1 as test")
         logger.info("✓ Connected to Neo4j")
@@ -389,11 +414,7 @@ def _resolve_time_window(args: argparse.Namespace) -> int:
     if args.day_end is None:
         return args.time_window_days
     end = datetime.date.fromisoformat(args.day_end)
-    start = (
-        datetime.date.fromisoformat(args.day_start)
-        if args.day_start
-        else None
-    )
+    start = datetime.date.fromisoformat(args.day_start) if args.day_start else None
     if start is None:
         raise ValueError("--day-end requires --day-start to be set")
     delta = (end - start).days
@@ -406,13 +427,13 @@ def load_and_prepare_data(
     args: argparse.Namespace,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """Load and prepare articles and price data.
-    
+
     Args:
         args: Command line arguments with data paths
-        
+
     Returns:
         Tuple of (articles_df, price_df)
-        
+
     Raises:
         FileNotFoundError: If data file not found
     """
@@ -440,14 +461,11 @@ def load_and_prepare_data(
         articles_per_day=args.articles_per_day,
         start_date=_parse_day_start(args.day_start),
     )
-    logger.info(
-        f"✓ Filtered to {len(articles_df)} articles in {effective_days}-day window"
-    )
+    logger.info(f"✓ Filtered to {len(articles_df)} articles in {effective_days}-day window")
 
     # Fetch price data — TARGET_TICKER env var takes precedence over CSV column
-    ticker = (
-        os.getenv("TARGET_TICKER")
-        or (articles_df["ticker"].iloc[0] if "ticker" in articles_df.columns else "TSLA")
+    ticker = os.getenv("TARGET_TICKER") or (
+        articles_df["ticker"].iloc[0] if "ticker" in articles_df.columns else "TSLA"
     )
     price_raw = fetch_stooq_prices(ticker)
     price_df = build_return_labels(price_raw)
@@ -462,13 +480,13 @@ def load_and_prepare_data(
     mask = (price_df["date"] >= article_start) & (price_df["date"] <= article_end)
     price_df = price_df[mask].copy()
     logger.info(f"✓ Filtered price data to {len(price_df)} trading days")
-    
+
     return articles_df, price_df
 
 
 def save_results(results: dict, output_path: Path) -> None:
     """Save experiment results to JSON file.
-    
+
     Args:
         results: Dictionary of results by candidate tag
         output_path: Path to save results
@@ -495,6 +513,7 @@ def save_results(results: dict, output_path: Path) -> None:
 # MLflow Helpers
 # ============================================================================
 
+
 def _log_data_stats(
     articles_df: pd.DataFrame,
     price_df: pd.DataFrame,
@@ -511,19 +530,27 @@ def _log_data_stats(
     n_val_days = n_price_days - n_train_days
     class_balance = float(price_df["direction"].mean()) if "direction" in price_df.columns else 0.0
 
-    mlflow.log_params({
-        "n_articles_actual": n_articles,
-        "n_days_actual": n_days,
-        "date_start_actual": date_start,
-        "date_end_actual": date_end,
-        "n_price_days": n_price_days,
-        "n_train_days": n_train_days,
-        "n_val_days": n_val_days,
-    })
+    mlflow.log_params(
+        {
+            "n_articles_actual": n_articles,
+            "n_days_actual": n_days,
+            "date_start_actual": date_start,
+            "date_end_actual": date_end,
+            "n_price_days": n_price_days,
+            "n_train_days": n_train_days,
+            "n_val_days": n_val_days,
+        }
+    )
     mlflow.log_metric("class_balance", class_balance)
     logger.info(
         "Data: %d articles, %d days (%s → %s), %d price days, train=%d val=%d, up_days=%.1f%%",
-        n_articles, n_days, date_start, date_end, n_price_days, n_train_days, n_val_days,
+        n_articles,
+        n_days,
+        date_start,
+        date_end,
+        n_price_days,
+        n_train_days,
+        n_val_days,
         class_balance * 100,
     )
 
@@ -543,6 +570,7 @@ def _make_run_name(args: argparse.Namespace, config: Config) -> str:
     prompt = args.evolution_prompt
     if prompt and prompt != "default":
         from pathlib import Path as _Path
+
         prompt_label = _Path(prompt).stem.replace("_prompt_template", "")
     else:
         prompt_label = "default"
@@ -554,41 +582,43 @@ def _make_run_name(args: argparse.Namespace, config: Config) -> str:
 
 def _log_params(args: argparse.Namespace, config: Config) -> None:
     """Log all experiment hyperparameters to the active MLflow run."""
-    mlflow.log_params({
-        # --- data ---
-        "data_file": args.data,
-        "day_start": args.day_start or "earliest",
-        "day_end": args.day_end or "derived",
-        "time_window_days": _resolve_time_window(args),
-        "articles_per_day": args.articles_per_day,
-        # --- experiment ---
-        "ticker": config.experiment.target_ticker,
-        "steps": args.steps,
-        "candidates": args.candidates,
-        "semaphore_limit": args.semaphore_limit,
-        "evolution_prompt": args.evolution_prompt,
-        # --- embedding ---
-        "embedding_type": args.embedding_type,
-        "local_model": args.local_model,
-        # --- feature engineering ---
-        "lookback_days": args.lookback_days,
-        "feature_mode": args.feature_mode,
-        "min_chain_hops": args.min_chain_hops,
-        "max_chain_hops": args.max_chain_hops,
-        "path_uniqueness": args.path_uniqueness,
-        "max_metapath_hops": args.max_metapath_hops,
-        # --- model training ---
-        "train_ratio": args.train_ratio,
-        # --- output ---
-        "output": args.output,
-        "log_level": args.log_level,
-        # --- infrastructure (no credentials) ---
-        "llm_model": config.openai.model_name,
-        "llm_base_url": config.openai.base_url or "openai",
-        "neo4j_uri": config.neo4j.uri,
-        "neo4j_user": config.neo4j.user,
-        "neo4j_database": config.neo4j.database,
-    })
+    mlflow.log_params(
+        {
+            # --- data ---
+            "data_file": args.data,
+            "day_start": args.day_start or "earliest",
+            "day_end": args.day_end or "derived",
+            "time_window_days": _resolve_time_window(args),
+            "articles_per_day": args.articles_per_day,
+            # --- experiment ---
+            "ticker": config.experiment.target_ticker,
+            "steps": args.steps,
+            "candidates": args.candidates,
+            "semaphore_limit": args.semaphore_limit,
+            "evolution_prompt": args.evolution_prompt,
+            # --- embedding ---
+            "embedding_type": args.embedding_type,
+            "local_model": args.local_model,
+            # --- feature engineering ---
+            "lookback_days": args.lookback_days,
+            "feature_mode": args.feature_mode,
+            "min_chain_hops": args.min_chain_hops,
+            "max_chain_hops": args.max_chain_hops,
+            "path_uniqueness": args.path_uniqueness,
+            "max_metapath_hops": args.max_metapath_hops,
+            # --- model training ---
+            "train_ratio": args.train_ratio,
+            # --- output ---
+            "output": args.output,
+            "log_level": args.log_level,
+            # --- infrastructure (no credentials) ---
+            "llm_model": config.openai.model_name,
+            "llm_base_url": config.openai.base_url or "openai",
+            "neo4j_uri": config.neo4j.uri,
+            "neo4j_user": config.neo4j.user,
+            "neo4j_database": config.neo4j.database,
+        }
+    )
 
 
 # ============================================================================
@@ -707,7 +737,7 @@ if __name__ == "__main__":
 
 
 # 2026-02-22 22:40:44 [INFO] __main__: ================================================================================
-# 2026-02-22 22:40:44 [INFO] __main__: 
+# 2026-02-22 22:40:44 [INFO] __main__:
 # Results by candidate:
 # 2026-02-22 22:40:44 [INFO] __main__:   step_1_candidate_0: AUC=0.6019, F1=0.5714, max_hops_train=6, max_hops_val=6
 # 2026-02-22 22:40:44 [INFO] __main__:   step_1_candidate_1: AUC=0.4815, F1=0.5714, max_hops_train=6, max_hops_val=6

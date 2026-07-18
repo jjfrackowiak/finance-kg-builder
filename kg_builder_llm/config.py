@@ -102,6 +102,7 @@ class ExperimentConfig:
     evolution_prompt_template: str = "default"
     drop_regressing_steps: bool = True
     auc_drop_tolerance: float = 0.0
+    single_addition: bool = False
     feature: FeatureConfig = None
 
     def __post_init__(self) -> None:
@@ -121,6 +122,7 @@ class ExperimentConfig:
             drop_regressing_steps=os.getenv("DROP_REGRESSING_STEPS", "true").lower()
             in ("1", "true", "yes"),
             auc_drop_tolerance=float(os.getenv("AUC_DROP_TOLERANCE", "0.0")),
+            single_addition=os.getenv("SINGLE_ADDITION", "false").lower() in ("1", "true", "yes"),
             feature=FeatureConfig.from_env(),
         )
 

@@ -1,12 +1,12 @@
 """Experiment orchestration."""
 
+import json
 import logging
 import math
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import mlflow
-
 import pandas as pd
 from neo4j_graphrag.embeddings.openai import OpenAIEmbeddings
 from neo4j_graphrag.llm import OpenAILLM
@@ -59,9 +59,14 @@ class Orchestrator:
         self.evolution_agent = OntologyEvolutionAgent(
             ontology_llm,
             prompt_template_path=config.experiment.evolution_prompt_template,
+            single_addition=config.experiment.single_addition,
         )
         self.results = {}
         self.candidates_per_step: Dict[int, List[OntologyCandidate]] = {}
+        # Single-addition mode: one record per proposed (node, relationship)
+        # addition, updated with ΔAUC and accept/reject outcome as known.
+        self.addition_history: List[dict] = []
+        self._last_accepted_auc: Optional[float] = None
         self.ontologies_dir = Path("results/ontologies")
         self._mlflow: Optional[MlflowExperimentLogger] = None
 
@@ -73,8 +78,10 @@ class Orchestrator:
         present (i.e. running on EKS with IRSA), falls back to the same vLLM
         endpoint used for extraction when running locally.
         """
-        from kg_builder_llm.core.bedrock_llm import BedrockLLM
         import boto3
+
+        from kg_builder_llm.core.bedrock_llm import BedrockLLM
+
         try:
             creds = boto3.session.Session().get_credentials().get_frozen_credentials()
             if not creds or not creds.token:
@@ -194,6 +201,7 @@ class Orchestrator:
                 best_candidate = step_winner
                 if winner_metrics is not None:
                     best_auc = winner_metrics.auc
+                    self._last_accepted_auc = winner_metrics.auc
                 logger.info(
                     "Step %d accepted: %s becomes evolution parent (best AUC=%s)",
                     step,
@@ -215,10 +223,14 @@ class Orchestrator:
                 # prune the winner too so the rejected step leaves no structure.
                 self._prune_candidate_tags(step_winner.candidate_tag)
 
+            self._finalize_step_addition_status(step, step_winner.candidate_tag, accepted)
             self._mlflow.tag_step_acceptance(self.candidates_per_step.get(step, []), accepted)
             self._mlflow.log_step_to_parent(
                 self.results.get(best_candidate.candidate_tag), step=step
             )
+
+        if self.addition_history:
+            self._mlflow.log_addition_history(self.addition_history)
 
         logger.info("Experiment completed")
 
@@ -248,7 +260,9 @@ class Orchestrator:
         local_model = self.config.experiment.feature.local_model_name
 
         if embedding_type == "openai" and not api_key:
-            logger.warning("OPENAI_API_KEY not set — skipping article embedding, baseline will be 0")
+            logger.warning(
+                "OPENAI_API_KEY not set — skipping article embedding, baseline will be 0"
+            )
             return
 
         logger.info("Embedding %d articles for baseline (%s)…", len(articles_df), embedding_type)
@@ -315,8 +329,24 @@ class Orchestrator:
                 metrics=best_metrics,
                 step_index=step,
                 variant_index=variant_idx,
+                addition_history=self.addition_history,
             )
             candidates.append(evolved)
+            if evolved.addition is not None:
+                self.addition_history.append(
+                    {
+                        "step": step,
+                        "variant": variant_idx,
+                        "candidate_tag": evolved.candidate_tag,
+                        "node": evolved.addition.get("node"),
+                        "relationship": evolved.addition.get("relationship"),
+                        "patterns": evolved.addition.get("patterns", []),
+                        "auc": None,
+                        "delta_auc": None,
+                        "delta_reference": None,
+                        "status": "pending",
+                    }
+                )
         self.candidates_per_step[step] = candidates
 
         for idx, candidate in enumerate(candidates):
@@ -360,7 +390,7 @@ class Orchestrator:
             ]
 
             logger.info("Evaluating with allowed tags: %s", allowed_tags_for_eval)
-            
+
             # Build day labels for evaluation
             day_labels = self._extract_day_labels(price_df)
 
@@ -385,13 +415,35 @@ class Orchestrator:
             self.results[candidate.candidate_tag] = metrics
             logger.info(
                 "Candidate %s: AUC=%.4f, F1=%.4f, Precision=%.4f, Recall=%.4f",
-                candidate.candidate_tag, metrics.auc, metrics.f1,
-                getattr(metrics, "precision", 0.0), getattr(metrics, "recall", 0.0),
+                candidate.candidate_tag,
+                metrics.auc,
+                metrics.f1,
+                getattr(metrics, "precision", 0.0),
+                getattr(metrics, "recall", 0.0),
             )
+            delta_auc, delta_reference = self._compute_delta_auc(metrics.auc)
+            if candidate.addition is not None:
+                self._record_addition_result(
+                    candidate.candidate_tag, metrics.auc, delta_auc, delta_reference
+                )
+                logger.info(
+                    "Addition %s + %s: ΔAUC=%s (vs %s)",
+                    candidate.addition.get("node"),
+                    candidate.addition.get("relationship"),
+                    f"{delta_auc:+.4f}" if delta_auc is not None else "n/a",
+                    delta_reference or "n/a",
+                )
             self._mlflow.log_candidate(
-                candidate, metrics, step, idx,
-                nodes_added=nodes_added, rels_added=rels_added,
-                nodes_total=nodes_after, rels_total=rels_after,
+                candidate,
+                metrics,
+                step,
+                idx,
+                nodes_added=nodes_added,
+                rels_added=rels_added,
+                nodes_total=nodes_after,
+                rels_total=rels_after,
+                delta_auc=delta_auc,
+                delta_reference=delta_reference,
             )
 
         # Prune tags of losing candidates
@@ -408,6 +460,45 @@ class Orchestrator:
                 if candidate.candidate_tag != best_step.candidate_tag:
                     self._prune_candidate_tags(candidate.candidate_tag)
                     logger.info("Pruned tags from losing candidate: %s", candidate.candidate_tag)
+
+    def _compute_delta_auc(self, candidate_auc: float) -> tuple[Optional[float], str]:
+        """AUC change of a candidate vs the current reference graph.
+
+        The reference is the last accepted step winner's AUC; before any step
+        has been accepted it falls back to the article-text baseline. Returns
+        (delta, reference_name), with delta None when no valid reference exists
+        or either AUC is NaN.
+        """
+        if candidate_auc is None or math.isnan(candidate_auc):
+            return None, ""
+        if self._last_accepted_auc is not None and not math.isnan(self._last_accepted_auc):
+            return candidate_auc - self._last_accepted_auc, "last_accepted_winner"
+        baseline = self.results.get("baseline_article_embedding")
+        if baseline is not None and not math.isnan(baseline.auc):
+            return candidate_auc - baseline.auc, "baseline_article_embedding"
+        return None, ""
+
+    def _record_addition_result(
+        self,
+        candidate_tag: str,
+        auc: float,
+        delta_auc: Optional[float],
+        delta_reference: str,
+    ) -> None:
+        """Fill in the evaluation outcome on a pending addition-history entry."""
+        for entry in self.addition_history:
+            if entry["candidate_tag"] == candidate_tag:
+                entry["auc"] = auc
+                entry["delta_auc"] = delta_auc
+                entry["delta_reference"] = delta_reference or None
+                return
+
+    def _finalize_step_addition_status(self, step: int, winner_tag: str, accepted: bool) -> None:
+        """Mark a step's additions as accepted (winner of an accepted step) or rejected."""
+        for entry in self.addition_history:
+            if entry["step"] == step:
+                is_kept = accepted and entry["candidate_tag"] == winner_tag
+                entry["status"] = "accepted" if is_kept else "rejected"
 
     @staticmethod
     def _should_accept_step(
@@ -507,7 +598,7 @@ class Orchestrator:
             Dict mapping date to label (0 or 1)
         """
         labels = {}
-        
+
         # Check if price_df is indexed by day or has a date column
         if price_df.index.name == "day":
             # Indexed by day
@@ -652,7 +743,6 @@ class Orchestrator:
             pruned_nodes = result[0].get("pruned_nodes", 0) if isinstance(result[0], dict) else 0
             logger.info("Pruned %d nodes (removed tag %s)", pruned_nodes, candidate_tag)
 
-
     def _save_ontologies(self) -> None:
         """Save all ontology candidates and results to files."""
         logger.info("Saving ontology candidates...")
@@ -677,6 +767,11 @@ class Orchestrator:
             best_candidate_tag=best_tag,
             output_dir=self.ontologies_dir,
         )
+
+        if self.addition_history:
+            history_path = self.ontologies_dir / "addition_history.json"
+            history_path.write_text(json.dumps(self.addition_history, indent=2, default=str))
+            logger.info("✓ Saved addition history: %s", history_path)
 
         logger.info("✓ Saved ontologies to %s", self.ontologies_dir)
 
