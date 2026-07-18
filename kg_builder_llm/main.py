@@ -176,6 +176,18 @@ Examples:
         default="default",
         help="Path to custom ontology evolution prompt template file or 'default' (default: default)",
     )
+    exp_group.add_argument(
+        "--keep-regressing-steps",
+        action="store_true",
+        help="Keep a step's winner as evolution parent even if its AUC is below the "
+        "last accepted step's AUC (disables the step-acceptance gate)",
+    )
+    exp_group.add_argument(
+        "--auc-drop-tolerance",
+        type=float,
+        default=0.0,
+        help="Allowed AUC regression before a step is dropped by the acceptance gate (default: 0.0)",
+    )
 
     # === Embedding Arguments ===
     embed_group = parser.add_argument_group('embedding arguments', 'Text embedding configuration')
@@ -283,6 +295,8 @@ def setup_config(args: argparse.Namespace) -> Config:
     config.experiment.max_candidates_per_step = args.candidates
     config.experiment.semaphore_limit = args.semaphore_limit
     config.experiment.evolution_prompt_template = args.evolution_prompt
+    config.experiment.drop_regressing_steps = not args.keep_regressing_steps
+    config.experiment.auc_drop_tolerance = args.auc_drop_tolerance
     config.experiment.feature.embedding_type = args.embedding_type
     config.experiment.feature.local_model_name = args.local_model
     config.experiment.feature.lookback_days = args.lookback_days

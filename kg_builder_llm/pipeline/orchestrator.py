@@ -1,13 +1,11 @@
 """Experiment orchestration."""
 
-import asyncio
 import logging
-import time
+import math
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import mlflow
-from mlflow.tracking import MlflowClient
 
 import pandas as pd
 from neo4j_graphrag.embeddings.openai import OpenAIEmbeddings
@@ -21,6 +19,7 @@ from kg_builder_llm.core.entity_resolution import (
     MERGE_DUPLICATES_BY_NAME_CYPHER,
 )
 from kg_builder_llm.core.graph import GraphDriver
+from kg_builder_llm.core.ids import article_text_id
 from kg_builder_llm.core.neo4j_io import write_price_labels_to_days
 from kg_builder_llm.core.ontology import OntologyCandidate, create_base_ontology
 from kg_builder_llm.core.ontology_io import save_ontology_candidate, save_ontology_summary
@@ -28,6 +27,7 @@ from kg_builder_llm.core.tagging import tag_candidate_entities
 from kg_builder_llm.ml.modeling import ModelMetrics
 from kg_builder_llm.mutations.base import build_kg_incremental_candidate
 from kg_builder_llm.pipeline.evaluator import evaluate_article_text_baseline, evaluate_candidate
+from kg_builder_llm.pipeline.mlflow_logging import MlflowExperimentLogger
 from kg_builder_llm.pipeline.ontology_evolution import OntologyEvolutionAgent
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ class Orchestrator:
         self.results = {}
         self.candidates_per_step: Dict[int, List[OntologyCandidate]] = {}
         self.ontologies_dir = Path("results/ontologies")
-        self._mlflow_run_ids: Dict[str, str] = {}
+        self._mlflow: Optional[MlflowExperimentLogger] = None
 
     @staticmethod
     def _build_ontology_llm(config: Config):
@@ -107,32 +107,9 @@ class Orchestrator:
         """
         logger.info("Starting experiment with %d articles", len(articles_df))
 
-        # Capture parent run ID early so we can log step-level metrics to it
-        # (inside nested child runs the parent is no longer the active run)
-        _parent_run = mlflow.active_run()
-        _parent_run_id = _parent_run.info.run_id if _parent_run else None
-        _mlflow_client = MlflowClient() if _parent_run_id else None
-
-        def _log_to_parent(metrics, step: int) -> None:
-            if not (_mlflow_client and _parent_run_id):
-                return
-            try:
-                ts = int(time.time() * 1000)
-                for key, val in {
-                    "auc": metrics.auc,
-                    "f1": metrics.f1,
-                    "precision": getattr(metrics, "precision", 0.0),
-                    "recall": getattr(metrics, "recall", 0.0),
-                    "brier_score": getattr(metrics, "brier_score", 0.0),
-                    "max_hops_train": getattr(metrics, "max_hops_train", 0),
-                    "max_hops_val": getattr(metrics, "max_hops_val", 0),
-                    "n_train_days": getattr(metrics, "n_train_days", 0),
-                    "graph/n_nodes": getattr(metrics, "n_nodes_total", 0),
-                    "graph/n_edges": getattr(metrics, "n_rels_total", 0),
-                }.items():
-                    _mlflow_client.log_metric(_parent_run_id, key, float(val), timestamp=ts, step=step)
-            except Exception as e:
-                logger.warning("MLflow parent step logging failed at step %d: %s", step, e)
+        # Capture the parent MLflow run now: inside nested child runs the
+        # parent is no longer the active run.
+        self._mlflow = MlflowExperimentLogger()
 
         # Clear the graph completely for clean state
         logger.info("Clearing Neo4j graph...")
@@ -154,14 +131,17 @@ class Orchestrator:
         tag_candidate_entities(self.driver, "base_structure")
         logger.info("✓ Tagged Article and Day nodes as base_structure")
 
-        # Create base ontology
-        base_ontology = create_base_ontology()
-
-        # STEP 0: Build base structure (minimal infrastructure - no LLM calls)
+        # STEP 0: base structure (articles + days + labels) was built above and
+        # tagged "base_structure"; the base ontology adopts that tag so results
+        # lookups and incremental builds line up.
         logger.info("=== Step 0 (Base Structure) ===")
-        logger.info("Building base structure (articles + days + labels, no LLM calls)...")
-        await self._build_base_structure(base_ontology, articles_df)
-        logger.info("✓ Base structure ready (step 0 complete)")
+        base_ontology = create_base_ontology()
+        base_ontology.candidate_tag = "base_structure"
+        logger.info(
+            "✓ Base structure ready: %d nodes, %d relationships",
+            self.driver.get_count(),
+            self.driver.get_relationship_count(),
+        )
 
         # STEP 0b: Write article text embeddings then run text-only baseline
         logger.info("=== Step 0b (Article-text baseline) ===")
@@ -178,12 +158,13 @@ class Orchestrator:
             baseline_metrics.auc,
             baseline_metrics.f1,
         )
-        self._log_baseline_to_mlflow(baseline_metrics)
-        _log_to_parent(baseline_metrics, step=0)
+        self._mlflow.log_baseline(baseline_metrics)
+        self._mlflow.log_step_to_parent(baseline_metrics, step=0)
 
         # STEP 1+: Evolve and evaluate ontologies using incremental mutation
         # num_steps=0 means only base, num_steps=1 means base + 1 evolution step, etc.
         best_candidate = base_ontology
+        best_auc: Optional[float] = None  # AUC of the last accepted step's winner
         for step in range(1, self.config.experiment.num_steps + 1):
             logger.info(
                 "=== Step %d/%d (Incremental Evolution) ===",
@@ -199,8 +180,45 @@ class Orchestrator:
             )
 
             # Select best from THIS step only (not global)
-            best_candidate = self._select_best_candidate_from_current_step(step)
-            _log_to_parent(self.results.get(best_candidate.candidate_tag), step=step)
+            step_winner = self._select_best_candidate_from_current_step(step)
+            winner_metrics = self.results.get(step_winner.candidate_tag)
+
+            accepted = self._should_accept_step(
+                winner_auc=winner_metrics.auc if winner_metrics else None,
+                best_auc=best_auc,
+                drop_regressing_steps=self.config.experiment.drop_regressing_steps,
+                tolerance=self.config.experiment.auc_drop_tolerance,
+            )
+
+            if accepted:
+                best_candidate = step_winner
+                if winner_metrics is not None:
+                    best_auc = winner_metrics.auc
+                logger.info(
+                    "Step %d accepted: %s becomes evolution parent (best AUC=%s)",
+                    step,
+                    step_winner.candidate_tag,
+                    f"{best_auc:.4f}" if best_auc is not None else "n/a",
+                )
+            else:
+                logger.info(
+                    "Step %d REJECTED: winner %s AUC=%.4f is below last accepted "
+                    "AUC=%.4f (tolerance=%.4f) — dropping step, keeping %s",
+                    step,
+                    step_winner.candidate_tag,
+                    winner_metrics.auc,
+                    best_auc,
+                    self.config.experiment.auc_drop_tolerance,
+                    best_candidate.candidate_tag,
+                )
+                # Losers were pruned in _run_step_incremental_evolution;
+                # prune the winner too so the rejected step leaves no structure.
+                self._prune_candidate_tags(step_winner.candidate_tag)
+
+            self._mlflow.tag_step_acceptance(self.candidates_per_step.get(step, []), accepted)
+            self._mlflow.log_step_to_parent(
+                self.results.get(best_candidate.candidate_tag), step=step
+            )
 
         logger.info("Experiment completed")
 
@@ -234,7 +252,7 @@ class Orchestrator:
             return
 
         logger.info("Embedding %d articles for baseline (%s)…", len(articles_df), embedding_type)
-        written = 0
+        rows = []
         for _, row in articles_df.iterrows():
             text = row.get("text", "")
             if not isinstance(text, str) or not text.strip():
@@ -247,53 +265,21 @@ class Orchestrator:
                     local_model=local_model,
                 )
                 emb_list = emb.tolist() if isinstance(emb, np.ndarray) else emb
-                self.driver.run_query(
-                    "MATCH (a:Article {id: $id}) SET a.text_embedding = $emb",
-                    parameters={"id": str(hash(text)), "emb": emb_list},
-                )
-                written += 1
+                rows.append({"id": article_text_id(text), "emb": emb_list})
             except Exception as e:
                 logger.warning("Failed to embed article: %s", e)
 
-        logger.info("✓ Wrote text embeddings for %d / %d articles", written, len(articles_df))
+        if rows:
+            self.driver.run_query(
+                """
+                UNWIND $rows AS row
+                MATCH (a:Article {id: row.id})
+                SET a.text_embedding = row.emb
+                """,
+                parameters={"rows": rows},
+            )
 
-    async def _build_base_structure(
-        self,
-        base_ontology: OntologyCandidate,
-        articles_df: pd.DataFrame,
-    ) -> None:
-        """Build base ontology structure - minimal infrastructure without LLM calls.
-        
-        Creates only:
-        - Article nodes with metadata
-        - Day nodes with price labels
-        - Article PUBLISHED_ON Day relationships
-        
-        This is everything needed by ML evaluation. Entity extraction happens separately.
-
-        Args:
-            base_ontology: Base ontology
-            articles_df: Articles data
-        """
-        base_candidate_tag = "base_structure"
-        base_ontology.candidate_tag = base_candidate_tag
-
-        logger.info("Building base structure (articles + days + labels, no LLM)...")
-        logger.info("Articles: %d | Days: %d", len(articles_df), articles_df["day"].nunique())
-        
-        # Infrastructure is already created by orchestrator.run():
-        # - Article nodes
-        # - Day nodes  
-        # - PUBLISHED_ON relationships
-        # - Price labels on Day nodes
-        # All tagged with "base_structure"
-        
-        logger.info("✓ Base structure ready for entity extraction")
-
-        # Log base structure size
-        base_nodes = self.driver.get_count()
-        base_rels = self.driver.get_relationship_count()
-        logger.info("  Base structure: %d nodes, %d relationships", base_nodes, base_rels)
+        logger.info("✓ Wrote text embeddings for %d / %d articles", len(rows), len(articles_df))
 
     async def _run_step_incremental_evolution(
         self,
@@ -319,7 +305,7 @@ class Orchestrator:
         logger.info("Evolving ontology from %s", best_candidate.candidate_tag)
 
         # Get metrics for best candidate
-        best_metrics = self.results.get(best_candidate.candidate_tag, ModelMetrics(0, 0, 0, 0))
+        best_metrics = self.results.get(best_candidate.candidate_tag, ModelMetrics.empty())
 
         # Generate evolved candidates
         candidates = []
@@ -402,7 +388,7 @@ class Orchestrator:
                 candidate.candidate_tag, metrics.auc, metrics.f1,
                 getattr(metrics, "precision", 0.0), getattr(metrics, "recall", 0.0),
             )
-            self._log_candidate_to_mlflow(
+            self._mlflow.log_candidate(
                 candidate, metrics, step, idx,
                 nodes_added=nodes_added, rels_added=rels_added,
                 nodes_total=nodes_after, rels_total=rels_after,
@@ -412,16 +398,45 @@ class Orchestrator:
         if self.results and self.candidates_per_step[step]:
             best_step = max(
                 self.candidates_per_step[step],
-                key=lambda c: self.results.get(c.candidate_tag, ModelMetrics(0, 0, 0, 0)).auc,
+                key=lambda c: self.results.get(c.candidate_tag, ModelMetrics.empty()).auc,
             )
             logger.info("Winner of step %d: %s", step, best_step.candidate_tag)
-            self._tag_step_winner_in_mlflow(step, best_step.candidate_tag)
+            self._mlflow.tag_step_winner(self.candidates_per_step[step], best_step.candidate_tag)
 
             # Prune tags from losing candidates (don't delete nodes/rels, just remove their tags)
             for candidate in self.candidates_per_step[step]:
                 if candidate.candidate_tag != best_step.candidate_tag:
                     self._prune_candidate_tags(candidate.candidate_tag)
                     logger.info("Pruned tags from losing candidate: %s", candidate.candidate_tag)
+
+    @staticmethod
+    def _should_accept_step(
+        winner_auc: Optional[float],
+        best_auc: Optional[float],
+        drop_regressing_steps: bool,
+        tolerance: float,
+    ) -> bool:
+        """Decide whether a step's winner replaces the current best candidate.
+
+        A step is rejected only when the gate is enabled, a previous step has
+        already been accepted, and the winner's AUC fell more than `tolerance`
+        below the last accepted AUC. NaN AUCs (e.g. a single-class validation
+        window) carry no evidence of regression, so they never reject a step.
+
+        Args:
+            winner_auc: AUC of this step's best candidate (None if unevaluated)
+            best_auc: AUC of the last accepted step's winner (None before step 1)
+            drop_regressing_steps: Whether the acceptance gate is enabled
+            tolerance: Allowed AUC regression before a step is dropped
+
+        Returns:
+            True if the step's winner should become the evolution parent
+        """
+        if not drop_regressing_steps or best_auc is None or winner_auc is None:
+            return True
+        if math.isnan(winner_auc) or math.isnan(best_auc):
+            return True
+        return winner_auc >= best_auc - tolerance
 
     def _select_best_candidate_from_current_step(self, step: int) -> OntologyCandidate:
         """Select best candidate from the current step only.
@@ -440,10 +455,10 @@ class Orchestrator:
         step_candidates = self.candidates_per_step[step]
         best_candidate = max(
             step_candidates,
-            key=lambda c: self.results.get(c.candidate_tag, ModelMetrics(0, 0, 0, 0)).auc,
+            key=lambda c: self.results.get(c.candidate_tag, ModelMetrics.empty()).auc,
         )
 
-        best_metrics = self.results.get(best_candidate.candidate_tag, ModelMetrics(0, 0, 0, 0))
+        best_metrics = self.results.get(best_candidate.candidate_tag, ModelMetrics.empty())
         logger.info(
             "Selected best candidate from step %d: %s (AUC=%.4f)",
             step,
@@ -482,33 +497,6 @@ class Orchestrator:
         except Exception as e:
             logger.warning("Key-based deduplication failed (APOC required): %s", e)
 
-    def _select_best_candidate(self) -> OntologyCandidate:
-        """Select best candidate from current step.
-
-        Returns:
-            Best OntologyCandidate
-        """
-        # Find candidate with highest AUC
-        if not self.results:
-            logger.warning("No results yet, using base ontology")
-            return create_base_ontology()
-
-        best_tag = max(self.results.keys(), key=lambda k: self.results[k].auc)
-        best_metrics = self.results[best_tag]
-
-        logger.info("Selected best candidate: %s (AUC=%.4f)", best_tag, best_metrics.auc)
-
-        # Find the candidate object
-        for step_candidates in self.candidates_per_step.values():
-            if step_candidates is None:
-                continue
-            for cand in step_candidates:
-                if cand.candidate_tag == best_tag:
-                    return cand
-
-        # Fallback
-        return create_base_ontology()
-
     def _extract_day_labels(self, price_df: pd.DataFrame) -> Dict[str, int]:
         """Extract day-level labels from price data.
 
@@ -537,38 +525,6 @@ class Orchestrator:
 
         logger.info("Extracted labels for %d days", len(labels))
         return labels
-
-    def _tag_untagged_entities_for_candidate(self, candidate_tag: str) -> None:
-        """Tag entities that were created by incremental build but not yet tagged.
-
-        Args:
-            candidate_tag: Tag to apply to untagged entities
-        """
-        query = """
-        MATCH (n)-[r]->(m)
-        WHERE NOT any(tag IN r.candidate_tags WHERE tag = $tag)
-        SET r.candidate_tags = CASE
-            WHEN r.candidate_tags IS NULL THEN [$tag]
-            ELSE r.candidate_tags + $tag
-        END
-        WITH r
-        LIMIT 10000
-        RETURN count(r) as tagged_count
-        """
-        try:
-            result = self.driver.run_query(query, parameters={"tag": candidate_tag})
-            if result:
-                tagged_count = (
-                    result[0].get("tagged_count", 0) if isinstance(result[0], dict) else 0
-                )
-                if tagged_count > 0:
-                    logger.info(
-                        "Tagged %d previously untagged relationships with %s",
-                        tagged_count,
-                        candidate_tag,
-                    )
-        except Exception as e:
-            logger.warning("Could not tag untagged entities: %s", str(e))
 
     def _build_day_labels_df(self, price_df: pd.DataFrame) -> pd.DataFrame:
         """Build day labels DataFrame for writing to Neo4j.
@@ -608,84 +564,6 @@ class Orchestrator:
             df_labels["return_next_day"] = df_labels["return"]
             df_labels = df_labels.set_index(date_col)[["direction", "return_next_day"]]
             return df_labels
-
-    def _extract_day_labels_old(self, price_df: pd.DataFrame) -> Dict[str, int]:
-        """Extract day-level labels from price data.
-
-        Args:
-            price_df: DataFrame with 'date' and 'return' columns
-
-        Returns:
-            Dict mapping date to label (0 or 1)
-        """
-        labels = {}
-        for _, row in price_df.iterrows():
-            day = row["date"]
-            label = 1 if row["return"] > 0 else 0
-            labels[day] = label
-
-        return labels
-
-    def _get_allowed_tags_for_step(self, step: int, current_candidate_tag: str) -> List[str]:
-        """Get allowed tags for evaluation: base structure + winners from all previous steps + current candidate.
-
-        Args:
-            step: Current step number
-            current_candidate_tag: Tag of current candidate being evaluated
-
-        Returns:
-            List of allowed tags (base_structure + winners from steps 0..step-1 + current candidate)
-        """
-        # Always include base structure (has articles)
-        allowed = ["base_structure", current_candidate_tag]
-
-        # Add winners from all previous steps
-        for prev_step in range(step):
-            if prev_step in self.winner_per_step:
-                allowed.append(self.winner_per_step[prev_step])
-                logger.debug(
-                    "Including winner from step %d: %s", prev_step, self.winner_per_step[prev_step]
-                )
-
-        return allowed
-
-    def _delete_candidate_from_graph(self, candidate_tag: str) -> None:
-        """Delete all entities and relationships tagged only with this candidate.
-
-        Keeps nodes/edges that have other tags (from base or other candidates).
-
-        Args:
-            candidate_tag: Tag of candidate to delete
-        """
-        logger.info("Deleting candidate %s from graph", candidate_tag)
-
-        # Delete relationships tagged only with this candidate
-        query_rels = """
-        MATCH ()-[r]->()
-        WHERE r.candidate_tags IS NOT NULL AND $tag IN r.candidate_tags
-        SET r.candidate_tags = [t IN r.candidate_tags WHERE t <> $tag]
-        WITH r WHERE r.candidate_tags IS NULL OR size(r.candidate_tags) = 0
-        DELETE r
-        RETURN count(*) as deleted_rels
-        """
-        result = self.driver.run_query(query_rels, parameters={"tag": candidate_tag})
-        if result:
-            deleted_rels = result[0].get("deleted_rels", 0) if isinstance(result[0], dict) else 0
-            logger.info("Deleted %d relationships for candidate %s", deleted_rels, candidate_tag)
-
-        # Delete nodes tagged only with this candidate
-        query_nodes = """
-        MATCH (n)
-        WHERE n.candidate_tags IS NOT NULL AND $tag IN n.candidate_tags
-        SET n.candidate_tags = [t IN n.candidate_tags WHERE t <> $tag]
-        WITH n WHERE n.candidate_tags IS NULL OR size(n.candidate_tags) = 0
-        DETACH DELETE n
-        RETURN count(*) as deleted_nodes
-        """
-        result = self.driver.run_query(query_nodes, parameters={"tag": candidate_tag})
-        if result:
-            deleted_nodes = result[0].get("deleted_nodes", 0) if isinstance(result[0], dict) else 0
-            logger.info("Deleted %d nodes for candidate %s", deleted_nodes, candidate_tag)
 
     def _get_accepted_tags_for_step(self, step: int) -> List[str]:
         """Get accepted tags for building candidates in this step.
@@ -732,14 +610,11 @@ class Orchestrator:
         query = """
         MATCH (n)
         WHERE n.candidate_tags IS NOT NULL AND $tag IN n.candidate_tags
-        RETURN count(*) as count
+        RETURN true AS found
         LIMIT 1
         """
         result = self.driver.run_query(query, parameters={"tag": tag})
-        if result and len(result) > 0:
-            count = result[0].get("count", 0) if isinstance(result[0], dict) else 0
-            return count > 0
-        return False
+        return bool(result)
 
     def _prune_candidate_tags(self, candidate_tag: str) -> None:
         """Remove a candidate's tag from all nodes and relationships in the graph.
@@ -777,124 +652,6 @@ class Orchestrator:
             pruned_nodes = result[0].get("pruned_nodes", 0) if isinstance(result[0], dict) else 0
             logger.info("Pruned %d nodes (removed tag %s)", pruned_nodes, candidate_tag)
 
-    def _log_baseline_to_mlflow(self, metrics) -> None:
-        """Log the article-text baseline as a nested MLflow run."""
-        try:
-            with mlflow.start_run(run_name="baseline_article_embedding", nested=True):
-                mlflow.log_params({"candidate_tag": "baseline_article_embedding", "step": 0})
-                mlflow.log_metrics({
-                    "auc": metrics.auc,
-                    "f1": metrics.f1,
-                    "precision": getattr(metrics, "precision", 0.0),
-                    "recall": getattr(metrics, "recall", 0.0),
-                    "brier_score": getattr(metrics, "brier_score", 0.0),
-                    "n_train_days": getattr(metrics, "n_train_days", 0),
-                    "n_val_days": getattr(metrics, "n_val_days", 0),
-                }, step=0)
-                mlflow.set_tag("winner", "false")
-        except Exception as e:
-            logger.warning("MLflow baseline logging failed: %s", e)
-
-    def _log_candidate_to_mlflow(
-        self,
-        candidate: OntologyCandidate,
-        metrics,
-        step: int,
-        variant_idx: int,
-        nodes_added: int = 0,
-        rels_added: int = 0,
-        nodes_total: int = 0,
-        rels_total: int = 0,
-    ) -> None:
-        """Log a single candidate's metrics and ontology params as a nested MLflow run."""
-        import json
-        import os
-        import tempfile
-
-        try:
-            node_labels = [
-                n.get("label", "") if isinstance(n, dict) else str(n)
-                for n in candidate.schema.get("node_types", [])
-            ]
-            rel_labels = [
-                r.get("label", "") if isinstance(r, dict) else str(r)
-                for r in candidate.schema.get("relationship_types", [])
-            ]
-            prev_node_types = len(candidate.schema.get("node_types", [])) - nodes_added
-            with mlflow.start_run(run_name=candidate.candidate_tag, nested=True) as run:
-                mlflow.log_params({
-                    "candidate_tag": candidate.candidate_tag,
-                    "step": step,
-                    "variant_idx": variant_idx,
-                    "parent_tag": candidate.parent_tag or "base",
-                    "node_types": ",".join(node_labels),
-                    "rel_types": ",".join(rel_labels),
-                    "n_node_types": len(node_labels),
-                    "n_rel_types": len(rel_labels),
-                    "description": candidate.description[:250],
-                })
-                mlflow.log_metrics({
-                    "auc": metrics.auc,
-                    "f1": metrics.f1,
-                    "precision": getattr(metrics, "precision", 0.0),
-                    "recall": getattr(metrics, "recall", 0.0),
-                    "brier_score": getattr(metrics, "brier_score", 0.0),
-                    "max_hops_train": metrics.max_hops_train,
-                    "max_hops_val": metrics.max_hops_val,
-                    "n_train_days": getattr(metrics, "n_train_days", 0),
-                    "n_val_days": getattr(metrics, "n_val_days", 0),
-                    "graph/n_nodes": nodes_total,
-                    "graph/n_edges": rels_total,
-                    "graph/nodes_added": nodes_added,
-                    "graph/rels_added": rels_added,
-                }, step=step)
-
-                # Feature importances artifact
-                fi = getattr(metrics, "feature_importances", None)
-                if fi:
-                    with tempfile.NamedTemporaryFile(
-                        mode="w", suffix=".json", delete=False,
-                        prefix=f"fi_step{step}_v{variant_idx}_",
-                    ) as f:
-                        json.dump({"feature_importances": fi}, f)
-                        tmp_fi = f.name
-                    mlflow.log_artifact(tmp_fi, artifact_path="feature_importances")
-                    os.unlink(tmp_fi)
-
-                # Per-candidate ontology snapshot (survives mid-run failure)
-                ontology_snapshot = {
-                    "candidate_tag": candidate.candidate_tag,
-                    "step": step,
-                    "schema": candidate.schema,
-                    "description": candidate.description,
-                    "metrics": {"auc": metrics.auc, "f1": metrics.f1,
-                                "precision": getattr(metrics, "precision", 0.0)},
-                }
-                with tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".json", delete=False,
-                    prefix=f"ontology_step{step}_v{variant_idx}_",
-                ) as f:
-                    json.dump(ontology_snapshot, f, indent=2, default=str)
-                    tmp_ont = f.name
-                mlflow.log_artifact(tmp_ont, artifact_path="ontologies")
-                os.unlink(tmp_ont)
-
-                self._mlflow_run_ids[candidate.candidate_tag] = run.info.run_id
-        except Exception as e:
-            logger.warning("MLflow logging failed for %s: %s", candidate.candidate_tag, e)
-
-    def _tag_step_winner_in_mlflow(self, step: int, winner_tag: str) -> None:
-        """Tag the winner and losers of a step on their (already closed) nested runs."""
-        try:
-            client = MlflowClient()
-            for candidate in self.candidates_per_step.get(step, []):
-                run_id = self._mlflow_run_ids.get(candidate.candidate_tag)
-                if run_id:
-                    is_winner = candidate.candidate_tag == winner_tag
-                    client.set_tag(run_id, "winner", str(is_winner).lower())
-                    client.set_tag(run_id, "step_winner", winner_tag)
-        except Exception as e:
-            logger.warning("MLflow winner tagging failed for step %d: %s", step, e)
 
     def _save_ontologies(self) -> None:
         """Save all ontology candidates and results to files."""
@@ -903,7 +660,7 @@ class Orchestrator:
         # Save each candidate individually
         for step, candidates in self.candidates_per_step.items():
             for candidate in candidates:
-                metrics = self.results.get(candidate.candidate_tag, ModelMetrics(0, 0, 0, 0))
+                metrics = self.results.get(candidate.candidate_tag, ModelMetrics.empty())
                 save_ontology_candidate(candidate, metrics, self.ontologies_dir)
 
         # Get best candidate tag

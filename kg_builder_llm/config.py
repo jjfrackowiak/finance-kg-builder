@@ -100,6 +100,8 @@ class ExperimentConfig:
     num_steps: int = 2
     semaphore_limit: int = 50
     evolution_prompt_template: str = "default"
+    drop_regressing_steps: bool = True
+    auc_drop_tolerance: float = 0.0
     feature: FeatureConfig = None
 
     def __post_init__(self) -> None:
@@ -116,6 +118,9 @@ class ExperimentConfig:
             num_steps=int(os.getenv("NUM_STEPS", "2")),
             semaphore_limit=int(os.getenv("SEMAPHORE_LIMIT", "50")),
             evolution_prompt_template=os.getenv("EVOLUTION_PROMPT_TEMPLATE", "default"),
+            drop_regressing_steps=os.getenv("DROP_REGRESSING_STEPS", "true").lower()
+            in ("1", "true", "yes"),
+            auc_drop_tolerance=float(os.getenv("AUC_DROP_TOLERANCE", "0.0")),
             feature=FeatureConfig.from_env(),
         )
 
