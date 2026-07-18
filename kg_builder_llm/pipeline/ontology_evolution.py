@@ -360,10 +360,14 @@ class OntologyEvolutionAgent:
         for entry in history:
             delta = entry.get("delta_auc")
             delta_txt = f"ΔAUC={delta:+.4f}" if delta is not None else "result pending"
-            lines.append(
-                f"  - {entry.get('node')} + {entry.get('relationship')}: "
-                f"{delta_txt} ({entry.get('status', 'pending')})"
-            )
+            node, rel = entry.get("node"), entry.get("relationship")
+            if node and rel:
+                combo = f"{node} + {rel}"
+            elif rel:
+                combo = f"{rel} (rel-only, between existing types)"
+            else:
+                combo = f"{node} (node-only)"
+            lines.append(f"  - {combo}: {delta_txt} ({entry.get('status', 'pending')})")
         return "\n".join(lines)
 
     def _create_single_addition_prompt(
@@ -400,11 +404,15 @@ class OntologyEvolutionAgent:
 You are a knowledge graph ontology designer optimizing for financial news analysis.
 
 TASK — step {step_index}, variant {variant_index} (SINGLE-ADDITION MODE):
-Evolve the schema by adding EXACTLY ONE new node type and EXACTLY ONE new relationship type.
+Evolve the schema with EXACTLY ONE atomic addition. Choose ONE of:
+  (a) one new node type PLUS one new relationship type connecting it to the schema, or
+  (b) one new relationship type between EXISTING node types (no new node type).
 Nothing else may change. This isolates the causal effect of your addition on downstream
-stock-movement prediction (AUC), so choose the single most promising financially relevant
-concept (e.g. a corporate action, macro event, instrument, regulatory body, supply-chain
-actor, geographic region, credit rating, ...).
+stock-movement prediction (AUC). For (a), choose the single most promising financially
+relevant concept (e.g. a corporate action, macro event, instrument, regulatory body,
+supply-chain actor, geographic region, credit rating, ...). For (b), choose the single
+most informative missing link between existing types (e.g. COMPETES_WITH or SUPPLIES_TO
+between Company nodes).
 
 ADDITIONS ALREADY TRIED (do NOT re-propose these combinations; learn from their ΔAUC):
 {history_block}
@@ -421,7 +429,8 @@ Performance signal: {auc_signal}
 Max relationship-chain hops — train: {metrics.max_hops_train}, val: {metrics.max_hops_val}
 
 RULES:
-1. Add exactly 1 new node type (with 1–3 properties) and exactly 1 new relationship type
+1. Option (a): exactly 1 new node type (with 1–3 properties) + exactly 1 new relationship
+   type. Option (b): exactly 1 new relationship type and NO new node type
 2. Add 1–3 patterns, each of which must involve the new node type or the new relationship
 3. Patterns MUST be ["NodeA", "RELATIONSHIP", "NodeB"] using only known node types
 4. Keep ALL existing node_types, relationship_types and patterns — only add, never remove

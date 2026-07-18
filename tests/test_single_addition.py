@@ -128,6 +128,37 @@ class TestAdditionHistoryFormatting:
         assert "CreditRating + RATED_BY: ΔAUC=+0.0500 (accepted)" in text
         assert "MacroEvent + AFFECTED_BY: result pending (pending)" in text
 
+    def test_rel_only_entry(self):
+        history = [
+            {
+                "node": None,
+                "relationship": "COMPETES_WITH",
+                "delta_auc": -0.02,
+                "status": "rejected",
+            },
+        ]
+        text = OntologyEvolutionAgent._format_addition_history(history)
+        assert "COMPETES_WITH (rel-only, between existing types): ΔAUC=-0.0200 (rejected)" in text
+
+
+class TestSingleAdditionPrompt:
+    def test_prompt_offers_rel_only_option(self):
+        agent = OntologyEvolutionAgent(llm=None, single_addition=True)
+        prompt = agent._create_single_addition_prompt(
+            _parent_candidate(),
+            ModelMetrics.empty(),
+            step_index=1,
+            variant_index=0,
+            addition_history=[],
+        )
+        assert "one new relationship type between EXISTING node types" in prompt
+        assert "exactly 1 new relationship type and NO new node type" in prompt
+        # The multi-addition default prompt must remain unchanged
+        default_prompt = agent._create_evolution_prompt(
+            _parent_candidate(), ModelMetrics.empty(), step_index=1, variant_index=0
+        )
+        assert "propose 3–5 new node types" in default_prompt
+
 
 class _FakeLLM:
     """Returns queued schema JSON responses, recording call count."""
