@@ -574,9 +574,14 @@ def _make_run_name(args: argparse.Namespace, config: Config) -> str:
         prompt_label = _Path(prompt).stem.replace("_prompt_template", "")
     else:
         prompt_label = "default"
+    suffix = ""
+    if args.single_addition:
+        suffix += "-singleadd"
+    if args.keep_regressing_steps:
+        suffix += "-keepregress"
     return (
         f"{ticker}-steps{args.steps}-cands{args.candidates}"
-        f"-{args.feature_mode}-{prompt_label}-{day_start}"
+        f"-{args.feature_mode}-{prompt_label}-{day_start}{suffix}"
     )
 
 
@@ -608,6 +613,10 @@ def _log_params(args: argparse.Namespace, config: Config) -> None:
             "max_metapath_hops": args.max_metapath_hops,
             # --- model training ---
             "train_ratio": args.train_ratio,
+            # --- evolution gating ---
+            "single_addition": config.experiment.single_addition,
+            "drop_regressing_steps": config.experiment.drop_regressing_steps,
+            "auc_drop_tolerance": config.experiment.auc_drop_tolerance,
             # --- output ---
             "output": args.output,
             "log_level": args.log_level,

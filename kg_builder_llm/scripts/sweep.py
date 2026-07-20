@@ -12,6 +12,39 @@ VLLM_DEPLOYMENT = "vllm"
 EMBEDDINGS_DEPLOYMENT = "embeddings"
 SWEEP_LABEL = "sweep-id"
 
+# cfg key -> (CLI flag, kind). "value" flags render `--flag <value>` when the key
+# is present in cfg; "flag" flags render bare `--flag` when cfg[key] is truthy.
+# Extend this table (rather than build_job_manifest) when main.py grows new CLI
+# args that sweep configs should be able to vary.
+OPTIONAL_ARG_SPECS = [
+    ("single_addition", "--single-addition", "flag"),
+    ("keep_regressing_steps", "--keep-regressing-steps", "flag"),
+    ("auc_drop_tolerance", "--auc-drop-tolerance", "value"),
+    ("embedding_type", "--embedding-type", "value"),
+    ("local_model", "--local-model", "value"),
+    ("lookback_days", "--lookback-days", "value"),
+    ("min_chain_hops", "--min-chain-hops", "value"),
+    ("max_chain_hops", "--max-chain-hops", "value"),
+    ("path_uniqueness", "--path-uniqueness", "value"),
+    ("max_metapath_hops", "--max-metapath-hops", "value"),
+    ("train_ratio", "--train-ratio", "value"),
+    ("semaphore_limit", "--semaphore-limit", "value"),
+]
+
+
+def build_optional_args(cfg: dict) -> str:
+    """Render OPTIONAL_ARG_SPECS entries present in cfg as a CLI arg string."""
+    parts = []
+    for key, flag, kind in OPTIONAL_ARG_SPECS:
+        if key not in cfg:
+            continue
+        if kind == "flag":
+            if cfg[key]:
+                parts.append(f" {flag}")
+        else:
+            parts.append(f" {flag} {cfg[key]}")
+    return "".join(parts)
+
 
 class MlflowClient:
     """Minimal MLflow REST client — avoids the heavy mlflow package."""
@@ -138,6 +171,7 @@ def build_job_manifest(
         f"{date_args}"
         f"{articles_per_day_arg}"
         f"{evolution_prompt_arg}"
+        f"{build_optional_args(cfg)}"
     )
 
     use_sidecar = neo4j_mode == "sidecar" and not stub
