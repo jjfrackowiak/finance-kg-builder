@@ -13,6 +13,7 @@ from neo4j_graphrag.llm import OpenAILLM
 
 from kg_builder_llm.config import ExperimentConfig, Neo4jConfig
 from kg_builder_llm.core.graph import GraphDriver
+from kg_builder_llm.core.ids import article_text_id
 from kg_builder_llm.core.ontology import OntologyCandidate
 from kg_builder_llm.ml.embeddings import embed_text_deterministic
 from kg_builder_llm.mutations.incremental_kg_mutator import IncrementalArticleKGMutator
@@ -157,14 +158,23 @@ async def build_kg_incremental_candidate(
     # Process each article
     articles_df = articles_df.sort_values("timestamp").reset_index(drop=True)
     semaphore = asyncio.Semaphore(exp_cfg.semaphore_limit)
+    # Graph writes are serialized: concurrent MERGEs on shared hub nodes
+    # deadlock in Neo4j and the per-statement error handling would silently
+    # drop the affected relationships. Writes are milliseconds while LLM
+    # extraction is seconds, so only extraction/embedding runs in parallel.
+    write_lock = asyncio.Lock()
 
     async def process_article(article_id: str, text: str, headline: str, day: str):
         async with semaphore:
-            # Compute text embedding if possible
+            # Compute text embedding if possible. The embedding call is
+            # synchronous, so run it in a thread: otherwise it blocks the event
+            # loop and serializes all articles regardless of SEMAPHORE_LIMIT.
             text_embedding = None
             if api_key:
                 try:
-                    text_embedding = embed_text_deterministic(text, api_key=api_key)
+                    text_embedding = await asyncio.to_thread(
+                        embed_text_deterministic, text, api_key=api_key
+                    )
                     # Convert numpy array to list for Neo4j storage
                     text_embedding = text_embedding.tolist() if isinstance(text_embedding, np.ndarray) else text_embedding
                     logger.debug("Embedded article %s (embedding_dim=%d)", article_id[:8], len(text_embedding))
@@ -182,6 +192,7 @@ async def build_kg_incremental_candidate(
                     candidate_tag=candidate_tag,
                     article_date=day,
                     text_embedding=text_embedding,
+                    write_lock=write_lock,
                 )
                 logger.debug("Processed article: %s", headline[:50])
             except Exception as e:
@@ -190,36 +201,40 @@ async def build_kg_incremental_candidate(
                 )
 
             # Also ensure Article node exists and is linked to Day
-            # (even if mutator extracted nothing, we still need the article-day link)
-            with driver.driver.session(database=neo4j_cfg.database) as session:
-                text_hash = str(hash(text))
-                try:
+            # (even if mutator extracted nothing, we still need the article-day link).
+            # Neo4j sessions are synchronous, so the write runs in a thread.
+            def _ensure_article_node() -> None:
+                with driver.driver.session(database=neo4j_cfg.database) as session:
                     article_update_query = """
                         MERGE (a:Article {id: $text_id})
                         SET a.headline = $headline
                     """
                     params = {
-                        "text_id": text_hash,
+                        "text_id": article_text_id(text),
                         "headline": headline,
                     }
-                    
+
                     if day:
                         article_update_query += ", a.date = date($day)"
                         params["day"] = day
-                    
+
                     if text_embedding:
                         article_update_query += ", a.text_embedding = $text_embedding"
                         params["text_embedding"] = text_embedding
-                    
+
                     article_update_query += """
                         WITH a
                         MATCH (d:Day {date: $day})
                         MERGE (a)-[r:PUBLISHED_ON]->(d)
                     """
-                    
+
                     session.run(article_update_query, **params)
-                except Exception as e:
-                    logger.debug("Failed to create Article node: %s", str(e))
+
+            try:
+                async with write_lock:
+                    await asyncio.to_thread(_ensure_article_node)
+            except Exception as e:
+                logger.debug("Failed to create Article node: %s", str(e))
 
     # Create tasks
     tasks = []

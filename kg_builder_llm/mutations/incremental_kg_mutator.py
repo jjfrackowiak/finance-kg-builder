@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -5,7 +6,8 @@ from neo4j import Driver
 from neo4j_graphrag.llm import LLMInterface
 from pydantic import BaseModel
 
-from kg_builder_llm.core.entity_resolution import canonical_key, normalize_key
+from kg_builder_llm.core.entity_resolution import canonical_key
+from kg_builder_llm.core.ids import article_text_id
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,7 @@ class IncrementalArticleKGMutator:
         candidate_tag: Optional[str] = None,
         article_date: Optional[str] = None,
         text_embedding: Optional[List[float]] = None,
+        write_lock: Optional[asyncio.Lock] = None,
     ) -> None:
         """
         Extract entities and relationships from text, then apply them to the graph
@@ -78,7 +81,7 @@ class IncrementalArticleKGMutator:
             article_date: Publication date of the article (YYYY-MM-DD format) for temporal features
             text_embedding: Deterministic text embedding vector (1536-dim for text-embedding-3-small)
         """
-        text_hash = str(hash(text))
+        text_hash = article_text_id(text)
         extraction = await self._extract(text, ontology)
         logger.info(
             "Extracted from article %s: %d nodes, %d relationships",
@@ -115,18 +118,28 @@ class IncrementalArticleKGMutator:
             rel.from_key = key_map.get(rel.from_key, canonical_key(rel.from_key, "", ""))
             rel.to_key = key_map.get(rel.to_key, canonical_key(rel.to_key, "", ""))
 
-        # Apply mutation with isolation constraints
-        with self.driver.session() as session:
-            session.execute_write(
-                self._apply_mutation,
-                article_id,
-                text_hash,
-                extraction,
-                accepted_tags,
-                candidate_tag,
-                article_date,
-                text_embedding,
-            )
+        # Apply mutation with isolation constraints. The Neo4j session is
+        # synchronous, so run the write in a thread to keep the event loop free
+        # for other articles' LLM calls. Concurrent writes MERGE the same hub
+        # nodes and deadlock, so callers pass a lock to serialize them.
+        def _write() -> None:
+            with self.driver.session() as session:
+                session.execute_write(
+                    self._apply_mutation,
+                    article_id,
+                    text_hash,
+                    extraction,
+                    accepted_tags,
+                    candidate_tag,
+                    article_date,
+                    text_embedding,
+                )
+
+        if write_lock is not None:
+            async with write_lock:
+                await asyncio.to_thread(_write)
+        else:
+            await asyncio.to_thread(_write)
 
         logger.debug("Applied mutation to graph for article_id=%s", article_id)
 

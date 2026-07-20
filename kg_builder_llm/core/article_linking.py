@@ -5,6 +5,7 @@ import logging
 import pandas as pd
 
 from kg_builder_llm.core.graph import GraphDriver
+from kg_builder_llm.core.ids import article_text_id
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ def create_and_link_article_days(
     for idx, row in articles_df.iterrows():
         day = str(row["day"])
         headline = str(row.get("headline", ""))[:1024]
-        text_hash = str(hash(row.get("text", "")))  # Simple hash to identify article
+        text_hash = article_text_id(str(row.get("text", "")))
 
         article_link_payload.append(
             {

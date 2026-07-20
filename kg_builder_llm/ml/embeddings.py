@@ -115,7 +115,10 @@ def compute_hope_embeddings(edges: List[Tuple[str, str]], dim: int = 128) -> Dic
     logger.info("Fitting HOPE model with final dim=%d (k=%d)", dim, k)
 
     # HOPE via Katz similarity SVD — equivalent to karateclub's HOPE implementation
-    A = nx.to_scipy_sparse_array(G, nodelist=range(N), format="csr", dtype=float)
+    if hasattr(nx, "to_scipy_sparse_array"):
+        A = nx.to_scipy_sparse_array(G, nodelist=range(N), format="csr", dtype=float)
+    else:  # networkx < 2.7
+        A = nx.to_scipy_sparse_matrix(G, nodelist=range(N), format="csr", dtype=float)
     beta = 0.01
     I = sp.eye(N, format="csr")
     try:

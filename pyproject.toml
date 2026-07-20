@@ -64,7 +64,7 @@ kg-builder = "kg_builder.main:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-v --cov=kg_builder --cov-report=term-missing"
+addopts = "-v --cov=kg_builder_llm --cov-report=term-missing"
 
 [tool.black]
 line-length = 100

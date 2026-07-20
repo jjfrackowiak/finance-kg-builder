@@ -42,17 +42,17 @@ def compute_topology_features(
     MATCH (article:Article)
     WHERE article.date >= date($eval_date) - duration({days: $lookback_days})
       AND article.date <= date($eval_date)
-    MATCH (n)-[:MENTIONED_IN]->(article)
+    MATCH (article)-[:MENTIONS]->(n)
     WITH DISTINCT n
 
     // Mention count in the lookback window
-    OPTIONAL MATCH (n)-[:MENTIONED_IN]->(win_art:Article)
+    OPTIONAL MATCH (win_art:Article)-[:MENTIONS]->(n)
     WHERE win_art.date >= date($eval_date) - duration({days: $lookback_days})
       AND win_art.date <= date($eval_date)
     WITH n, count(DISTINCT win_art) AS mention_count
 
     // First-ever mention date (entity novelty)
-    OPTIONAL MATCH (n)-[:MENTIONED_IN]->(any_art:Article)
+    OPTIONAL MATCH (any_art:Article)-[:MENTIONS]->(n)
     WITH n, mention_count, min(any_art.date) AS first_date
 
     // In-degree (all relationships in graph — temporal isolation handled by allowed_tags)

@@ -33,6 +33,11 @@ class ModelMetrics:
     n_val_days: int = 0
     feature_importances: Optional[List[float]] = None
 
+    @classmethod
+    def empty(cls) -> "ModelMetrics":
+        """Zero-valued metrics used as the default for unevaluated candidates."""
+        return cls(auc=0.0, f1=0.0, max_hops_train=0, max_hops_val=0)
+
 
 def build_day_embedding_frame(
     df_day_nodes: pd.DataFrame,
@@ -151,7 +156,9 @@ def train_classifier_on_embeddings(
             return ModelMetrics(auc=0.0, f1=0.0, max_hops_train=0, max_hops_val=0)
 
         logger.debug("Using legacy temporal split mode")
-        train_df, val_df = temporal_train_val_split(df_train, train_fraction)
+        train_idx, val_idx = temporal_train_val_split(df_train["day"].tolist(), train_fraction)
+        train_df = df_train.iloc[train_idx]
+        val_df = df_train.iloc[val_idx]
 
     if len(train_df) == 0 or len(val_df) == 0:
         logger.warning("Insufficient data for train/val split")
