@@ -669,7 +669,14 @@ async def main(args: Optional[argparse.Namespace] = None) -> int:
 
         # 4. Initialize LLM and embedder
         logger.info("Initializing LLM and embedder...")
-        llm_kwargs = {"api_key": config.openai.api_key, "model_name": config.openai.model_name}
+        llm_kwargs = {
+            "api_key": config.openai.api_key,
+            "model_name": config.openai.model_name,
+            # Greedy decoding + fixed seed so extraction is reproducible across
+            # runs/pods — otherwise identical articles + identical ontology can
+            # yield different extracted entities/relationships and thus AUC.
+            "model_params": {"temperature": 0, "seed": 42},
+        }
         if config.openai.base_url:
             llm_kwargs["base_url"] = config.openai.base_url
             logger.info(f"  - LLM_BASE_URL={config.openai.base_url}")
