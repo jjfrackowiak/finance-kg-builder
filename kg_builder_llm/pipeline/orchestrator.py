@@ -90,12 +90,13 @@ class Orchestrator:
             return BedrockLLM(
                 model_id=config.bedrock.model_id,
                 region=config.bedrock.region,
+                temperature=0,
             )
         except Exception:
             logger.info("Bedrock unavailable — falling back to OpenAI for ontology LLM")
             kwargs = dict(
                 model_name=config.openai.model_name,
-                model_params={"temperature": 0.1},
+                model_params={"temperature": 0},
                 api_key=config.openai.api_key,
             )
             if config.openai.base_url:

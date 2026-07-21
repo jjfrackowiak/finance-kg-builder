@@ -15,7 +15,7 @@ class _LLMResponse:
 class BedrockLLM:
     """Calls AWS Bedrock Converse API; interface matches neo4j-graphrag OpenAILLM."""
 
-    def __init__(self, model_id: str, region: str, temperature: float = 0.1):
+    def __init__(self, model_id: str, region: str, temperature: float = 0):
         import boto3
         self.model_id = model_id
         self.client = boto3.client("bedrock-runtime", region_name=region)
