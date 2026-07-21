@@ -132,7 +132,8 @@ resource "aws_iam_role_policy" "github_assume_deployment" {
 # Assumed by both GitHub Actions (via github role) and local runs (via IAM user)
 
 resource "aws_iam_role" "terraform_deployment" {
-  name = "${local.prefix}-terraform-deployment"
+  name                 = "${local.prefix}-terraform-deployment"
+  max_session_duration = 14400 # 4h — sweeps assuming this role can run past the 1h default
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
