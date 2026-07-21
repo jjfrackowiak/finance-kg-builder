@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import subprocess
 import time
 import uuid
 
@@ -300,8 +301,62 @@ def build_job_manifest(
     )
 
 
-def wait_for_job(batch_v1: client.BatchV1Api, job_name: str):
+CREDENTIAL_REFRESH_INTERVAL = 45 * 60  # seconds; role-chained STS sessions cap at 1h
+
+
+def _get_assumed_role_arn() -> "str | None":
+    """IAM role ARN backing the current assumed-role session, or None if
+    running on long-term credentials (e.g. a local IAM user) — those aren't
+    role-chained and don't need proactive refresh."""
+    try:
+        out = subprocess.run(
+            ["aws", "sts", "get-caller-identity", "--query", "Arn", "--output", "text"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    if "assumed-role/" not in out:
+        return None
+    account_id = out.split(":")[4]
+    role_name = out.split("assumed-role/")[1].split("/")[0]
+    return f"arn:aws:iam::{account_id}:role/{role_name}"
+
+
+def refresh_aws_credentials(role_arn: str) -> None:
+    """Re-assume role_arn for a fresh session. Role chaining (OIDC -> github
+    role -> this role) caps sessions at 1h regardless of the role's
+    MaxSessionDuration, so long sweeps must refresh proactively instead of
+    requesting a longer duration up front."""
+    out = subprocess.run(
+        ["aws", "sts", "assume-role", "--role-arn", role_arn,
+         "--role-session-name", "sweep-refresh", "--output", "json"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    creds = json.loads(out)["Credentials"]
+    os.environ["AWS_ACCESS_KEY_ID"] = creds["AccessKeyId"]
+    os.environ["AWS_SECRET_ACCESS_KEY"] = creds["SecretAccessKey"]
+    os.environ["AWS_SESSION_TOKEN"] = creds["SessionToken"]
+    print(f"  ↻ Refreshed AWS credentials (expires {creds['Expiration']})")
+
+
+class CredentialRefresher:
+    """Proactively re-assumes the current role during long polling loops so
+    the EKS auth exec plugin (which re-reads AWS_* env vars on each token
+    refresh) never hits an expired role-chained session."""
+
+    def __init__(self):
+        self.role_arn = _get_assumed_role_arn()
+        self.last_refresh = time.time()
+
+    def maybe_refresh(self):
+        if self.role_arn and time.time() - self.last_refresh > CREDENTIAL_REFRESH_INTERVAL:
+            refresh_aws_credentials(self.role_arn)
+            self.last_refresh = time.time()
+
+
+def wait_for_job(batch_v1: client.BatchV1Api, job_name: str, refresher: CredentialRefresher):
     while True:
+        refresher.maybe_refresh()
         job = batch_v1.read_namespaced_job(name=job_name, namespace=NAMESPACE)
         if job.status.completion_time:
             print(f"  {job_name} completed")
@@ -377,9 +432,10 @@ def main():
         submitted.append(job)
 
     print(f"\nAll {len(submitted)} jobs submitted — waiting for completion...")
+    refresher = CredentialRefresher()
     failed_count = 0
     for job in submitted:
-        if not wait_for_job(batch_v1, job.metadata.name):
+        if not wait_for_job(batch_v1, job.metadata.name, refresher):
             failed_count += 1
 
     if args.n_workers > 0:

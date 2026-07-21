@@ -74,10 +74,12 @@ jobs:
 
       - name: 🔐 Assume deployment role
         run: |
+          # Role-chained sessions (OIDC -> github role -> this role) are
+          # capped at 1h by AWS regardless of the role's MaxSessionDuration —
+          # sweep.py refreshes these credentials proactively during long polls.
           CREDS=$(aws sts assume-role \
             --role-arn "${{ steps.config.outputs.role_arn }}" \
             --role-session-name sweep \
-            --duration-seconds 14400 \
             --output json)
           echo "AWS_ACCESS_KEY_ID=$(echo "$CREDS"     | jq -r .Credentials.AccessKeyId)"     >> "$GITHUB_ENV"
           echo "AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r .Credentials.SecretAccessKey)" >> "$GITHUB_ENV"
