@@ -8,6 +8,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-extra local --no-extra sweep
 
 COPY kg_builder_llm/ ./kg_builder_llm/
+COPY resources/ ./resources/
 
 ENV PATH="/app/.venv/bin:$PATH"
 
