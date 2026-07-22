@@ -31,6 +31,8 @@ class ModelMetrics:
     brier_score: float = 0.0
     n_train_days: int = 0
     n_val_days: int = 0
+    n_nodes_total: int = 0
+    n_rels_total: int = 0
     feature_importances: Optional[List[float]] = None
 
     @classmethod

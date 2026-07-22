@@ -20,6 +20,39 @@ from kg_builder_llm.ml.modeling import (
 logger = logging.getLogger(__name__)
 
 
+def count_graph_by_tags(
+    driver: GraphDriver, allowed_tags: Optional[List[str]]
+) -> "tuple[int, int]":
+    """Count nodes and relationships belonging to a candidate's effective graph.
+
+    Scopes to entities tagged with any of allowed_tags (base + prior winners +
+    current candidate). Returns (n_nodes, n_rels); (0, 0) on any failure so a
+    counting error never aborts evaluation. Used for the KG-growth figure.
+    """
+    try:
+        if allowed_tags:
+            node_q = (
+                "MATCH (n) WHERE n.candidate_tags IS NOT NULL "
+                "AND any(t IN n.candidate_tags WHERE t IN $tags) "
+                "RETURN count(n) AS c"
+            )
+            rel_q = (
+                "MATCH ()-[r]->() WHERE r.candidate_tags IS NOT NULL "
+                "AND any(t IN r.candidate_tags WHERE t IN $tags) "
+                "RETURN count(r) AS c"
+            )
+            params = {"tags": allowed_tags}
+        else:
+            node_q = "MATCH (n) RETURN count(n) AS c"
+            rel_q = "MATCH ()-[r]->() RETURN count(r) AS c"
+            params = {}
+        n_nodes = driver.run_query(node_q, params)[0]["c"]
+        n_rels = driver.run_query(rel_q, params)[0]["c"]
+        return int(n_nodes), int(n_rels)
+    except Exception as e:
+        logger.warning("Failed to count graph size for tags %s: %s", allowed_tags, e)
+        return 0, 0
+
 
 def evaluate_article_text_baseline(
     driver: GraphDriver,
@@ -366,5 +399,14 @@ def evaluate_candidate(
     except Exception as e:
         logger.error("Failed to train classifier: %s", str(e))
         return ModelMetrics(auc=0.0, f1=0.0, max_hops_train=train_max_hops, max_hops_val=val_max_hops)
-    
+
+    # Record graph size for this candidate's effective (allowed-tag) subgraph so
+    # KG growth across evolution steps can be plotted from parent-run metrics.
+    metrics.n_nodes_total, metrics.n_rels_total = count_graph_by_tags(driver, allowed_tags)
+    logger.info(
+        "Candidate graph size: %d nodes, %d relationships",
+        metrics.n_nodes_total,
+        metrics.n_rels_total,
+    )
+
     return metrics

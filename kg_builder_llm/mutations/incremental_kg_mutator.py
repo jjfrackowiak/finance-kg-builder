@@ -346,7 +346,7 @@ Example:
                 records = result.consume()
                 if records.counters.nodes_created > 0:
                     nodes_created += 1
-                logger.info(
+                logger.debug(
                     "Node: %s{key: %s} (normalized from %s) with candidate_tag=%s (counters: %s)",
                     node.label,
                     normalized_key,
@@ -405,7 +405,7 @@ Example:
                     records = result.consume()
                     if records.counters.relationships_created > 0:
                         rels_created += 1
-                    logger.info(
+                    logger.debug(
                         "Relationship (with isolation): %s{%s->%s} (normalized from %s->%s) with candidate_tag=%s (counters: %s)",
                         rel.type,
                         normalized_from_key,
@@ -449,7 +449,7 @@ Example:
                     records = result.consume()
                     if records.counters.relationships_created > 0:
                         rels_created += 1
-                    logger.info(
+                    logger.debug(
                         "Relationship (no isolation): %s{%s->%s} (normalized from %s->%s) with candidate_tag=%s (counters: %s)",
                         rel.type,
                         normalized_from_key,
