@@ -761,6 +761,17 @@ class Orchestrator:
 
         best_tag = max(self.results.keys(), key=lambda k: self.results[k].auc)
 
+        # Log the run's headline AUC as a flat parent-run metric so the whole
+        # sweep is analyzable via a single search_runs() → groupby().agg()
+        # instead of parsing ontology_summary.json per job.
+        try:
+            best_metrics = self.results[best_tag]
+            mlflow.log_metric("best_auc", best_metrics.auc)
+            mlflow.log_metric("best_f1", best_metrics.f1)
+            mlflow.set_tag("best_candidate", best_tag)
+        except Exception as e:
+            logger.warning("Failed to log best_auc to MLflow: %s", e)
+
         # Save summary
         save_ontology_summary(
             candidates_by_step=self.candidates_per_step,
