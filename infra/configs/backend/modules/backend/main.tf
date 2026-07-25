@@ -150,6 +150,18 @@ resource "aws_iam_role" "terraform_deployment" {
         Condition = {
           StringEquals = { "aws:PrincipalArn" = var.local_operator_arn }
         }
+      },
+      {
+        # Self-trust: lets an already-assumed session re-assume this same role.
+        # Chained sessions (OIDC -> github -> this role) are hard-capped at 1h by
+        # AWS regardless of max_session_duration above, so long GHA sweeps
+        # proactively re-assume every 45min (see sweep.py CredentialRefresher) —
+        # without this statement that re-assumption is denied and the sweep dies.
+        # ARN is constructed (not self-referenced) because Terraform disallows a
+        # resource referring to its own attribute within its own configuration.
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${var.account_id}:role/${local.prefix}-terraform-deployment" }
+        Action    = "sts:AssumeRole"
       }
     ]
   })
