@@ -81,9 +81,15 @@ jobs:
             --role-arn "${{ steps.config.outputs.role_arn }}" \
             --role-session-name sweep \
             --output json)
-          echo "AWS_ACCESS_KEY_ID=$(echo "$CREDS"     | jq -r .Credentials.AccessKeyId)"     >> "$GITHUB_ENV"
-          echo "AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | jq -r .Credentials.SecretAccessKey)" >> "$GITHUB_ENV"
-          echo "AWS_SESSION_TOKEN=$(echo "$CREDS"     | jq -r .Credentials.SessionToken)"    >> "$GITHUB_ENV"
+          AKID=$(echo "$CREDS" | jq -r .Credentials.AccessKeyId)
+          SAK=$(echo "$CREDS"  | jq -r .Credentials.SecretAccessKey)
+          STOK=$(echo "$CREDS" | jq -r .Credentials.SessionToken)
+          # Mask before exporting — $GITHUB_ENV values are NOT auto-masked and were
+          # leaking in plaintext in every later step's env dump.
+          echo "::add-mask::$AKID"; echo "::add-mask::$SAK"; echo "::add-mask::$STOK"
+          echo "AWS_ACCESS_KEY_ID=$AKID"     >> "$GITHUB_ENV"
+          echo "AWS_SECRET_ACCESS_KEY=$SAK"  >> "$GITHUB_ENV"
+          echo "AWS_SESSION_TOKEN=$STOK"     >> "$GITHUB_ENV"
 
       - name: ⚙️ Install kubectl
         uses: azure/setup-kubectl@v4

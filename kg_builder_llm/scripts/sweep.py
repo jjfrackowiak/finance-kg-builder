@@ -413,8 +413,10 @@ def main():
     if args.n_workers > 0:
         scale_deployment(apps_v1, VLLM_DEPLOYMENT, args.n_workers)
         scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, args.n_embedding_workers)
-        wait_for_deployment_ready(apps_v1, VLLM_DEPLOYMENT, timeout=600)
-        wait_for_deployment_ready(apps_v1, EMBEDDINGS_DEPLOYMENT, timeout=300)
+        # 10 fresh GPU nodes pulling the image + loading the model from the shared
+        # EFS cache can exceed 10 min; 600s was right at the boundary and flaked.
+        wait_for_deployment_ready(apps_v1, VLLM_DEPLOYMENT, timeout=1200)
+        wait_for_deployment_ready(apps_v1, EMBEDDINGS_DEPLOYMENT, timeout=600)
 
     # Submit all jobs up front, then wait for all in parallel.
     submitted = []
