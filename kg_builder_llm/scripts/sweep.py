@@ -7,6 +7,7 @@ import uuid
 
 import requests
 from kubernetes import client, config
+from kubernetes.client.exceptions import ApiException
 
 NAMESPACE = "kg-experiments"
 VLLM_DEPLOYMENT = "vllm"
@@ -337,6 +338,9 @@ def refresh_aws_credentials(role_arn: str) -> None:
     os.environ["AWS_SECRET_ACCESS_KEY"] = creds["SecretAccessKey"]
     os.environ["AWS_SESSION_TOKEN"] = creds["SessionToken"]
     print(f"  ↻ Refreshed AWS credentials (expires {creds['Expiration']})")
+    # New STS credentials can take a few seconds to propagate to the EKS auth
+    # webhook; the very next k8s API call has been observed to 401 without this.
+    time.sleep(5)
 
 
 class CredentialRefresher:
@@ -357,7 +361,16 @@ class CredentialRefresher:
 def wait_for_job(batch_v1: client.BatchV1Api, job_name: str, refresher: CredentialRefresher):
     while True:
         refresher.maybe_refresh()
-        job = batch_v1.read_namespaced_job(name=job_name, namespace=NAMESPACE)
+        try:
+            job = batch_v1.read_namespaced_job(name=job_name, namespace=NAMESPACE)
+        except ApiException as e:
+            # A freshly-refreshed STS session can briefly 401 against the EKS auth
+            # webhook before it propagates -- retry rather than killing the sweep.
+            if e.status == 401:
+                print(f"  transient 401 polling {job_name}, retrying in 10s...")
+                time.sleep(10)
+                continue
+            raise
         if job.status.completion_time:
             print(f"  {job_name} completed")
             return True
