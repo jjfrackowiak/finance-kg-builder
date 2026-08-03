@@ -1,0 +1,34 @@
+[
+  {
+    "ticker": "MSFT",
+    "steps": 7,
+    "candidates": 3,
+    "feature_mode": "hybrid",
+    "day_start": "2022-05-02",
+    "day_end": "2022-08-10",
+    "articles_per_day": 4,
+    "evolution_prompt": "default",
+    "lookback_days": 10,
+    "min_chain_hops": 6,
+    "max_chain_hops": 6,
+    "single_addition": true,
+    "auc_drop_tolerance": 0,
+    "semaphore_limit": 440
+  },
+  {
+    "ticker": "TSLA",
+    "steps": 7,
+    "candidates": 3,
+    "feature_mode": "hybrid",
+    "day_start": "2022-05-02",
+    "day_end": "2022-08-10",
+    "articles_per_day": 4,
+    "evolution_prompt": "resources/fundamental_prompt_template.txt",
+    "lookback_days": 20,
+    "min_chain_hops": 6,
+    "max_chain_hops": 6,
+    "single_addition": true,
+    "auc_drop_tolerance": 0,
+    "semaphore_limit": 440
+  }
+]

@@ -34,92 +34,82 @@ NVDA is kept in the dataset table and figure for completeness but is not used in
 
 ## Research Hypotheses
 
-The sweep is organised around the following testable claims. Each hypothesis isolates one hyperparameter dimension; the **Symmetry Principle** (below) ensures all other free dimensions co-vary uniformly across every group.
+The sweep is organised around the following testable claims. Each hypothesis isolates one hyperparameter dimension; the **Balanced Factorial Design** (below) ensures every other free dimension is *equally distributed* across the levels of the dimension under test, so each hparam's effect is estimated over a shared, representative spread of the others rather than at a single arbitrary reference point.
 
 **H1 — Market memory (lookback window)**  
-`--lookback-days` ∈ {1, 3, 5, 7}  
-AUC peaks at 3–5 days then drops. News older than ~1 week is too stale to carry directional signal in the graph.
+`--lookback-days` ∈ {3, 8, 10, 20}  
+AUC peaks at a moderate window then drops as older news goes stale. Tested factor.
 
 **H2 — Evolution depth is the core claim**  
-`--steps` ∈ {0, 3, 4, 5}  
-AUC increases with steps up to a convergence point. steps=0 is the no-evolution baseline the method must beat.
+`--steps` ∈ {3, 5, 7}  *(reduced from {3,5,7,9}; `steps=9` dropped — see Reduced Design below)*  
+AUC increases with steps up to a convergence point. Tested factor. (The no-evolution comparison is provided per-run by the step-0 base-structure and article-text baselines that every job already logs, so steps=0 is not run as a separate config.)
 
 **H3 — Multi-hop paths carry more signal than shallow ones**  
-`--min-chain-hops` = `--max-chain-hops` ∈ {4, 5, 6}  
-Deeper chains outperform shallower ones. Indirect entity chains encode signal not visible in direct mentions.
+`--min-chain-hops` = `--max-chain-hops` ∈ {3, 5, 6}  
+Deeper chains outperform shallower ones. Indirect entity chains encode signal not visible in direct mentions. Tested factor.
 
-**H4 — Exploration breadth (candidates per step)**  
-`--candidates` ∈ {1, 2, 3}  
-More candidates → better ontology selected per step → better AUC. Primarily a cost/quality tradeoff.
+**H4 — Exploration breadth (candidates per step) — HELD FIXED this sweep**  
+`--candidates` fixed at 3. Not a tested factor in this design; kept constant so it does not spend runs. Test separately later if needed.
 
-**H6 — News volume per day**  
-`--articles-per-day` ∈ {3, 5, 10, 20}  
-AUC improves up to ~10 articles/day then saturates. Data efficiency: how much news does the graph need?
+**H6 — News volume per day — HELD FIXED this sweep**  
+`--articles-per-day` fixed at 10. Not a tested factor in this design; kept constant. Test separately later if needed.
 
 **H7a — Which entity categories drive performance (post-hoc)**  
-Extracted from evolved ontologies after H1–H6 runs complete.  
-XGBoost feature importances aggregated by semantic category (corporate-fundamental, event-driven, macro-structural) reveal which ontology additions are responsible for AUC gains. Requires adding `feature/importances` artifact logging.
+Extracted from evolved ontologies after the sweep completes.  
+XGBoost feature importances aggregated by semantic category (corporate-fundamental, event-driven, macro-structural) reveal which ontology additions are responsible for AUC gains. `feature_importances` artifact logging is in place.
 
 **H7b — Evolution prompt strategy**  
 `--evolution-prompt` ∈ {default, fundamental, event-driven, macro-context}  
-Biasing ontology evolution toward corporate-fundamental entities outperforms the unstructured default. Each prompt uses the same AUC-gated threshold logic but guides the LLM toward a different semantic category cluster when proposing new types. Embedded as a co-varying dimension across **all** hypothesis groups (see Symmetry Principle below).
+Biasing ontology evolution toward corporate-fundamental entities outperforms the unstructured default. Each prompt uses the same AUC-gated threshold logic but guides the LLM toward a different semantic category cluster when proposing new types. Prompt is a full factor in the design, so H7b is answered from the same 36 runs as everything else.
 
 ---
 
-## Symmetry Principle
+## Balanced Factorial Design
 
-Each hypothesis group varies **exactly one dimension** at a time. All other free dimensions are held at their reference value.
+**Why not one-factor-at-a-time (OFAT).** The tempting design is: to test one hparam, hold every other hparam at a fixed "reference" value and sweep only the one. That produces a clean comparison — but *only at that single reference operating point*. If, say, the best `lookback_days` is different when `articles_per_day` is high, OFAT never sees it: the other knobs never move. Each hparam's effect is then measured at one arbitrary corner of the space, and interactions are invisible.
 
-**Evolution prompt (H7b) is not an isolated group — it co-varies with every other group.** Every config in every hypothesis group is replicated across all four prompt variants. This guarantees:
+**What we do instead — a strength-2 (pairwise-balanced) orthogonal array.** All five *tested* factors vary simultaneously, but the runs are chosen so that **for every pair of factors, every combination of their levels appears equally often**. The consequence is the property we actually want:
 
-1. The effect of any single hparam is not confounded with prompt choice
-2. H7b can be answered from the data of every hypothesis group, not a dedicated subset
-3. The full sweep is a clean factorial: (hypothesis dimension) × prompt × ticker
+> For each hparam value, the *distribution of every other hparam is identical*. So `mean(AUC | lookback=8)` and `mean(AUC | lookback=3)` are each averaged over the **same** balanced spread of steps, hops, prompt, and ticker. The difference between those means is therefore attributable to `lookback` alone — a fair marginal effect, not an artifact of the reference point.
 
-**Reference values** (fixed except when explicitly varied):
+**Tested factors and levels:**
 
-| Dimension | Reference |
-|-----------|-----------|
-| `steps` | 3 |
-| `lookback_days` | 3 |
-| `min_chain_hops` / `max_chain_hops` | 5 / 5 |
-| `candidates` | 2 |
-| `articles_per_day` | 5 |
-| `feature_mode` | hybrid (histogram + path + topology) |
+| Factor | Levels | n |
+|--------|--------|---|
+| `lookback_days` | 3, 8, 10, 20 | 4 |
+| `steps` | 3, 5, 7 | 3 |
+| `evolution_prompt` | default, fundamental, event-driven, macro-context | 4 |
+| `chain_hops` (min = max) | 3, 5, 6 | 3 |
+| `ticker` | MSFT, TSLA | 2 |
 
-**Dimensions always crossed with every group:**
+**Held fixed** (not under test): `candidates = 3`, `feature_mode = hybrid`, `single_addition = true`, monotonic AUC gate on (`keep_regressing_steps` off), `auc_drop_tolerance = 0.0`.
 
-| Dimension | Values |
-|-----------|--------|
-| `evolution_prompt` | default, fundamental, event-driven, macro-context |
-| `ticker` | MSFT, TSLA |
+**`articles_per_day` and the date window were cut for execution reasons — see "Data-volume cut" below.** The values in this section (`articles_per_day = 10`, window `2022-05-02 → 2023-08-16`) describe the *original, intended* design; the currently-dispatching pilot uses reduced values and is explicitly flagged as such in `sweep_runs/MANIFEST.md`.
 
-**Exception — steps=0 baseline:** the evolution prompt is never called at steps=0, so all four prompt variants would produce identical runs. Run 1 job per ticker (2 jobs total) as the baseline rather than 4 × 2 = 8 redundant jobs.
+**Original construction (48 runs).** The clean balanced set was 48 runs, with `steps` as a *4-level* factor {3,5,7,9}. Perfect pairwise balance requires the run count to be divisible by every pairwise level-product (16, 12, 8, 6) — LCM **48**. Construction: a 16-run orthogonal block for the three 4-level factors (`lookback`, `steps`, `prompt`) — `L=i`, `S=j` (full 4×4), `P=(i+j) mod 4` — replicated three times using the copy index as the 3-level `chain_hops` factor; `ticker` assigned by a balancing search; verified **zero** deviation on all 10 factor pairs. That grid is `sweep_grid.xlsx` (`configs` = the 48 jobs).
 
-**Job count per hypothesis group:**
+**Reduced Design — run count = 36 (current).** `steps=9` was dropped to remove the 12 heaviest jobs (each `steps=9` job = 27 candidate-builds), cutting sweep cost by ~⅓. This leaves **36 runs** with `steps ∈ {3,5,7}`. Balance consequence: a *perfectly* balanced design for the new level set {4,4,3,3,2} would need **144 runs** — two 3-level factors (`steps`, `chain_hops`) force divisibility by 9, which collides with the 16 from the two 4-level factors (`lookback`, `prompt`); LCM(16,9)=144. At 36 runs the design is therefore **not perfectly balanced**, but the damage is minimal and characterised:
+- All five **marginals stay uniform** (lookback 9 each, steps 12, prompt 9, chain_hops 12, ticker 18), and every factor pair among {lookback, steps, prompt, chain_hops} **remains balanced**.
+- Only the three **`ticker` pairings** (`lookback×ticker`, `prompt×ticker`, `chain_hops×ticker`) are **4-vs-5** instead of even. This is *unavoidable and minimal*: with 9 configs per 4-level level, a 2-level factor cannot split evenly (9 is odd).
+- **The core `steps` effect (H2) stays perfectly clean.** Only ticker-related comparisons carry a ≤1-config confound.
 
-| Hypothesis | Varied dim | Values | Formula | Jobs |
-|------------|-----------|--------|---------|------|
-| H1 | lookback_days | {1, 3, 5, 7} | 4 × 4 prompts × 2 tickers | 32 |
-| H2 | steps | {0, 3, 4, 5} | 2 (baseline) + 3 × 4 × 2 | 26 |
-| H3 | chain hops (min=max) | {4, 5, 6} | 3 × 4 × 2 | 24 |
-| H4 | candidates | {1, 2, 3} | 3 × 4 × 2 | 24 |
-| H6 | articles_per_day | {3, 5, 10, 20} | 4 × 4 × 2 | 32 |
-| **Total** | | | | **138 jobs** |
+**Data-volume cut (2026-07-26 — current pilot).** At the original `articles_per_day=10` over the full 471-day window (~3,730 articles/build), a single `steps=7` job's **step 1 alone took 90+ minutes and never finished** in live testing (see `planning/SWEEP_EXECUTION_FINDINGS.md`) — GPU-count tuning alone (tried 6, 8, 10) could not fix this; it is a workload-volume problem, not an infra one. The window was cut to **100 calendar days (2022-05-02 → 2022-08-10)** and `articles_per_day` cut **10→4** (measured ~355 articles/build, a ~10.5x reduction). This is a **reduced-fidelity pilot**, not a replacement for the intended design — the goal is to validate the full pipeline finishes end-to-end and get real per-step timing, before deciding whether to scale back toward the original window/volume or adopt this reduced footprint permanently. Measured on this reduced volume: ~17-19 min per evolution step (previously: step 1 never completed).
+
+**Execution — 13 runs to fit the 6h GitHub Actions cap, grouped by `steps`.** Runs are split into **13 `sweep.yml` dispatches** (`sweep_runs/run_01.json … run_13.json`; tracked in `sweep_runs/MANIFEST.md`), one steps-level per chunk (not mixed): 3 chunks of 4 configs at `steps=3` (~74min), 4 chunks of 3 configs at `steps=5` (~110min), 6 chunks of 2 configs at `steps=7` (~146min). Chunks were originally mixed by steps level (LPT bin-packed by total call volume), which made wall-time unpredictable — a light job finishes and frees GPU capacity while a heavy one is still running, so the chunk's wall-clock was governed by whichever config had the most steps, and packing by *total calls* doesn't balance *wall-clock*, which is step-sequential-bound. Grouping by steps makes each chunk's wall-time uniform and predictable, at the cost that same-steps configs stay synchronized through every step (no early tapering) — chunk size is shrunk as steps grows to compensate. 8 vLLM GPU workers (g5.xlarge / A10G), 5 CPU nodes, 6 embedding workers, sidecar Neo4j, semaphore 220/293/440 (scaled to configs-per-chunk). **All 13 must complete before analysis** — the balanced marginals only exist over the full 36-config set; partial runs are not interpretable for any factor. Splits are by *runtime*, never by factor (splitting by factor would be OFAT and destroy the balance).
+
+**Calibration (single-job measurement, 2026-07-25, original full-volume window).** ~**1.7** completed extractions/s per A10G (Qwen2.5-7B-AWQ), ~**140** concurrent-sequence KV ceiling per GPU, ~**3,730** articles/build (10/day cap over the 466-day training window). Full-48 sweep ≈ 3.2M extraction calls; reduced-36 ≈ 2.0M — both figures describe the *original* volume, since abandoned per the data-volume cut above.
+
+**Reading effects off the results.** After all 9 runs complete, pull the 36 parent runs (`best_auc` logged as a flat metric) and, for any hparam, `groupby(value).best_auc.agg(['mean','std'])`. Group means are directly comparable for lookback / steps / prompt / chain_hops (still pairwise-balanced); ticker contrasts (and any ticker-confounded comparison) should note the 4-vs-5 imbalance. Because the design is only strength-2, a paired/blocked test may block on any **single** other factor (whose margins match) — but **not** on the full joint cell of all remaining factors, which would require a full-factorial or higher-strength design.
 
 ---
 
 ## Open Design Questions
 
-**Subgroup averaging instead of a single reference run.** The Symmetry Principle currently
-compares every swept value against one fixed pseudo-default configuration (`steps=3,
-lookback_days=3, chain hops=5, candidates=2, articles_per_day=5`), so each ablation's effect is
-read off relative to a single arbitrary point rather than the spread of outcomes when other
-dimensions vary too. Since `evolution_prompt` and `ticker` are already crossed with every group,
-we could instead compare a swept value's mean AUC across its 8 replicate runs (4 prompts × 2
-tickers) against the mean AUC of other subgroups that are otherwise identical, rather than
-collapsing each group to the single reference config's AUC — this is less sensitive to the
-reference point being an unrepresentative pick.
+**Subgroup averaging instead of a single reference run. — RESOLVED** by the Balanced Factorial
+Design above. Effects are now read off as marginal means over a balanced spread of all other
+factors (`groupby(value).best_auc.mean()`), not against one fixed pseudo-default configuration.
+The old OFAT/Symmetry-Principle design (each swept value compared at a single reference point) is
+superseded.
 
 **One node+relationship pair per evolution step.** Extend the single-addition constraint (see
 `planning/POST_HOC_SEMANTIC_COMPARISON.md` Idea 1) so each step proposes exactly one new node
