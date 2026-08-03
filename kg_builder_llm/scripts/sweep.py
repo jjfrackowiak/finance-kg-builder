@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 import time
 import uuid
 
@@ -358,7 +359,40 @@ class CredentialRefresher:
             self.last_refresh = time.time()
 
 
-def wait_for_job(batch_v1: client.BatchV1Api, job_name: str, refresher: CredentialRefresher):
+def dump_failed_job_logs(core_v1: client.CoreV1Api, job_name: str) -> None:
+    """Print container logs for a failed job's pod(s) before the job's TTL
+    (1h) garbage-collects them -- otherwise a failure is undiagnosable
+    (this happened once already: cause of a real failure was unrecoverable
+    by the time anyone looked)."""
+    try:
+        pods = core_v1.list_namespaced_pod(
+            namespace=NAMESPACE, label_selector=f"job-name={job_name}"
+        )
+    except ApiException as e:
+        print(f"  could not list pods for {job_name} to dump logs: {e}")
+        return
+    for pod in pods.items:
+        pod_name = pod.metadata.name
+        container_names = [c.name for c in pod.spec.containers]
+        for c_name in container_names:
+            print(f"\n  ----- logs: pod={pod_name} container={c_name} (last 200 lines) -----")
+            try:
+                logs = core_v1.read_namespaced_pod_log(
+                    name=pod_name, namespace=NAMESPACE, container=c_name,
+                    tail_lines=200, timestamps=True,
+                )
+                print(logs)
+            except ApiException as e:
+                print(f"  (could not fetch logs for {pod_name}/{c_name}: {e})")
+            print(f"  ----- end logs: {pod_name}/{c_name} -----")
+
+
+def wait_for_job(
+    batch_v1: client.BatchV1Api,
+    core_v1: client.CoreV1Api,
+    job_name: str,
+    refresher: CredentialRefresher,
+):
     while True:
         refresher.maybe_refresh()
         try:
@@ -376,6 +410,7 @@ def wait_for_job(batch_v1: client.BatchV1Api, job_name: str, refresher: Credenti
             return True
         if job.status.failed:
             print(f"  {job_name} failed")
+            dump_failed_job_logs(core_v1, job_name)
             return False
         time.sleep(15)
 
@@ -409,6 +444,7 @@ def main():
     load_k8s_config()
     apps_v1 = client.AppsV1Api()
     batch_v1 = client.BatchV1Api()
+    core_v1 = client.CoreV1Api()
 
     parent_run_id = "local"
     if tracking_enabled:
@@ -450,7 +486,7 @@ def main():
     refresher = CredentialRefresher()
     failed_count = 0
     for job in submitted:
-        if not wait_for_job(batch_v1, job.metadata.name, refresher):
+        if not wait_for_job(batch_v1, core_v1, job.metadata.name, refresher):
             failed_count += 1
 
     if args.n_workers > 0:
@@ -465,6 +501,11 @@ def main():
         mlflow.end_run(parent_run_id)
 
     print(f"\nSweep complete. {len(configs) - failed_count}/{len(configs)} succeeded.")
+
+    if failed_count > 0:
+        # Previously exited 0 regardless -- GHA showed green on a run that
+        # silently dropped a config. Surface partial failure as a real failure.
+        sys.exit(1)
 
 
 if __name__ == "__main__":
