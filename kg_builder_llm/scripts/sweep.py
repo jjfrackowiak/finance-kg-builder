@@ -357,7 +357,14 @@ class CredentialRefresher:
 
     def __init__(self):
         self.role_arn = _get_assumed_role_arn()
-        self.last_refresh = time.time()
+        # Anchor to the ACTUAL session creation time (set by the workflow right
+        # after "Assume deployment role"), not to when this object happens to be
+        # instantiated -- GPU node provisioning + job submission can take 20+ min
+        # before sweep.py even reaches this point, and counting from "now" caused
+        # the chained session's 1h hard cap to be exceeded before the first
+        # refresh fired (observed failure at 65m53s into a run).
+        assumed_at = os.environ.get("ROLE_ASSUMED_AT_EPOCH")
+        self.last_refresh = float(assumed_at) if assumed_at else time.time()
 
     def maybe_refresh(self):
         if self.role_arn and time.time() - self.last_refresh > CREDENTIAL_REFRESH_INTERVAL:

@@ -90,6 +90,12 @@ jobs:
           echo "AWS_ACCESS_KEY_ID=$AKID"     >> "$GITHUB_ENV"
           echo "AWS_SECRET_ACCESS_KEY=$SAK"  >> "$GITHUB_ENV"
           echo "AWS_SESSION_TOKEN=$STOK"     >> "$GITHUB_ENV"
+          # True session creation time, so sweep.py's CredentialRefresher can
+          # count from when the chained session ACTUALLY started (not from
+          # whenever the Python object happens to be instantiated, which can
+          # be 20+ min later after GPU node provisioning) -- otherwise the
+          # 1h chained-session cap can be exceeded before the first refresh.
+          echo "ROLE_ASSUMED_AT_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
       - name: ⚙️ Install kubectl
         uses: azure/setup-kubectl@v4
