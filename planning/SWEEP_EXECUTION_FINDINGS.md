@@ -178,3 +178,34 @@ was the first *real* failure since that hardening landed, and it worked
 exactly as intended — the full pod traceback (including the underlying
 `neo4j.exceptions.ServiceUnavailable`) was captured and readable in the GHA
 log well after the 1h job TTL would otherwise have erased it.
+
+**Chunk 1 retry (v2, neo4j mem fix) crashed again at 65m53s** — same
+`subprocess.CalledProcessError` / exit-254 symptom as the original self-trust
+bug, but the self-trust IAM policy was verified still in place (re-checked
+live). Different root cause: `CredentialRefresher.last_refresh` was seeded
+with `time.time()` at **Python object instantiation**, which happens only
+after GPU node provisioning (up to 20min with the 1200s timeout) and job
+submission — 20-25min after the *actual* AWS session was created in the
+workflow's "Assume deployment role" bash step. So the 45-minute countdown
+started ~20-25min late relative to true session age, meaning the first
+refresh could fire *after* AWS's 1h chained-session hard cap had already
+passed (65m53s observed > 60min cap). **Fixed** (commit `24498be`): the
+workflow now exports `ROLE_ASSUMED_AT_EPOCH` right after the assume-role
+call; `CredentialRefresher` anchors its countdown to that real timestamp
+instead of its own construction time. Chunk 1 re-dispatched (3rd attempt,
+run `30899967068`) with both this and the neo4j memory fix live.
+
+**Open question, not yet actioned:** candidate pruning (`_prune_candidate_tags`,
+`orchestrator.py:711`) only strips a losing candidate's tag from nodes/
+relationships — it never deletes them (confirmed via a full-package search:
+the only `DETACH DELETE` calls are the start-of-run full wipe). The code
+comment at `orchestrator.py:459` confirms this is intentional design, not an
+oversight. This means graph size grows monotonically for a job's entire
+lifetime (every candidate at every step, win or lose, adds permanent data),
+which is almost certainly the underlying driver behind the Neo4j OOM above —
+the memory bump treats the symptom, not the cause. Real fix would be
+deleting nodes/relationships whose `candidate_tags` becomes empty after
+untagging (i.e. truly orphaned, not shared with `base_structure` or an
+accepted lineage) — a genuine pipeline change, not yet implemented. Risk is
+highest for the 6 remaining `steps=7` chunks (most accumulated candidate
+history before a job ends).
