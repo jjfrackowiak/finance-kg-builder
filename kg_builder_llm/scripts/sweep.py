@@ -233,16 +233,22 @@ def build_job_manifest(
             ],
             env=[
                 client.V1EnvVar(name="NEO4J_AUTH",                              value="neo4j/sweeppass"),
-                client.V1EnvVar(name="NEO4J_server_memory_heap_initial__size",   value="128m"),
-                client.V1EnvVar(name="NEO4J_server_memory_heap_max__size",       value="512m"),
-                client.V1EnvVar(name="NEO4J_server_memory_pagecache_size",       value="64m"),
+                client.V1EnvVar(name="NEO4J_server_memory_heap_initial__size",   value="256m"),
+                client.V1EnvVar(name="NEO4J_server_memory_heap_max__size",       value="1g"),
+                client.V1EnvVar(name="NEO4J_server_memory_pagecache_size",       value="128m"),
                 client.V1EnvVar(name="NEO4J_server_http_enabled",                value="false"),
                 client.V1EnvVar(name="NEO4J_server_https_enabled",               value="false"),
             ],
             ports=[client.V1ContainerPort(container_port=7687, name="bolt")],
             resources=client.V1ResourceRequirements(
-                requests={"cpu": "250m", "memory": "512Mi"},
-                limits={"cpu": "500m", "memory": "768Mi"},
+                # Bumped 512Mi/768Mi -> 1Gi/1.5Gi: at 768Mi, a job crashed with
+                # ServiceUnavailable/Connection refused mid-run once the graph
+                # grew past a certain size (200-day window, ~2x the 100-day
+                # pilot's data) -- Neo4j almost certainly got OOM-killed. Pod
+                # restartPolicy=Never means a crashed sidecar never recovers,
+                # so every later query in that job fails permanently.
+                requests={"cpu": "250m", "memory": "1Gi"},
+                limits={"cpu": "500m", "memory": "1536Mi"},
             ),
             volume_mounts=[
                 client.V1VolumeMount(name="neo4j-data", mount_path="/data"),
