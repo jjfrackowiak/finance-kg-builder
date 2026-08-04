@@ -136,3 +136,45 @@ draining, no new billing). All 4 v5 job objects deleted. `sweep_runs/`
 config files still reflect the full-fidelity (`articles_per_day=10,
 candidates=3`) design and have NOT been changed — no dispatch has
 succeeded yet; run 1 remains "not completed" in `sweep_runs/MANIFEST.md`.
+
+## Update 2026-08-03/04: 100-day pilot succeeded (2 chunks), then window raised to 200 days
+
+The 100-day/4-articles-per-day pilot (steps-grouped, 13 chunks) ran cleanly:
+DagsHub's 100-run quota cap (private-repo free-tier limit) was hit and blocked
+all dispatch — fixed by making the DagsHub repo public (free plan: unlimited
+runs on public repos). `sweep.py` was hardened to dump failed-job pod logs
+before the 1h TTL wipes them and to exit non-zero on partial failure (both
+gaps found the hard way on an earlier run whose cause is permanently
+unrecoverable). With both fixes live, **chunks 1 and 2 (`steps=3`) each
+completed 4/4 cleanly in ~70-71 min**, matching the ~74min projection — first
+fully clean chunks all session.
+
+**Window then raised 100→200 days** (2022-05-02 → 2022-11-18) to increase
+fidelity, still at `articles_per_day=4` (~720 articles/build, 2.03x). This
+required confirming GitHub-hosted runners have a **hard, non-configurable 6h
+job cap** (verified against GitHub's own docs — `timeout-minutes` cannot
+exceed it; only self-hosted runners, up to 5 days, escape it) — chosen over
+setting up a self-hosted runner since 200 days' projected worst case
+(`steps=7`, ~4.6h) still fits with ~1.4h margin. This **supersedes** the
+100-day pilot's 2 completed chunks (different window, not comparable); all
+13 chunks were regenerated and restart from scratch.
+
+**Chunk 1 (200-day) crashed at 91min**, well into step 2, with
+`neo4j.exceptions.ServiceUnavailable: Connection refused` on `localhost:7687`
+— multiple steps/candidates had already succeeded (confirmed via MLflow run
+links in the captured logs), so this was **Neo4j dying mid-run**, not a
+startup issue. Root cause: the Neo4j sidecar's memory limit (768Mi, 512m JVM
+heap) was tuned for the 100-day pilot's smaller graph; at 200 days (~2x the
+data) the accumulated graph across evolution steps most likely exceeded it,
+triggering an OOM-kill. Critically, the job pod's `restartPolicy=Never`
+means a crashed sidecar **never recovers** — every later Neo4j query in that
+job fails permanently, which is exactly the "several steps succeed, then
+total failure" pattern observed. **Fixed** (commit `5b41ea6`): heap max
+512m→1g, pagecache 64m→128m, container memory limit 768Mi→1.5Gi, request
+512Mi→1Gi. Chunk 1 re-dispatched at 08:08 UTC 2026-08-04 to validate.
+
+**Also validated the failed-job log capture fix from the 100-day pilot**: this
+was the first *real* failure since that hardening landed, and it worked
+exactly as intended — the full pod traceback (including the underlying
+`neo4j.exceptions.ServiceUnavailable`) was captured and readable in the GHA
+log well after the 1h job TTL would otherwise have erased it.
