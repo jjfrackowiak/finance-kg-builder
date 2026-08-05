@@ -475,10 +475,12 @@ def main():
     if args.n_workers > 0:
         scale_deployment(apps_v1, VLLM_DEPLOYMENT, args.n_workers)
         scale_deployment(apps_v1, EMBEDDINGS_DEPLOYMENT, args.n_embedding_workers)
-        # 10 fresh GPU nodes pulling the image + loading the model from the shared
-        # EFS cache can exceed 10 min; 600s was right at the boundary and flaked.
-        wait_for_deployment_ready(apps_v1, VLLM_DEPLOYMENT, timeout=1200)
-        wait_for_deployment_ready(apps_v1, EMBEDDINGS_DEPLOYMENT, timeout=600)
+        # GPU node provisioning + image pull + model load from the shared EFS
+        # cache has real variance -- 600s flaked once, 1200s flaked again on a
+        # later run (no evidence of load-related cause, looks like plain AWS
+        # capacity/scheduling variance). Bumped with more margin this time.
+        wait_for_deployment_ready(apps_v1, VLLM_DEPLOYMENT, timeout=1800)
+        wait_for_deployment_ready(apps_v1, EMBEDDINGS_DEPLOYMENT, timeout=900)
 
     # Submit all jobs up front, then wait for all in parallel.
     submitted = []
