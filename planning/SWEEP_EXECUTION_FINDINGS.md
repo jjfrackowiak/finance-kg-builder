@@ -260,3 +260,18 @@ regression matched ground truth to full floating-point precision.
 `groupby(value).mean()`, when reading off `lookback` and `evolution_prompt`
 effects specifically (from either the pooled 72 or either ticker's 36
 alone). `steps` and `chain_hops` are safe with either method.
+
+**Minor, non-blocking finding (chunk 4, still in flight): occasional
+extraction JSON truncation.** ~56 `pydantic_core.ValidationError: Invalid
+JSON: EOF while parsing...` occurrences seen by step 5 (the deepest step
+reached this session) — `incremental_kg_mutator.py:245` fails to parse the
+LLM's JSON response because it's truncated mid-string, most likely a
+`max_tokens` ceiling being hit on longer/more-complex extractions as the
+evolved ontology grows. The immediate handler (`:252`) logs and re-raises,
+but the job pod stays `Running` with 0 restarts through 106+ minutes and
+multiple steps, so something upstream catches it per-article and skips
+rather than crashing the job. **Net effect: not fatal, but silently drops
+that one article's contribution** — worth investigating (likely just
+raising the extraction call's `max_tokens`) before or alongside the
+`steps=7` chunks, where deeper ontologies make longer completions more
+likely. Not yet actioned.
