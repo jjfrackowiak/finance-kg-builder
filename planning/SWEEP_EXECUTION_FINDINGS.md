@@ -209,3 +209,54 @@ untagging (i.e. truly orphaned, not shared with `base_structure` or an
 accepted lineage) — a genuine pipeline change, not yet implemented. Risk is
 highest for the 6 remaining `steps=7` chunks (most accumulated candidate
 history before a job ends).
+
+## Update 2026-08-05: extended to 72 configs, and a Counter-based balance check flaw found
+
+After 12/36 configs completed cleanly (chunks 1-3, all `steps=3`, ~102-104min
+each, both the neo4j memory fix and credential-refresh timing fix holding)
+plus chunk 4 (first `steps=5`) in flight, discussion turned to whether MSFT
+and TSLA results could be meaningfully compared. Conclusion: raw AUC can't be
+compared across tickers directly (different underlying task difficulty), but
+pooled marginal-mean *differences* remain valid (ticker-difficulty cancels
+when subtracted, same logic as any balanced-design confounder control) —
+*however* this doesn't support independently analyzing MSFT-only or
+TSLA-only, since filtering the pooled 36-design by ticker breaks balance on
+6 of 6 remaining pairs (verified empirically, not assumed).
+
+**Extended to 72 configs** (36 MSFT + 36 TSLA, each its own independently-
+balanced `steps=9`-dropped design) to support per-ticker analysis without
+the earlier-declined 288-config full rebuild — the reduced 36-per-ticker
+version turns out to need no more configs than doing it once for a full
+4-factor design would (144/2=72... actually simpler: same reduction ratio
+applies per-ticker as it did pooled). Reuses all 12 completed + 3 in-flight
+configs (same hparam combos, now needed under both tickers instead of a
+ticker split); 22 new chunks (`run_05..run_26`) generated for the remaining
+57 configs — see `sweep_runs/MANIFEST.md`.
+
+**Real methodology bug caught while verifying the single-ticker design's
+balance**: checking pairwise balance via `Counter` of *observed* factor
+combinations — the exact method used everywhere earlier in this document
+and in `EXPERIMENT_STRATEGY.md` — silently hides **missing** cells, since a
+0-count combination never appears as a Counter key. Explicit full-grid
+verification (checking every possible cell, not just observed ones) found
+`lookback×prompt` has 4 of 16 cells genuinely absent in the `steps=9`-dropped
+construction (each `lookback` level never co-occurs with one specific
+`prompt` value — an artifact of the `P=(i+j) mod 4` formula losing one row).
+Only `lookback` and `prompt` are affected, only with each other; `steps`
+(the core H2 claim) and `chain_hops` have zero missing cells with anything.
+
+**The fix needed no new data** — confirmed via an empirical zero-noise
+synthetic-data test that the design matrix is full rank (the effects ARE
+identifiable) and that naive `groupby().mean()` is measurably biased for
+`lookback`/`prompt` while **OLS regression with all 4 factors as covariates
+recovers the true effects exactly**. One further self-correction along the
+way: an initial "regression also fails" result was itself a bug (pandas'
+`get_dummies` sorted `lookback`'s string-cast values alphabetically,
+silently using `"10"` as the reference category instead of `"3"`) — fixed by
+specifying explicit `pd.Categorical` reference categories, after which
+regression matched ground truth to full floating-point precision.
+
+**Analysis implication going forward**: use OLS regression, not naive
+`groupby(value).mean()`, when reading off `lookback` and `evolution_prompt`
+effects specifically (from either the pooled 72 or either ticker's 36
+alone). `steps` and `chain_hops` are safe with either method.
