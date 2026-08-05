@@ -1,20 +1,14 @@
-# Sweep Run Manifest — 200-day window, grouped by steps (2026-08-03)
+# Sweep Run Manifest — 72-config design (36 MSFT + 36 TSLA, each independently balanced), 200-day window (2026-08-05)
 
-**Data window: 200 calendar days (2022-05-02 → 2022-11-18), `articles_per_day`=4** (measured ~720 articles/build, ~2.03x the previous 100-day pilot's ~355). Chosen as a middle ground: no self-hosted runner needed (GitHub-hosted 6h cap confirmed as a hard platform limit, not configurable — see conversation), and the tightest single-job projection (`steps=7`, ~4.6h) still has ~1.4h margin under 6h.
+**Extended from 36 to 72 configs.** Each ticker now gets its own complete, independently-balanced 36-config Latin-square design (steps ∈ {3,5,7}, steps=9 dropped) — not a 36-config array with ticker as a 5th factor. This achieves **perfect balance on every pair** within each ticker (verified: 0 missing cells for lookback×steps/hops, steps×prompt/hops, prompt×hops in each ticker's own 36; the one remaining structural feature — `lookback×prompt` has 4 of 16 cells missing, a side effect of the Latin-square-minus-one-row construction — is present in both tickers' 36 identically, and is fully resolved by using **regression (OLS with all 4 factors as covariates), not naive `groupby().mean()`**, to read off `lookback` and `steps` effects specifically. Verified empirically (zero-noise synthetic test): naive group means are biased for lookback/prompt; regression recovers true effects exactly. `steps` (H2, the core claim) and `chain_hops` (H3) have zero missing cells with anything and are unaffected either way.
 
-**⚠️ Supersedes the 100-day pilot.** The 100-day/4-per-day pilot's 2 completed chunks (runs 1-2, both `steps=3`, both 4/4 succeeded) used a *different* window and are **not comparable** to this design — they must be re-run under the 200-day window for the balanced marginals to be valid. All 13 chunks below are freshly generated for 200 days and start from scratch.
+**Also documents the resolved cross-ticker construct-validity question** (see `EXPERIMENT_STRATEGY.md`): raw AUC must not be compared directly between MSFT and TSLA (different underlying task difficulty), but pooled marginal-mean *differences* remain valid since ticker is now perfectly balanced against every other factor within each ticker's own design. With 72 configs, MSFT-only and TSLA-only analyses are now ALSO independently valid (not just the pooled analysis) — this was the actual motivation for the extension.
 
-Still the 36-config reduced design (`steps ∈ {3,5,7}`, `steps=9` dropped). Chunk structure (steps-grouped, sizes 4/3/2 for steps 3/5/7) is unchanged from the 100-day pilot — concurrency shape, not article volume, drives chunk sizing. Per-step time scaled by the measured article-volume ratio (~2.03x):
+**Reuse from the prior 36-config (2-ticker) plan**: all 12 completed configs (chunks 1-3) and the 3 in-flight configs (chunk 4) are part of the 72-config target as-is (same lookback/steps/prompt/hops combos, now needed for both tickers instead of a ticker-split). 15/72 covered once chunk 4 finishes; **57 new configs / 22 new chunks** (run_05..run_26) needed.
 
-| steps | configs/chunk | chunks | semaphore | ~projected wall-time |
-|---|---|---|---|---|
-| 3 | 4 | 3 | 220 | ~130 min (2.2h) |
-| 5 | 3 | 4 | 293 | ~203 min (3.4h) |
-| 7 | 2 | 6 | 440 | ~276 min (4.6h) — tightest margin, recommend validating before trusting |
+8 vLLM GPU workers (g5.xlarge / A10G), 5 CPU nodes, 6 embedding workers, sidecar Neo4j. Chunk sizing unchanged (steps=3: 4 configs/chunk sem=220; steps=5: 3/chunk sem=293; steps=7: 2/chunk sem=440).
 
-8 GPUs / 6 embedding workers / 5 CPU nodes, unchanged.
-
-**All 13 runs must complete before analysis** — the balanced marginals only exist over the full 36-config set.
+**All 26 chunks must complete before analysis** — the balanced marginals only exist over the full 72-config set (36 per ticker).
 
 Dispatch one run: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_runs/run_NN.json)" -f n_workers=8 -f n_embedding_workers=6 -f gpu_nodes=8 -f cpu_nodes=5 -f neo4j_mode=sidecar`
 
@@ -24,12 +18,25 @@ Dispatch one run: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_r
 | 02 | 3 | ✅ DONE (4/4, ~103min) | TSLA·lb3·s3·default·h5<br>MSFT·lb8·s3·fundament·h5<br>TSLA·lb10·s3·event_dri·h5<br>MSFT·lb20·s3·macro_con·h5 | 220 | ~130min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/30938173506) |
 | 03 | 3 | ✅ DONE (4/4, ~102min) | TSLA·lb3·s3·default·h6<br>TSLA·lb8·s3·fundament·h6<br>MSFT·lb10·s3·event_dri·h6<br>TSLA·lb20·s3·macro_con·h6 | 220 | ~130min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/30949749397) |
 | 04 | 5 | ⏳ DISPATCHED (v2, vllm timeout fix) | MSFT·lb3·s5·fundament·h3<br>TSLA·lb8·s5·event_dri·h3<br>TSLA·lb10·s5·macro_con·h3 | 293 | ~203min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/30994206421) |
-| 05 | 5 | · pending | TSLA·lb20·s5·default·h3<br>MSFT·lb3·s5·fundament·h5<br>TSLA·lb8·s5·event_dri·h5 | 293 | ~203min | — |
-| 06 | 5 | · pending | TSLA·lb10·s5·macro_con·h5<br>TSLA·lb20·s5·default·h5<br>MSFT·lb3·s5·fundament·h6 | 293 | ~203min | — |
-| 07 | 5 | · pending | MSFT·lb8·s5·event_dri·h6<br>MSFT·lb10·s5·macro_con·h6<br>MSFT·lb20·s5·default·h6 | 293 | ~203min | — |
-| 08 | 7 | · pending | TSLA·lb3·s7·event_dri·h3<br>TSLA·lb8·s7·macro_con·h3 | 440 | ~276min | — |
-| 09 | 7 | · pending | MSFT·lb10·s7·default·h3<br>TSLA·lb20·s7·fundament·h3 | 440 | ~276min | — |
-| 10 | 7 | · pending | MSFT·lb3·s7·event_dri·h5<br>MSFT·lb8·s7·macro_con·h5 | 440 | ~276min | — |
-| 11 | 7 | · pending | TSLA·lb10·s7·default·h5<br>MSFT·lb20·s7·fundament·h5 | 440 | ~276min | — |
-| 12 | 7 | · pending | TSLA·lb3·s7·event_dri·h6<br>MSFT·lb8·s7·macro_con·h6 | 440 | ~276min | — |
-| 13 | 7 | · pending | MSFT·lb10·s7·default·h6<br>TSLA·lb20·s7·fundament·h6 | 440 | ~276min | — |
+| 05 | 3 | · pending | MSFT·lb3·s3·default·h5<br>MSFT·lb3·s3·default·h6<br>MSFT·lb8·s3·fundament·h3<br>MSFT·lb8·s3·fundament·h6 | 220 | ~130min | — |
+| 06 | 3 | · pending | MSFT·lb10·s3·event_dri·h5<br>MSFT·lb20·s3·macro_con·h6<br>TSLA·lb3·s3·default·h3<br>TSLA·lb8·s3·fundament·h5 | 220 | ~130min | — |
+| 07 | 3 | · pending | TSLA·lb10·s3·event_dri·h3<br>TSLA·lb10·s3·event_dri·h6<br>TSLA·lb20·s3·macro_con·h3<br>TSLA·lb20·s3·macro_con·h5 | 220 | ~130min | — |
+| 08 | 5 | · pending | MSFT·lb3·s5·fundament·h5<br>MSFT·lb3·s5·fundament·h6<br>MSFT·lb8·s5·event_dri·h3 | 293 | ~203min | — |
+| 09 | 5 | · pending | MSFT·lb8·s5·event_dri·h5<br>MSFT·lb8·s5·event_dri·h6<br>MSFT·lb10·s5·macro_con·h3 | 293 | ~203min | — |
+| 10 | 5 | · pending | MSFT·lb10·s5·macro_con·h5<br>MSFT·lb10·s5·macro_con·h6<br>MSFT·lb20·s5·default·h3 | 293 | ~203min | — |
+| 11 | 5 | · pending | MSFT·lb20·s5·default·h5<br>MSFT·lb20·s5·default·h6<br>TSLA·lb3·s5·fundament·h3 | 293 | ~203min | — |
+| 12 | 5 | · pending | TSLA·lb3·s5·fundament·h5<br>TSLA·lb3·s5·fundament·h6<br>TSLA·lb8·s5·event_dri·h5 | 293 | ~203min | — |
+| 13 | 5 | · pending | TSLA·lb8·s5·event_dri·h6<br>TSLA·lb10·s5·macro_con·h5<br>TSLA·lb10·s5·macro_con·h6 | 293 | ~203min | — |
+| 14 | 5 | · pending | TSLA·lb20·s5·default·h3<br>TSLA·lb20·s5·default·h5<br>TSLA·lb20·s5·default·h6 | 293 | ~203min | — |
+| 15 | 7 | · pending | MSFT·lb3·s7·event_dri·h3<br>MSFT·lb3·s7·event_dri·h5 | 440 | ~276min | — |
+| 16 | 7 | · pending | MSFT·lb3·s7·event_dri·h6<br>MSFT·lb8·s7·macro_con·h3 | 440 | ~276min | — |
+| 17 | 7 | · pending | MSFT·lb8·s7·macro_con·h5<br>MSFT·lb8·s7·macro_con·h6 | 440 | ~276min | — |
+| 18 | 7 | · pending | MSFT·lb10·s7·default·h3<br>MSFT·lb10·s7·default·h5 | 440 | ~276min | — |
+| 19 | 7 | · pending | MSFT·lb10·s7·default·h6<br>MSFT·lb20·s7·fundament·h3 | 440 | ~276min | — |
+| 20 | 7 | · pending | MSFT·lb20·s7·fundament·h5<br>MSFT·lb20·s7·fundament·h6 | 440 | ~276min | — |
+| 21 | 7 | · pending | TSLA·lb3·s7·event_dri·h3<br>TSLA·lb3·s7·event_dri·h5 | 440 | ~276min | — |
+| 22 | 7 | · pending | TSLA·lb3·s7·event_dri·h6<br>TSLA·lb8·s7·macro_con·h3 | 440 | ~276min | — |
+| 23 | 7 | · pending | TSLA·lb8·s7·macro_con·h5<br>TSLA·lb8·s7·macro_con·h6 | 440 | ~276min | — |
+| 24 | 7 | · pending | TSLA·lb10·s7·default·h3<br>TSLA·lb10·s7·default·h5 | 440 | ~276min | — |
+| 25 | 7 | · pending | TSLA·lb10·s7·default·h6<br>TSLA·lb20·s7·fundament·h3 | 440 | ~276min | — |
+| 26 | 7 | · pending | TSLA·lb20·s7·fundament·h5<br>TSLA·lb20·s7·fundament·h6 | 440 | ~276min | — |
