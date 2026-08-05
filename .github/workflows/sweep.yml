@@ -241,6 +241,19 @@ jobs:
           THIS_RUN="${{ github.event.inputs.run_number }}"
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
+          # Sync MANIFEST.md to the ACTUAL latest origin/dev first, then edit
+          # on top of that -- not "edit the stale job-start checkout, then
+          # rebase". A run can take 100+ min, during which anyone (including a
+          # human tracking progress) may have also committed to MANIFEST.md;
+          # editing-then-rebasing turns that into a real merge conflict that
+          # fails outright (observed: chunk 05's own auto-dispatch step failed
+          # this way). Resetting to the tip first means our edit always lands
+          # on the true current state, so it applies cleanly regardless of
+          # what changed underneath during the run. This runner is ephemeral
+          # and holds no other uncommitted changes, so a hard reset is safe.
+          git fetch origin dev
+          git reset --hard origin/dev
+
           # Standalone script, not an embedded heredoc -- a heredoc's Python
           # body must start at column 0 (Python requires unindented top-level
           # statements), but YAML's block scalar (this `run: |`) requires
@@ -251,9 +264,9 @@ jobs:
 
           git add sweep_runs/MANIFEST.md
           git commit -m "docs: auto-mark chunk ${THIS_RUN} complete, chain to next" || echo "nothing to commit"
-          git pull --rebase origin dev
           # HEAD:dev (not just 'dev') -- robust whether checkout left us on a
-          # local branch or in detached HEAD.
+          # local branch or in detached HEAD. Fast-forward push since we just
+          # synced to the tip above.
           git push origin HEAD:dev
 
           if [ -z "$NEXT" ]; then
