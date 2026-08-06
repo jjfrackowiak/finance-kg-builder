@@ -275,3 +275,59 @@ that one article's contribution** — worth investigating (likely just
 raising the extraction call's `max_tokens`) before or alongside the
 `steps=7` chunks, where deeper ontologies make longer completions more
 likely. Not yet actioned.
+
+## Update 2026-08-06: chunk 11 GPU billing leak + root cause (slow node provisioning)
+
+Chunk 11 (`run_id=31076389173`, dispatched 06:10:09Z) failed with
+`TimeoutError: vllm not ready after 1800s`. Investigating cleanup afterward
+found the GPU nodegroup still at `desiredSize=8` — 8 `g5.xlarge` nodes had
+been running since the chunk's own scale-up, undetected, for **~7-8 hours**
+by the time it was caught (node creation timestamps 06:15-07:51Z, caught at
+14:42Z).
+
+**Two compounding bugs, both fixed in `2e2d21b`:**
+
+1. **Cleanup silently skipped the scale-down call.** The "🧹 Scale down"
+   step's `wait_active` helper had a 300s timeout waiting for the nodegroup
+   to leave `UPDATING`. On timeout it `return`ed non-zero, and the caller
+   chained the actual `aws eks update-nodegroup-config --desiredSize=0` call
+   with `&&`, so a slow-to-settle nodegroup meant the scale-down command
+   *never ran at all* — no error, no warning, nothing in the logs to
+   indicate the leak. Fixed: `wait_active` timeout raised to 600s, and the
+   scale-down call is now always attempted regardless of `wait_active`'s
+   outcome (`||` fallback logs a warning instead of skipping); a
+   post-scale-down check re-reads `desiredSize` and emits a loud
+   `::error::` (non-blocking, so it doesn't break the later auto-chain
+   `success()` check) if it's not actually `0`.
+
+2. **Root cause of the original vllm timeout: scale-up only waited for 1/8
+   GPU nodes.** The "⚡ Scale up" step's readiness wait
+   (`until kubectl get nodes -l node-role=gpu ... grep -qE Ready`) returned
+   as soon as a *single* GPU node was `Ready`, then immediately proceeded to
+   `sweep.py`, which starts polling vllm's own 1800s readiness timeout.
+   That day, GPU node provisioning was unusually slow — 3 of 8 nodes Ready
+   by 06:16, but the last 5 not until 07:20-07:51, over an hour after
+   dispatch. vllm's 8-replica deployment could never reach `Ready` within
+   1800s while most of its nodes were still `Pending`. Fixed: scale-up now
+   waits for **all** requested GPU nodes to be `Ready` (40m timeout, logs
+   progress every 60s, proceeds with a `::warning::` only if at least 1 node
+   is ready after the deadline) before moving on to `sweep.py`.
+
+**Manual remediation performed immediately upon discovery** (before the
+code fix, to stop the leak): `aws eks update-nodegroup-config
+--nodegroup-name kg-experiments-dev-gpu --scaling-config desiredSize=0` +
+`kubectl -n kg-experiments scale deployment vllm embeddings --replicas=0`.
+Confirmed drained to 0 nodes before redispatching chunk 11.
+
+**Cost impact**: ~8 `g5.xlarge` (A10G) nodes ran ~7-8h instead of the
+budgeted ~30-45min for one chunk attempt — roughly an order of magnitude
+more GPU-hours than expected for this single chunk. Not independently
+verified against AWS Cost Explorer; flagged here for awareness rather than
+quantified precisely.
+
+**Process takeaway**: this is the second time this session a cleanup-path
+edge case caused a real, undetected AWS cost (the first being the
+credential-masking gap, bug #2 above, which was a security leak rather
+than a billing one). Cleanup/teardown code needs the same scrutiny as the
+main happy path, not less — it runs unconditionally (`if: always()`) but
+was written and tested less rigorously than the scale-up path.
