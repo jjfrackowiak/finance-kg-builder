@@ -156,13 +156,33 @@ jobs:
             --scaling-config desiredSize=${{ github.event.inputs.cpu_nodes }} \
             --region ${{ env.AWS_REGION }}
 
-          echo "Waiting for at least 1 GPU node to be Ready (timeout 15m)..."
-          DEADLINE=$((SECONDS + 900))
-          until kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -qE "^\S+\s+Ready\s"; do
-            [ $SECONDS -ge $DEADLINE ] && echo "Timed out waiting for Ready GPU node" && exit 1
+          # Wait for ALL requested GPU nodes to be Ready, not just 1 -- vLLM needs
+          # n_workers replicas scheduled before it can become ready, and node
+          # launches can take well over 15m under capacity constraints (chunk 11,
+          # 2026-08-06: nodes trickled in over 95min, causing vllm's own 1800s
+          # readiness wait to expire while most nodes were still Pending).
+          WANT_GPU=${{ github.event.inputs.gpu_nodes }}
+          echo "Waiting for all $WANT_GPU GPU node(s) to be Ready (timeout 40m)..."
+          DEADLINE=$((SECONDS + 2400))
+          LAST_LOG=0
+          until [ "$(kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -c ' Ready ')" -ge "$WANT_GPU" ]; do
+            READY_NOW="$(kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -c ' Ready ')"
+            if [ $((SECONDS - LAST_LOG)) -ge 60 ]; then
+              echo "  $READY_NOW/$WANT_GPU GPU nodes Ready so far..."
+              LAST_LOG=$SECONDS
+            fi
+            if [ $SECONDS -ge $DEADLINE ]; then
+              if [ "$READY_NOW" -ge 1 ]; then
+                echo "::warning::Only $READY_NOW/$WANT_GPU GPU nodes Ready after 40m -- proceeding anyway, vllm readiness wait may fail"
+                break
+              else
+                echo "::error::0/$WANT_GPU GPU nodes Ready after 40m"
+                exit 1
+              fi
+            fi
             sleep 10
           done
-          echo "GPU node is Ready"
+          echo "$(kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -c ' Ready ')/$WANT_GPU GPU nodes Ready"
 
           echo "Waiting for ${{ github.event.inputs.cpu_nodes }} CPU nodes to be Ready (timeout 5m)..."
           DEADLINE=$((SECONDS + 300))
@@ -212,18 +232,41 @@ jobs:
           CLUSTER="${{ steps.config.outputs.prefix }}-eks"
           REGION="${{ env.AWS_REGION }}"
 
+          # Real incident: a slow GPU node warmup (vLLM readiness can now take
+          # up to 30-45min) meant this nodegroup's own scale-UP config-update
+          # was STILL "UPDATING" when cleanup ran. The old wait_active
+          # returned failure on timeout, which SHORT-CIRCUITED the scale-down
+          # call entirely via `&&` -- 8 GPU nodes kept running, undetected,
+          # until manually caught. Two changes: (1) wait longer (10min, up
+          # from 5), and (2) ALWAYS attempt the scale-down call regardless of
+          # whether we confirmed ACTIVE -- AWS harmlessly rejects it if the
+          # nodegroup truly isn't ready, but if it settled just after our
+          # last poll, we still want to try rather than give up.
           wait_active() {
-            local ng="$1" deadline=$((SECONDS + 300))
+            local ng="$1" deadline=$((SECONDS + 600))
             until [ "$(aws eks describe-nodegroup --cluster-name "$CLUSTER" --nodegroup-name "$ng" --query 'nodegroup.status' --output text --region "$REGION" 2>/dev/null)" = "ACTIVE" ]; do
-              [ $SECONDS -ge $deadline ] && echo "Timeout waiting for $ng ACTIVE, skipping scale" && return 1
+              [ $SECONDS -ge $deadline ] && { echo "::warning::$ng not ACTIVE after 600s -- attempting scale-down anyway"; return 0; }
               sleep 15
             done
           }
 
-          wait_active "${{ steps.config.outputs.prefix }}-gpu" && \
-            aws eks update-nodegroup-config --cluster-name "$CLUSTER" --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" --scaling-config desiredSize=0 --region "$REGION" || true
-          wait_active "${{ steps.config.outputs.prefix }}-cpu" && \
-            aws eks update-nodegroup-config --cluster-name "$CLUSTER" --nodegroup-name "${{ steps.config.outputs.prefix }}-cpu" --scaling-config desiredSize=1 --region "$REGION" || true
+          wait_active "${{ steps.config.outputs.prefix }}-gpu"
+          aws eks update-nodegroup-config --cluster-name "$CLUSTER" --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" --scaling-config desiredSize=0 --region "$REGION" 2>&1 || echo "::warning::GPU scale-down API call failed"
+          wait_active "${{ steps.config.outputs.prefix }}-cpu"
+          aws eks update-nodegroup-config --cluster-name "$CLUSTER" --nodegroup-name "${{ steps.config.outputs.prefix }}-cpu" --scaling-config desiredSize=1 --region "$REGION" 2>&1 || echo "::warning::CPU scale-down API call failed"
+
+          # Verify it actually landed. Loud (::error:: annotation, visible in
+          # the run summary) but deliberately NOT `exit 1` -- this step has
+          # `if: always()` and failing it would flip success() to false for
+          # the later auto-dispatch step, incorrectly blocking the chain on a
+          # cleanup hiccup even when the actual experiment succeeded.
+          sleep 15
+          GPU_DESIRED=$(aws eks describe-nodegroup --cluster-name "$CLUSTER" --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" --query 'nodegroup.scalingConfig.desiredSize' --output text --region "$REGION" 2>/dev/null)
+          if [ "$GPU_DESIRED" != "0" ]; then
+            echo "::error::GPU nodegroup desiredSize is '$GPU_DESIRED', not 0 after cleanup -- scale-down may not have applied. Manual check needed to avoid ongoing billing (this happened once already: 2026-08-06, chunk 11)."
+          else
+            echo "Confirmed: GPU nodegroup desiredSize=0"
+          fi
 
       - name: 🔗 Auto-dispatch next pending chunk
         # Only chains when (a) the sweep step actually succeeded -- our exit-code
