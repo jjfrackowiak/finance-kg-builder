@@ -161,12 +161,19 @@ jobs:
           # launches can take well over 15m under capacity constraints (chunk 11,
           # 2026-08-06: nodes trickled in over 95min, causing vllm's own 1800s
           # readiness wait to expire while most nodes were still Pending).
+          # NOTE: `grep -c` exits 1 when the count is 0. Under `bash -e`, a bare
+          # `var=$(cmd)` assignment propagates that failure and kills the whole
+          # step -- so every count read below is guarded with `|| true`.
+          count_ready_gpu() {
+            kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -c ' Ready ' || true
+          }
           WANT_GPU=${{ github.event.inputs.gpu_nodes }}
           echo "Waiting for all $WANT_GPU GPU node(s) to be Ready (timeout 40m)..."
           DEADLINE=$((SECONDS + 2400))
           LAST_LOG=0
-          until [ "$(kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -c ' Ready ')" -ge "$WANT_GPU" ]; do
-            READY_NOW="$(kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -c ' Ready ')"
+          READY_NOW=$(count_ready_gpu)
+          until [ "$READY_NOW" -ge "$WANT_GPU" ]; do
+            READY_NOW=$(count_ready_gpu)
             if [ $((SECONDS - LAST_LOG)) -ge 60 ]; then
               echo "  $READY_NOW/$WANT_GPU GPU nodes Ready so far..."
               LAST_LOG=$SECONDS
@@ -182,7 +189,7 @@ jobs:
             fi
             sleep 10
           done
-          echo "$(kubectl get nodes -l node-role=gpu --no-headers 2>/dev/null | grep -c ' Ready ')/$WANT_GPU GPU nodes Ready"
+          echo "$(count_ready_gpu)/$WANT_GPU GPU nodes Ready"
 
           echo "Waiting for ${{ github.event.inputs.cpu_nodes }} CPU nodes to be Ready (timeout 5m)..."
           DEADLINE=$((SECONDS + 300))
