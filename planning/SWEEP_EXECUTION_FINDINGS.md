@@ -346,3 +346,30 @@ zero-match `kubectl` before pushing. **Lesson**: `grep -c` inside any bare
 assignment under `set -e` is a landmine — the loop *condition* itself is
 safe (POSIX exempts `while`/`until` conditions from `-e`), but any count
 read inside the loop *body* is not.
+
+**Third attempt (`run 31113031688`): unexplained GitHub-side cancellation,
+one config completed first.** After both bugs above were fixed, GPU
+provisioning worked correctly (8/8 nodes Ready in ~11min) and the sweep
+started normally. 76 minutes into the `🧪 Run sweep` step, GitHub Actions
+cancelled the job outright (`##[error]The operation was canceled.`, no
+further detail). Investigated and ruled out: no `concurrency:` block in
+the workflow: no overlapping dispatch existed; repo is public so Actions
+minutes/spending limits don't apply; the user confirmed they did not
+cancel it manually. No definitive cause was found — the leading
+hypothesis is a transient GitHub-hosted-runner-side interruption (rare
+but known to happen on hosted `ubuntu-latest` runners for single steps
+that block for 1h+ polling an external system), not anything in our
+config or code. Flagging as unresolved rather than guessing further.
+
+The silver lining: the underlying k8s job for the first of the two
+configs (`MSFT lb20 h5 default`) had already completed successfully
+(exit 0, full MLflow run logged) before the cancellation landed, and
+cleanup correctly scaled GPU nodes back to 0 despite the cancel. Rather
+than re-run all 3 configs, attempt 4 (`run 31121807408`) was dispatched
+with only the 2 still-outstanding configs (`MSFT lb20 h6 default`,
+`TSLA lb3 h3 fundamental`) built from `run_11.json[1:]` — `run_11.json`
+itself was left unmodified as the canonical chunk-11 definition.
+`run_number` was deliberately omitted from this dispatch (no auto-chain)
+so a further failure here doesn't cascade into a premature chunk 12
+dispatch; auto-chain will be re-armed on the next full chunk once 11
+actually completes.
