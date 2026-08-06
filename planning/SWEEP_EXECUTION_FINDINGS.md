@@ -355,11 +355,8 @@ cancelled the job outright (`##[error]The operation was canceled.`, no
 further detail). Investigated and ruled out: no `concurrency:` block in
 the workflow: no overlapping dispatch existed; repo is public so Actions
 minutes/spending limits don't apply; the user confirmed they did not
-cancel it manually. No definitive cause was found — the leading
-hypothesis is a transient GitHub-hosted-runner-side interruption (rare
-but known to happen on hosted `ubuntu-latest` runners for single steps
-that block for 1h+ polling an external system), not anything in our
-config or code. Flagging as unresolved rather than guessing further.
+cancel it manually. **Confirmed root cause (see attempt 4 below): a GitHub Actions platform
+outage**, not anything in our config or code.
 
 The silver lining: the underlying k8s job for the first of the two
 configs (`MSFT lb20 h5 default`) had already completed successfully
@@ -373,3 +370,17 @@ itself was left unmodified as the canonical chunk-11 definition.
 so a further failure here doesn't cascade into a premature chunk 12
 dispatch; auto-chain will be re-armed on the next full chunk once 11
 actually completes.
+
+**Attempt 4 confirms the cause: GitHub Actions platform outage.** Attempt
+4 (`run 31121807408`, dispatched 17:00:55Z) never got a runner assigned
+at all (`runner_id: 0`, `steps: []` in the Jobs API) — it sat queued for
+15 minutes, then GitHub cancelled it itself. Checked
+`githubstatus.com` directly: GitHub Actions was in a confirmed **Major
+Outage** from 15:22 UTC ("workflow runs failing or delayed in starting,
+queued jobs timing out, Actions API errors"), still ongoing as of the
+17:02 UTC status update. This fully explains both attempt 3's mid-run
+cancellation (16:20, inside the outage window) and attempt 4's failure
+to even get a runner. **Not our code, not our AWS account, not user
+action** — external platform incident. Holding off on further sweep
+dispatches until GitHub confirms resolution, to avoid burning GPU-node
+time against a flaky control plane.
