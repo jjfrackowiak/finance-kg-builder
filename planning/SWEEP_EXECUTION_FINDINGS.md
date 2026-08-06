@@ -331,3 +331,18 @@ credential-masking gap, bug #2 above, which was a security leak rather
 than a billing one). Cleanup/teardown code needs the same scrutiny as the
 main happy path, not less — it runs unconditionally (`if: always()`) but
 was written and tested less rigorously than the scale-up path.
+
+**Immediate follow-up regression (same day): the fix in (2) above broke the
+scale-up step entirely.** First retry (`run 31112684227`) failed within
+~30s, before any GPU node could possibly be ready. Cause: the new
+`READY_NOW="$(kubectl get nodes ... | grep -c ' Ready ')"` line is a bare
+variable assignment inside the loop *body* (not the `until` condition,
+which is `-e`-exempt). `grep -c` exits 1 when the count is 0, and under
+this step's `bash -e` shell a failing `var=$(cmd)` assignment propagates
+that exit and kills the whole step immediately. Fixed in `e79df82` by
+wrapping the count read in a `count_ready_gpu() { ... | grep -c ' Ready '
+|| true; }` helper. Verified locally under `bash -e` with a mocked
+zero-match `kubectl` before pushing. **Lesson**: `grep -c` inside any bare
+assignment under `set -e` is a landmine — the loop *condition* itself is
+safe (POSIX exempts `while`/`until` conditions from `-e`), but any count
+read inside the loop *body* is not.
