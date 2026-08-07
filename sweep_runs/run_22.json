@@ -1,6 +1,6 @@
 [
   {
-    "ticker": "TSLA",
+    "ticker": "MSFT",
     "steps": 7,
     "candidates": 3,
     "feature_mode": "hybrid",
@@ -16,7 +16,7 @@
     "semaphore_limit": 440
   },
   {
-    "ticker": "TSLA",
+    "ticker": "MSFT",
     "steps": 7,
     "candidates": 3,
     "feature_mode": "hybrid",
