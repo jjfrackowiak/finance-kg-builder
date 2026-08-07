@@ -117,17 +117,17 @@ Evolution prompt & \texttt{default}, \texttt{fundamental}, \texttt{event-driven}
 The four evolution-prompt variants bias the Ontology Evolution Agent toward different semantic
 categories when proposing new node and relationship types.
 Each ticker receives its own 36-configuration design over the remaining four dimensions, for 72
-configurations in total (36 MSFT, 36 TSLA), and the two per-ticker designs have the same structure,
-so results are comparable both within and across them.
-Because raw predictive AUC differs systematically between the two tickers (they pose different
-underlying prediction-difficulty tasks), two complementary analyses are supported: one per ticker,
-and one pooling both with ticker included as a covariate so that ticker-level differences cancel out
-of comparisons along the other dimensions.
+configurations in total (36 MSFT, 36 TSLA).
+The two tickers are analysed separately rather than pooled: they are different prediction problems,
+of differing difficulty, so their AUC values are not meaningfully comparable on the same scale.
+The two per-ticker designs share the same structure, so the effect of a given dimension can still be
+read off in each and the two readings set side by side.
+Effects are read from group means: the configurations sharing a given level of one dimension are
+averaged and compared against those sharing each other level.
 Evolution steps and chain hops --- the two dimensions of primary interest --- are balanced against
-every other dimension, so their effects are read directly from group means.
-Lookback and evolution prompt are balanced against everything except each other: a few of their
-joint combinations go uncovered, so those two effects are estimated by OLS regression on all factors
-jointly rather than from group means.
+every other dimension, so these comparisons are clean.
+Lookback and evolution prompt are balanced against everything except each other, where a few joint
+combinations go uncovered, so comparisons along those two dimensions are read with more caution.
 
 \subsection{Infrastructure}
 \label{sec:infrastructure}
