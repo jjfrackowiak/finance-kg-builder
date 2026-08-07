@@ -116,9 +116,16 @@ categories when proposing new node and relationship types.
 Each ticker receives its own independently-balanced 36-configuration design over the remaining four
 dimensions, for 72 configurations in total (36 MSFT, 36 TSLA).
 Because raw predictive AUC differs systematically between the two tickers (they pose different
-underlying prediction-difficulty tasks), per-dimension effects are estimated via OLS regression on
-all factors jointly rather than naive per-group means, so that ticker-level differences are
-absorbed as a covariate and cancel out of marginal contrasts along the other dimensions.
+underlying prediction-difficulty tasks), two complementary analyses are supported.
+Per-ticker, each 36-configuration design is independently balanced on its own, so effects are read
+off directly via OLS regression on the four within-ticker dimensions, with no ticker term needed —
+the 36 TSLA and 36 MSFT configurations are run as two contiguous blocks precisely so that a
+TSLA-only analysis is already valid once the first 36 configurations complete, without waiting on
+MSFT.
+Pooling both tickers additionally lets per-dimension effects be estimated via OLS regression on all
+factors jointly, including ticker, rather than naive per-group means, so that ticker-level
+differences are absorbed as a covariate and cancel out of marginal contrasts along the other
+dimensions.
 
 \subsection{Infrastructure}
 \label{sec:infrastructure}
