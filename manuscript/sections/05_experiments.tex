@@ -126,6 +126,19 @@ Pooling both tickers supports the same distinction with ticker added as a covari
 for steps and chain-hops, OLS regression for lookback and evolution-prompt, with ticker-level
 differences absorbed as a covariate and cancelling out of marginal contrasts along the other
 dimensions.
+Figure~\ref{fig:balance} verifies this directly against the realized 72-configuration design: every
+pair of dimensions is perfectly balanced (a uniform count in every cell) except lookback--prompt,
+where the Latin-square construction leaves exactly one cell empty per lookback level, rotating
+across prompts --- the source of the one exception noted above.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/balance_matrix.png}
+  \caption{Pairwise co-occurrence counts across all ten dimension pairs in the realized 72-configuration
+    design. Nine pairs are perfectly uniform; lookback--prompt (top row, third panel) has one empty
+    cell per lookback level, rotating across the four prompts.}
+  \label{fig:balance}
+\end{figure}
 
 \subsection{Infrastructure}
 \label{sec:infrastructure}
