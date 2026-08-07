@@ -35,6 +35,10 @@ on:
         description: 'Workflow timeout in minutes (default 360 = 6h)'
         required: false
         default: '360'
+      dump_logs:
+        description: 'Print APOC/embedding diagnostic lines from each completed job pod. Smoke-test runs only -- a real chunk produces far too much output.'
+        required: false
+        default: 'false'
       run_number:
         description: 'sweep_runs/run_NN.json chunk number this dispatch corresponds to (2-digit, e.g. "05"). Leave empty for one-off/manual dispatches -- only set when part of the MANIFEST.md-driven chain, since that is what triggers auto-dispatch of the next pending chunk on success.'
         required: false
@@ -213,7 +217,8 @@ jobs:
             --configs '${{ github.event.inputs.configs }}' \
             --n-workers ${{ github.event.inputs.n_workers }} \
             --n-embedding-workers ${{ github.event.inputs.n_embedding_workers }} \
-            --neo4j-mode ${{ github.event.inputs.neo4j_mode }}
+            --neo4j-mode ${{ github.event.inputs.neo4j_mode }} \
+            ${{ github.event.inputs.dump_logs == 'true' && '--dump-logs' || '' }}
 
       - name: 🔐 Re-authenticate for cleanup
         if: always()
