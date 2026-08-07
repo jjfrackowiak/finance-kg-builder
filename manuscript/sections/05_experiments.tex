@@ -84,21 +84,16 @@ Inference (TEI) on a CPU node.
 \subsection{Sweep Configuration}
 \label{sec:sweep-config}
 
-Rather than a full grid search, the sweep uses a near-orthogonal balanced factorial design over the
-dimensions in Table~\ref{tab:sweep-dims}, crossed with two tickers, MSFT and TSLA.
-A strength-two mixed orthogonal array (Definition~1.2 of \citealp{lin2025orthogonalarrays}) requires
-every pair of factor levels to co-occur an equal number of times, which forces its index
-$\lambda = N / (s_i s_j)$ to be an integer for every pair of factors with $s_i$ and $s_j$ levels.
-For the level set used here --- two four-level factors (lookback, prompt), two three-level factors
-(steps, chain hops) and one two-level factor (ticker) --- that condition is only satisfiable at
-$N = 144$ runs.
-At the $N = 72$ runs affordable under the compute budget, the design attains exact pairwise balance
-for nine of the ten factor pairs; the single unavoidable exception is lookback--prompt, where
-$72/16 = 4.5$ is not an integer and each lookback level therefore leaves one prompt unobserved,
-rotating across the four prompts.
-This keeps each dimension's effect readable on its own, without being distorted by the others, while
-needing far fewer runs than testing every combination would --- designs of this kind have been shown
-to be effective specifically for exploring machine-learning hyperparameter spaces~\citep{shi2023hpdesigns}.
+Rather than a full grid search, configurations are chosen so that each dimension in
+Table~\ref{tab:sweep-dims} can be compared on equal footing.
+When the levels of one dimension are compared --- three evolution steps against five and seven, say
+--- the remaining dimensions are distributed identically across those groups, so a difference
+between the groups reflects the dimension being varied rather than an uneven mix of everything else.
+This is the standard balanced factorial, or orthogonal array, strategy~\citep{lin2025orthogonalarrays},
+which buys that comparability at a small fraction of the runs a full grid over the same levels would
+demand; such designs have proven effective for exploring machine-learning hyperparameter spaces in
+particular~\citep{shi2023hpdesigns}.
+The design is crossed with two tickers, MSFT and TSLA.
 Candidates per step is fixed at 3, articles per day at 4, and feature mode at \texttt{hybrid}
 (Section~\ref{sec:features}) throughout.
 
@@ -122,21 +117,17 @@ Evolution prompt & \texttt{default}, \texttt{fundamental}, \texttt{event-driven}
 The four evolution-prompt variants bias the Ontology Evolution Agent toward different semantic
 categories when proposing new node and relationship types.
 Each ticker receives its own 36-configuration design over the remaining four dimensions, for 72
-configurations in total (36 MSFT, 36 TSLA).
-The same balance property holds within each ticker separately, and fails in the same one place: five
-of the six within-ticker factor pairs are exactly balanced, while lookback--prompt again has a
-non-integral index ($36/16 = 2.25$) and leaves the same four combinations unobserved.
-The two per-ticker designs are structurally identical --- the unobserved combinations coincide
-exactly --- so per-ticker estimates are directly comparable with one another.
+configurations in total (36 MSFT, 36 TSLA), and the two per-ticker designs have the same structure,
+so results are comparable both within and across them.
 Because raw predictive AUC differs systematically between the two tickers (they pose different
-underlying prediction-difficulty tasks), two complementary analyses are supported.
-Per-ticker, steps and chain-hops effects --- the two dimensions of primary interest --- are read
-directly from per-group means, while lookback and evolution-prompt effects require OLS regression
-jointly on all four within-ticker dimensions, on account of those unobserved combinations.
-Pooling both tickers supports the same distinction with ticker added as a covariate: per-group means
-for steps and chain-hops, OLS regression for lookback and evolution-prompt, with ticker-level
-differences absorbed as a covariate and cancelling out of marginal contrasts along the other
-dimensions.
+underlying prediction-difficulty tasks), two complementary analyses are supported: one per ticker,
+and one pooling both with ticker included as a covariate so that ticker-level differences cancel out
+of comparisons along the other dimensions.
+Evolution steps and chain hops --- the two dimensions of primary interest --- are balanced against
+every other dimension, so their effects are read directly from group means.
+Lookback and evolution prompt are balanced against everything except each other: a few of their
+joint combinations go uncovered, so those two effects are estimated by OLS regression on all factors
+jointly rather than from group means.
 
 \subsection{Infrastructure}
 \label{sec:infrastructure}
