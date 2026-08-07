@@ -117,19 +117,14 @@ Each ticker receives its own independently-balanced 36-configuration design over
 dimensions, for 72 configurations in total (36 MSFT, 36 TSLA).
 Because raw predictive AUC differs systematically between the two tickers (they pose different
 underlying prediction-difficulty tasks), two complementary analyses are supported.
-Per-ticker, each 36-configuration design is independently balanced on its own, so effects are read
-off directly via OLS regression on the four within-ticker dimensions, with no ticker term needed —
-the 36 TSLA and 36 MSFT configurations are run as two contiguous blocks precisely so that a
-TSLA-only analysis is already valid once the first 36 configurations complete, without waiting on
-MSFT.\footnote{Running each ticker as a contiguous block trades one confound for another: ticker is
-now perfectly aligned with execution order, so any effect that drifts over the course of the sweep
-(e.g.\ upstream LLM provider-side model updates, infrastructure state) would be indistinguishable
-from a true ticker effect in the pooled analysis. This is not a concern for the per-ticker analyses
-above, only for the pooled one, and is judged an acceptable trade against the operational benefit of
-an early, complete per-ticker result.}
-Pooling both tickers additionally lets per-dimension effects be estimated via OLS regression on all
-factors jointly, including ticker, rather than naive per-group means, so that ticker-level
-differences are absorbed as a covariate and cancel out of marginal contrasts along the other
+Per-ticker, each 36-configuration design is independently balanced on its own: steps and chain-hops
+effects, the two dimensions of primary interest, are read directly from per-group means, while
+lookback and evolution-prompt effects require OLS regression jointly on all four within-ticker
+dimensions, since the Latin-square construction leaves a small number of lookback--prompt cells
+unobserved within each ticker.
+Pooling both tickers supports the same distinction with ticker added as a covariate: per-group means
+for steps and chain-hops, OLS regression for lookback and evolution-prompt, with ticker-level
+differences absorbed as a covariate and cancelling out of marginal contrasts along the other
 dimensions.
 
 \subsection{Infrastructure}
