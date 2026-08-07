@@ -429,6 +429,17 @@ DIAGNOSTIC_PATTERNS = (
     "ProcedureNotFound",
     "apoc",
     "APOC",
+    # The subgraph and topology blocks can go all-zero just as silently as the
+    # path block did -- _hashed_histogram returns zeros with no log line at
+    # all -- so capture their coverage lines too, not just APOC's.
+    "Built feature vector",
+    "Built temporal subgraph features",
+    "Computed topology features",
+    "No topology features found",
+    "No features to aggregate",
+    "FEATURE BLOCK",
+    "Feature block",
+    "Feature matrix shape",
 )
 
 

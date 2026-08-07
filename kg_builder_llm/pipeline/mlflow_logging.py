@@ -39,7 +39,12 @@ class MlflowExperimentLogger:
             return
         try:
             ts = int(time.time() * 1000)
+            # Per-block feature coverage rides along on the parent timeline so a
+            # block that silently went to all zeros is visible per step, not
+            # only buried in pod logs that get garbage-collected after an hour.
+            block_stats = getattr(metrics, "block_stats", None) or {}
             for key, val in {
+                **block_stats,
                 "auc": metrics.auc,
                 "f1": metrics.f1,
                 "precision": getattr(metrics, "precision", 0.0),

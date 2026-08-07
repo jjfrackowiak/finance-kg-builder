@@ -10,7 +10,10 @@ from neo4j_graphrag.embeddings import Embedder
 
 from kg_builder_llm.config import Neo4jConfig
 from kg_builder_llm.core.graph import GraphDriver
-from kg_builder_llm.ml.feature_engineering import build_day_feature_vector
+from kg_builder_llm.ml.feature_engineering import (
+    build_day_feature_vector,
+    describe_feature_blocks,
+)
 from kg_builder_llm.ml.modeling import (
     ModelMetrics,
     temporal_train_val_split,
@@ -342,6 +345,32 @@ def evaluate_candidate(
     
     logger.info("Feature matrix shape: %s, labels shape: %s", feature_matrix.shape, labels.shape)
     logger.info("Feature vectors keys (days): %s", sorted(list(feature_vectors.keys())))
+
+    # Per-block coverage. A block can be all zeros while its dimensions are
+    # still present, so the shape line above cannot distinguish real features
+    # from a dead block -- only these numbers can.
+    block_stats = describe_feature_blocks(
+        feature_matrix,
+        feature_mode=feature_mode,
+        embedding_type=embedding_type,
+        local_model=local_model,
+    )
+    for name in ("path", "subgraph", "topo"):
+        frac = block_stats.get(f"feat/{name}_nonzero_frac")
+        if frac is None:
+            continue
+        dims = int(block_stats.get(f"feat/{name}_dims", 0))
+        norm = block_stats.get(f"feat/{name}_mean_norm", 0.0)
+        if dims and frac == 0.0:
+            logger.warning(
+                "⚠ FEATURE BLOCK '%s' IS ALL ZEROS across %d dims -- it contributes "
+                "nothing to the model", name, dims,
+            )
+        else:
+            logger.info(
+                "Feature block '%s': dims=%d, live_cols=%.1f%%, mean_norm=%.4f",
+                name, dims, 100 * frac, norm,
+            )
     
     # Split into train/val by day (temporal split)
     try:
@@ -396,9 +425,14 @@ def evaluate_candidate(
         # Override max_hops_train/max_hops_val with longest path (max hops) instead of counts
         metrics.max_hops_train = train_max_hops
         metrics.max_hops_val = val_max_hops
+        metrics.block_stats = block_stats
     except Exception as e:
         logger.error("Failed to train classifier: %s", str(e))
-        return ModelMetrics(auc=0.0, f1=0.0, max_hops_train=train_max_hops, max_hops_val=val_max_hops)
+        failed = ModelMetrics(
+            auc=0.0, f1=0.0, max_hops_train=train_max_hops, max_hops_val=val_max_hops
+        )
+        failed.block_stats = block_stats
+        return failed
 
     # Record graph size for this candidate's effective (allowed-tag) subgraph so
     # KG growth across evolution steps can be plotted from parent-run metrics.

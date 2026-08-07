@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -415,3 +415,69 @@ def build_day_feature_vector(
     )
 
     return feature_vector, total_chains_extracted, max_hop_count_overall
+
+
+def _block_stats(name: str, block: np.ndarray) -> Dict[str, float]:
+    """Coverage of one feature block: width, share of live columns, mean row norm."""
+    if block.size == 0 or block.shape[1] == 0:
+        return {
+            f"feat/{name}_dims": 0.0,
+            f"feat/{name}_nonzero_frac": 0.0,
+            f"feat/{name}_mean_norm": 0.0,
+        }
+    live_cols = float(np.count_nonzero(np.any(block != 0, axis=0)))
+    return {
+        f"feat/{name}_dims": float(block.shape[1]),
+        f"feat/{name}_nonzero_frac": live_cols / block.shape[1],
+        f"feat/{name}_mean_norm": float(np.mean(np.linalg.norm(block, axis=1))),
+    }
+
+
+def describe_feature_blocks(
+    feature_matrix: np.ndarray,
+    feature_mode: str,
+    embedding_type: str = "local",
+    local_model: str = "all-MiniLM-L6-v2",
+) -> Dict[str, float]:
+    """Per-block coverage of an assembled (days x dims) feature matrix.
+
+    Each block can collapse to all zeros while the run still reports success:
+    the path block when APOC or the embedding call fails, the subgraph
+    histograms whenever they receive no tokens (silently -- _hashed_histogram
+    returns zeros with no log line at all), and the topology block on a failed
+    query. Shapes stay correct in every case, so only the CONTENT separates
+    real features from a dead block. A path block zeroed exactly this way went
+    undetected across an entire sweep; these numbers are what would have
+    caught it, so they are logged as metrics rather than just printed.
+
+    nonzero_frac == 0.0 for a block means that block contributed nothing.
+    """
+    from kg_builder_llm.ml.subgraph_features import (
+        METAPATH_BUCKETS,
+        NODE_TYPE_BUCKETS,
+        REL_TYPE_BUCKETS,
+        TEMPORAL_STATS_DIM,
+    )
+
+    if feature_matrix.ndim != 2 or feature_matrix.size == 0:
+        return {}
+
+    subgraph_dim = (
+        NODE_TYPE_BUCKETS + REL_TYPE_BUCKETS + METAPATH_BUCKETS + TEMPORAL_STATS_DIM
+    )
+
+    leading = []
+    if feature_mode in {"path", "hybrid"}:
+        leading.append(("path", get_embedding_dim(embedding_type, local_model)))
+    if feature_mode in {"subgraph", "hybrid"}:
+        leading.append(("subgraph", subgraph_dim))
+
+    stats: Dict[str, float] = {}
+    start = 0
+    for name, dim in leading:
+        stats.update(_block_stats(name, feature_matrix[:, start:start + dim]))
+        start += dim
+    # Topology is whatever remains rather than a hardcoded 8, so a change to
+    # its width can never silently shift the boundaries measured above.
+    stats.update(_block_stats("topo", feature_matrix[:, start:]))
+    return stats
