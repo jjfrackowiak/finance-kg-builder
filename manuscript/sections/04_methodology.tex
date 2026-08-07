@@ -80,7 +80,7 @@ specifying the candidate ontology and requesting a JSON response of the form
 \texttt{\{"nodes":\,[...],\,"relationships":\,[...]\}}.
 Extracted nodes carry a label, key, and a property dictionary; relationships carry a
 type, source key, and target key.
-Company nodes are keyed by stock ticker (\texttt{NVDA}, \texttt{AAPL}); all other types are keyed
+Company nodes are keyed by stock ticker (\texttt{MSFT}, \texttt{TSLA}); all other types are keyed
 by a lowercase name slug to promote cross-article deduplication.
 
 \paragraph{Candidate isolation.}
@@ -100,10 +100,10 @@ first by matching label and lowercased name, then by matching label and uppercas
 Properties and relationships are merged rather than deleted, so no extracted information is lost.
 
 \paragraph{Temporal integrity.}
-To prevent look-ahead data leakeage, each article's chain extraction uses the article's own publication date as
+To prevent look-ahead data leakage, each article's chain extraction uses the article's own publication date as
 the upper temporal boundary.
 A \texttt{first\_seen} property records the earliest article date at which an entity appeared;
-all feature queries exclude entities whose \texttt{first\_seen} is later then the evaluation day.
+all feature queries exclude entities whose \texttt{first\_seen} is later than the evaluation day.
 
 \subsection{Ontology Evolution Agent}
 \label{sec:evolution}
@@ -151,7 +151,7 @@ In our framework the schema is the object being optimised, so the feature repres
 
 \paragraph{Why not learned embeddings.}
 Graph neural network and knowledge graph embedding methods are ill-suited for this evaluation
-setting for at least reasons.
+setting for at least three reasons.
 
 \textit{Temporal look-ahead.}
 Computing node embeddings on a temporal graph without information leakage requires evaluating the
@@ -170,7 +170,7 @@ vocabulary and topology cannot be applied to another: relation-type parameters a
 schema under which they were fitted.
 
 \textit{Evaluation noise.}
-Independent model fitting per candidate also training variance --- from random
+Independent model fitting per candidate also introduces training variance --- from random
 initialisation and mini-batch ordering --- that confounds the AUC comparison between candidates
 and corrupts the ontology selection signal.
 
@@ -229,13 +229,18 @@ types, so $\mathbf{t}_d$ is identical across ontology candidates and any AUC dif
 candidates cannot be attributed to it.
 
 \paragraph{Feature modes.}
-The path, subgraph, and topology blocks are combined according to one of three feature modes,
-selected per run and swept as an ablation dimension (Section~\ref{sec:sweep-config}):
+The path, subgraph, and topology blocks can be combined according to one of three feature modes:
 \texttt{path} ($\mathbf{x}_d = [\,\mathbf{p}_d \,\|\, \mathbf{t}_d\,] \in \mathbb{R}^{392}$),
 \texttt{subgraph} ($\mathbf{x}_d = [\,\mathbf{s}_d \,\|\, \mathbf{t}_d\,] \in \mathbb{R}^{104}$), and
 \texttt{hybrid} ($\mathbf{x}_d = [\,\mathbf{p}_d \,\|\, \mathbf{s}_d \,\|\, \mathbf{t}_d\,] \in
-\mathbb{R}^{488}$), which concatenates all three and is the reference feature mode
-(Table~\ref{tab:sweep-dims}).
+\mathbb{R}^{488}$), which concatenates all three.
+The sweep (Section~\ref{sec:sweep-config}) fixes \texttt{hybrid} throughout rather than varying
+feature mode.
+% NOTE: the 488-dim hybrid figure is architecturally correct (embedding service verified live,
+% 384-dim) but the sweep's logged feature_importances are 1640-dim with zero importance on every
+% path dimension in all runs checked -- the path block's zero-fallback is mis-sized (1536 instead
+% of 384) AND appears to fire on every day, not just empty ones. See the CONFIRMED TODO in
+% Section~\ref{sec:models} for the root cause and required fix.
 
 \subsection{Downstream Classifier and Evaluation Protocol}
 \label{sec:eval-protocol}

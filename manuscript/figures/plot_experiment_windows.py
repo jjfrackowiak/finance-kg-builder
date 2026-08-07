@@ -29,15 +29,15 @@ plt.rcParams.update({
     "axes.axisbelow":     True,
 })
 
-TICKERS = ["NVDA", "MSFT", "TSLA"]
-TC = {"NVDA": "#1a6faf", "MSFT": "#2ca02c", "TSLA": "#c0392b"}
+TICKERS = ["MSFT", "TSLA"]
+TC = {"MSFT": "#2ca02c", "TSLA": "#c0392b"}
 OOS = "#e07b20"
 
-# Identical windows for all three tickers:
-# common coverage starts 2022-05-02 (TSLA first date), ends 2023-12-16
-# 4-month OOS hold-out → cut at 2023-08-16
-_W = dict(ts="2022-05-02", te="2023-08-16", os="2023-08-16", oe="2023-12-16")
-WINDOWS = {"NVDA": _W, "MSFT": _W, "TSLA": _W}
+# Identical windows for both tickers:
+# 200-day in-sample window 2022-05-02 -> 2022-11-18
+# 100-day OOS hold-out immediately following, 2022-11-19 -> 2023-02-26
+_W = dict(ts="2022-05-02", te="2022-11-18", os="2022-11-19", oe="2023-02-26")
+WINDOWS = {"MSFT": _W, "TSLA": _W}
 
 DATA_PATH = ("/Users/mac/Desktop/Research and Study/Doktorat/"
              "downstream-finance-graph/finance-kg-builder/"
@@ -46,16 +46,16 @@ df = pd.read_csv(DATA_PATH, parse_dates=["timestamp"])
 df["date"] = df["timestamp"].dt.normalize()
 
 print("Downloading prices…")
-prices = yf.download(TICKERS, start="2021-07-01", end="2024-01-31",
+prices = yf.download(TICKERS, start="2021-07-01", end="2023-04-15",
                      auto_adjust=True, progress=False)["Close"]
 prices.index = pd.to_datetime(prices.index)
 
 FULL_START = pd.Timestamp("2021-07-01")
-FULL_END   = pd.Timestamp("2024-01-31")
+FULL_END   = pd.Timestamp("2023-04-15")
 
 fig, axes = plt.subplots(
-    3, 2,
-    figsize=(12, 8),
+    2, 2,
+    figsize=(12, 5.6),
     gridspec_kw={"hspace": 0.62, "wspace": 0.28,
                  "width_ratios": [2.6, 1]},
 )
@@ -133,7 +133,7 @@ for row, ticker in enumerate(TICKERS):
     daily = (
         df[df["ticker"] == ticker]
         .groupby("date").size()
-        .reindex(pd.date_range("2021-07-01", "2024-01-31"), fill_value=0)
+        .reindex(pd.date_range(FULL_START, FULL_END), fill_value=0)
     )
     rolling = daily.rolling(14, center=True, min_periods=1).mean()
 
@@ -146,8 +146,8 @@ for row, ticker in enumerate(TICKERS):
     ax_v.yaxis.set_major_locator(MaxNLocator(integer=True, nbins=4, prune="upper"))
     ax_v.set_ylabel("Articles / day", labelpad=4)
 
-    covered = daily[(daily.index >= pd.Timestamp("2021-08-17")) &
-                    (daily.index <= pd.Timestamp("2023-12-16")) &
+    covered = daily[(daily.index >= pd.Timestamp(_W["ts"])) &
+                    (daily.index <= pd.Timestamp(_W["oe"])) &
                     (daily > 0)]
     p25 = covered.quantile(0.25)
     ax_v.axhline(p25, color=c, linewidth=0.9, linestyle=":", alpha=0.85,
@@ -161,9 +161,9 @@ axes[0, 1].set_title("News volume",   fontsize=10, pad=6)
 
 # ── Legend ───────────────────────────────────────────────────────────────
 train_patch = mpatches.Patch(facecolor="#555577", alpha=0.40,
-                              label="Training window  2022-05-02 → 2023-08-16  (338 bdays)")
+                              label="Training window  2 May 2022 → 18 Nov 2022  (200 days, 144 bdays)")
 oos_patch   = mpatches.Patch(facecolor=OOS, alpha=0.60,
-                              label="Out-of-sample hold-out  2023-08-16 → 2023-12-16  (88 bdays)")
+                              label="Out-of-sample hold-out  19 Nov 2022 → 26 Feb 2023  (100 days, 70 bdays)")
 fig.legend(
     handles=[train_patch, oos_patch],
     loc="lower center", ncol=2,

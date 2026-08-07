@@ -1,21 +1,18 @@
 \subsection{Data}
 \label{sec:data}
 
-We use a subset of the FNSPID dataset~\citep{dong2024fnspid} covering three Nasdaq tickers ---
-NVDA, MSFT, and TSLA --- comprising 26{,}165 news articles (8{,}716, 8{,}737, and 8{,}712
-articles respectively) with full article text, headline, and timestamp.
-For each ticker we define a common in-sample window from 2 May 2022 to 16 August 2023 (338
-trading days), used for the ontology-evolution sweep and the temporal train/validation split defined in
-Section~\ref{sec:eval-protocol}, and hold out a subsequent 4-month out-of-sample window from 16
-August 2023 to 16 December 2023 (88 trading days) that is not seen during ontology search and is
-reserved for final evaluation of the selected ontology.
-The window starts at TSLA's first coverage date (2 May 2022), where all three tickers reach
-consistently dense article volume; earlier months are excluded due to sparse MSFT and TSLA
-coverage (fewer than 10 articles/day at the 25th percentile).
+We use a subset of the FNSPID dataset~\citep{dong2024fnspid} covering two Nasdaq tickers, MSFT and
+TSLA, with full article text, headline, and timestamp for each article, at a fixed rate of 4
+articles/day per ticker.
+For each ticker we define a common in-sample window of 200 calendar days, from 2 May 2022 to 18
+November 2022, used for the ontology-evolution sweep and the temporal train/validation split defined
+in Section~\ref{sec:eval-protocol}, and hold out a subsequent 100-day out-of-sample window, from 19
+November 2022 to 26 February 2023, that is not seen during ontology search and is reserved for final
+evaluation of the selected ontology.
+The window starts at 2 May 2022, where both tickers reach consistently dense article volume; earlier
+months are excluded due to sparse coverage.
 Figure~\ref{fig:windows} shows adjusted close price and daily article volume for each ticker over
 the full history, with the in-sample and out-of-sample windows overlaid.
-NVDA is retained here for descriptive completeness but excluded from the primary sweep
-(Section~\ref{sec:sweep-config}).
 
 \begin{figure}[t]
   \centering
@@ -61,46 +58,67 @@ deployment.
 Article and node text embeddings (feature construction and the text-only baseline) use
 \texttt{sentence-transformers/all-MiniLM-L6-v2}, served through Hugging Face Text Embeddings
 Inference (TEI) on a CPU node.
+% CORRECTION (2026-08-07): an earlier version of this TODO wrongly claimed embedding_type=remote
+% routes to a paid OpenAI API. Verified empirically (live /info + /v1/embeddings call against the
+% running TEI pod, 2026-08-07): "remote" correctly calls the self-hosted TEI service at
+% http://embeddings-svc:8080 serving sentence-transformers/all-MiniLM-L6-v2, returning real
+% 384-dim vectors. This paragraph is accurate; no cost/correctness issue here. Retracted.
+%
+% TODO(flagged 2026-08-07, CONFIRMED, higher priority): the path-embedding block described below
+% and in Section~\ref{sec:features} appears to be contributing NO signal in every run checked (4
+% different configs, different tickers/lookback/hops) -- XGBoost feature_importances_ is exactly
+% zero across all 1536 path-embedding dimensions in every case, all nonzero importance falling in
+% the subgraph+topology dimensions only. Root cause traced to kg_builder_llm/ml/embeddings.py:
+% get_embedding_dim("remote", ...) hardcodes 1536 (a stale/wrong comment: "openai / remote
+% (text-embeddings-inference default)"), rather than the true 384 the deployed model returns. This
+% wrong dimension is used to build the zero-fallback vector in
+% kg_builder_llm/ml/feature_engineering.py (build_day_feature_vector) whenever chain extraction
+% finds zero chains for a day -- and every checked run's uniform 1640-dim, always-zero-below-1536
+% pattern indicates chain extraction is returning empty on every day in these runs, not just
+% occasionally. Needs two fixes: (1) get_embedding_dim("remote", local_model) should probe the
+% real embedding dim or accept an override rather than hardcode 1536; (2) separately, why
+% relationship-chain extraction is returning zero chains needs its own investigation. Until fixed,
+% every "hybrid" AUC result logged so far reflects subgraph+topology signal only -- the path
+% embeddings' contribution described in Section~\ref{sec:features} has not actually been tested by
+% the sweep to date. This may require re-running some or all completed configs after the fix.
 
 \subsection{Sweep Configuration}
 \label{sec:sweep-config}
 
-Rather than a full grid search, the sweep is organized as single-dimension ablations around one
-reference configuration (3 evolution steps, 3-day lookback, chain hops fixed at 5, 2 candidates
-per step, 5 articles/day, hybrid feature mode of Section~\ref{sec:features}): each group varies
-exactly one dimension while holding all others at their reference value, so that per-dimension
-effects are not confounded by simultaneous changes elsewhere.
-Table~\ref{tab:sweep-dims} lists the swept dimensions.
+Rather than a full grid search, the sweep uses a pairwise-balanced factorial design: a strength-2
+orthogonal array, constructed via a Latin-square scheme, over the four dimensions in
+Table~\ref{tab:sweep-dims}, crossed with two tickers, MSFT and TSLA.
+Every pair of factor levels co-occurs an equal number of times by construction, so marginal
+comparisons along any one dimension are not confounded by the others, at a fraction of the runs a
+full grid over the same levels would require.
+Candidates per step is fixed at 3, articles per day at 4, and feature mode at \texttt{hybrid}
+(Section~\ref{sec:features}) throughout.
 
 \begin{table}[t]
 \centering
-\begin{tabular}{lll}
+\begin{tabular}{ll}
 \toprule
-Dimension & Values swept & Reference \\
+Dimension & Levels \\
 \midrule
-Evolution steps & 0, 3, 4, 5 & 3 \\
-Lookback window (days) & 1, 3, 5, 7 & 3 \\
-Chain hops (min = max) & 4, 5, 6 & 5 \\
-Candidates per step & 1, 2, 3 & 2 \\
-Articles per day & 3, 5, 10, 20 & 5 \\
+Evolution steps & 3, 5, 7 \\
+Lookback window (days) & 3, 8, 10, 20 \\
+Chain hops (min = max) & 3, 5, 6 \\
+Evolution prompt & \texttt{default}, \texttt{fundamental}, \texttt{event-driven}, \texttt{macro-context} \\
 \bottomrule
 \end{tabular}
-\caption{Dimensions ablated in the sweep and the reference value each is held at when another
-dimension is varied.}
+\caption{Dimensions crossed in the balanced factorial sweep, further crossed with ticker
+(MSFT, TSLA).}
 \label{tab:sweep-dims}
 \end{table}
 
-Every configuration in every group is further crossed with four evolution-prompt variants
-(\texttt{default}, \texttt{fundamental}, \texttt{event-driven}, \texttt{macro-context}), which
-bias the Ontology Evolution Agent toward different semantic categories when proposing new node
-and relationship types, and with two tickers, MSFT and TSLA.
-NVDA is excluded from the primary sweep: over the training window it undergoes a near-4$\times$
-rally driven by the AI sector narrative, so next-day direction is dominated by macro demand rather
-than article-level graph signal, making the prediction task either trivially easy or
-uninformative.
-Combined, this design totals 138 jobs: 32 for the lookback sweep, 26 for the evolution-depth sweep
-(2 no-evolution jobs plus 24 evolved), 24 for the chain-hop sweep, 24 for the candidate-breadth
-sweep, and 32 for the articles-per-day sweep.
+The four evolution-prompt variants bias the Ontology Evolution Agent toward different semantic
+categories when proposing new node and relationship types.
+Each ticker receives its own independently-balanced 36-configuration design over the remaining four
+dimensions, for 72 configurations in total (36 MSFT, 36 TSLA).
+Because raw predictive AUC differs systematically between the two tickers (they pose different
+underlying prediction-difficulty tasks), per-dimension effects are estimated via OLS regression on
+all factors jointly rather than naive per-group means, so that ticker-level differences are
+absorbed as a covariate and cancel out of marginal contrasts along the other dimensions.
 
 \subsection{Infrastructure}
 \label{sec:infrastructure}
