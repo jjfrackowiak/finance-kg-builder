@@ -450,9 +450,16 @@ def dump_job_diagnostics(core_v1: client.CoreV1Api, job_name: str) -> None:
         pod_name = pod.metadata.name
         for c_name in [c.name for c in pod.spec.containers]:
             try:
-                logs = core_v1.read_namespaced_pod_log(
+                # _preload_content=False: with the default the client hands back
+                # the repr of a bytes object ('b"line\\nline"') as ONE string, so
+                # splitlines() sees a single line and the whole container log
+                # gets printed as one multi-megabyte line -- which GitHub's log
+                # API then drops silently. Read the raw stream and decode it.
+                resp = core_v1.read_namespaced_pod_log(
                     name=pod_name, namespace=NAMESPACE, container=c_name,
+                    _preload_content=False,
                 )
+                logs = resp.data.decode("utf-8", "replace")
             except ApiException as e:
                 print(f"  (could not fetch logs for {pod_name}/{c_name}: {e})")
                 continue
@@ -462,11 +469,14 @@ def dump_job_diagnostics(core_v1: client.CoreV1Api, job_name: str) -> None:
                 f"\n  ----- diagnostics: {pod_name}/{c_name} "
                 f"({len(matched)} matched of {len(lines)} lines) -----"
             )
+            # Truncate each line too: a single runaway line (a dumped Cypher
+            # query, a stack trace with embedded data) is enough to blow the
+            # per-line limit and take the whole record with it.
             for ln in matched[:400]:
-                print(f"    {ln}")
+                print(f"    {ln[:500]}")
             print(f"  ----- last 40 lines: {pod_name}/{c_name} -----")
             for ln in lines[-40:]:
-                print(f"    {ln}")
+                print(f"    {ln[:500]}")
             print(f"  ----- end diagnostics: {pod_name}/{c_name} -----")
 
 
