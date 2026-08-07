@@ -162,3 +162,21 @@
 2026-08-07 19:04:03 INFO     sync() done — added=1 reindexed=0 removed=0 unchanged=35 embedded=183
 2026-08-07 19:22:04 DEBUG    get_page() lin_2025_orthogonalarrays.pdf p1
 2026-08-07 19:22:12 DEBUG    get_page() lin_2025_orthogonalarrays.pdf p2
+2026-08-07 19:46:45 INFO     sync() started
+2026-08-07 19:46:45 INFO     Found 35 PDFs on disk, 36 sources in index
+2026-08-07 19:46:45 INFO     Removed stale entry: lin_2025_orthogonalarrays.pdf
+2026-08-07 19:46:45 DEBUG    No pending chunks to embed
+2026-08-07 19:46:45 INFO     sync() done — added=0 reindexed=0 removed=1 unchanged=35 embedded=0
+2026-08-07 19:51:29 DEBUG    get_page() lin_2025_orthogonalarrays.pdf p3
+2026-08-07 19:51:29 WARNING  get_page(): not found — lin_2025_orthogonalarrays.pdf p3
+2026-08-07 19:51:37 INFO     sync() started
+2026-08-07 19:51:37 INFO     Found 36 PDFs on disk, 35 sources in index
+2026-08-07 19:51:37 DEBUG    Indexing lin_2025_orthogonalarrays.pdf (bib_key=lin2025orthogonalarrays)
+2026-08-07 19:51:38 INFO     Indexed lin_2025_orthogonalarrays.pdf — 183 chunks
+2026-08-07 19:51:38 INFO     Embedding 183 chunks in batches of 100
+2026-08-07 19:51:40 DEBUG    Embedded batch 0–99
+2026-08-07 19:51:41 DEBUG    Embedded batch 100–182
+2026-08-07 19:51:41 INFO     Finished embedding 183 chunks
+2026-08-07 19:51:41 INFO     sync() done — added=1 reindexed=0 removed=0 unchanged=35 embedded=183
+2026-08-07 19:51:50 DEBUG    get_page() lin_2025_orthogonalarrays.pdf p3
+2026-08-07 19:54:37 INFO     publications-rag MCP server initialised
