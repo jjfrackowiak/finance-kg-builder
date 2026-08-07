@@ -34,6 +34,10 @@ class ModelMetrics:
     n_nodes_total: int = 0
     n_rels_total: int = 0
     feature_importances: Optional[List[float]] = None
+    # Per-block feature coverage from describe_feature_blocks (feat/*_dims,
+    # feat/*_nonzero_frac, feat/*_mean_norm). A block whose nonzero_frac is
+    # 0.0 contributed nothing to the model despite occupying its dimensions.
+    block_stats: Optional[Dict[str, float]] = None
 
     @classmethod
     def empty(cls) -> "ModelMetrics":

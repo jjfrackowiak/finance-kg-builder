@@ -408,6 +408,89 @@ def dump_failed_job_logs(core_v1: client.CoreV1Api, job_name: str) -> None:
             print(f"  ----- end logs: {pod_name}/{c_name} -----")
 
 
+# Log lines that reveal whether the APOC-dependent chain block and the remote
+# embedding service actually produced data, versus silently falling back.
+# extract_chains_batch catches a failed expandConfig and returns {}, and both
+# dedup passes only warn -- so a job can report success with the entire
+# path-feature block zeroed. That is precisely what went undetected across the
+# pre-fix sweep, and a green workflow does not distinguish the two cases.
+DIAGNOSTIC_PATTERNS = (
+    "Batch query executed successfully",
+    "Batch query failed",
+    "BATCH EXTRACTION COMPLETE",
+    "Total chains extracted",
+    "Total chains embedded",
+    "Articles with chains",
+    "No chains extracted",
+    "No chains embedded",
+    "Chain aggregation complete",
+    "Aggregated embedding shape",
+    "deduplication failed",
+    "ProcedureNotFound",
+    "apoc",
+    "APOC",
+    # The subgraph and topology blocks can go all-zero just as silently as the
+    # path block did -- _hashed_histogram returns zeros with no log line at
+    # all -- so capture their coverage lines too, not just APOC's.
+    "Built feature vector",
+    "Built temporal subgraph features",
+    "Computed topology features",
+    "No topology features found",
+    "No features to aggregate",
+    "FEATURE BLOCK",
+    "Feature block",
+    "Feature matrix shape",
+)
+
+
+def dump_job_diagnostics(core_v1: client.CoreV1Api, job_name: str) -> None:
+    """Print the slice of a completed job's logs that shows whether the APOC
+    chain extraction and the embedding service did real work.
+
+    Gated behind --dump-logs: a full chunk's logs are far too large to put in
+    the workflow output, but for a smoke-test run these lines are the only
+    way to tell real work from a silent zero-vector fallback."""
+    try:
+        pods = core_v1.list_namespaced_pod(
+            namespace=NAMESPACE, label_selector=f"job-name={job_name}"
+        )
+    except ApiException as e:
+        print(f"  could not list pods for {job_name} to dump diagnostics: {e}")
+        return
+    for pod in pods.items:
+        pod_name = pod.metadata.name
+        for c_name in [c.name for c in pod.spec.containers]:
+            try:
+                # _preload_content=False: with the default the client hands back
+                # the repr of a bytes object ('b"line\\nline"') as ONE string, so
+                # splitlines() sees a single line and the whole container log
+                # gets printed as one multi-megabyte line -- which GitHub's log
+                # API then drops silently. Read the raw stream and decode it.
+                resp = core_v1.read_namespaced_pod_log(
+                    name=pod_name, namespace=NAMESPACE, container=c_name,
+                    _preload_content=False,
+                )
+                logs = resp.data.decode("utf-8", "replace")
+            except ApiException as e:
+                print(f"  (could not fetch logs for {pod_name}/{c_name}: {e})")
+                continue
+            lines = logs.splitlines()
+            matched = [ln for ln in lines if any(p in ln for p in DIAGNOSTIC_PATTERNS)]
+            print(
+                f"\n  ----- diagnostics: {pod_name}/{c_name} "
+                f"({len(matched)} matched of {len(lines)} lines) -----"
+            )
+            # Truncate each line too: a single runaway line (a dumped Cypher
+            # query, a stack trace with embedded data) is enough to blow the
+            # per-line limit and take the whole record with it.
+            for ln in matched[:400]:
+                print(f"    {ln[:500]}")
+            print(f"  ----- last 40 lines: {pod_name}/{c_name} -----")
+            for ln in lines[-40:]:
+                print(f"    {ln[:500]}")
+            print(f"  ----- end diagnostics: {pod_name}/{c_name} -----")
+
+
 def wait_for_job(
     batch_v1: client.BatchV1Api,
     core_v1: client.CoreV1Api,
@@ -450,6 +533,12 @@ def main():
         choices=["sidecar", "external"],
         default="sidecar",
         help="sidecar: ephemeral neo4j per job (default); external: use NEO4J_* from kg-secrets (AuraDB)",
+    )
+    parser.add_argument(
+        "--dump-logs",
+        action="store_true",
+        help="after each job completes, print the APOC/embedding diagnostic lines from its "
+             "pod logs (smoke-test runs only -- a full chunk's output is far too large)",
     )
     args = parser.parse_args()
 
@@ -511,6 +600,9 @@ def main():
     for job in submitted:
         if not wait_for_job(batch_v1, core_v1, job.metadata.name, refresher):
             failed_count += 1
+        elif args.dump_logs:
+            # Only on success -- a failure already dumped its full tail above.
+            dump_job_diagnostics(core_v1, job.metadata.name)
 
     if args.n_workers > 0:
         scale_deployment(apps_v1, VLLM_DEPLOYMENT, 0)
