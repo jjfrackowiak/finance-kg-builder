@@ -84,13 +84,21 @@ Inference (TEI) on a CPU node.
 \subsection{Sweep Configuration}
 \label{sec:sweep-config}
 
-Rather than a full grid search, the sweep uses a balanced factorial design: a mixed orthogonal
-array~\citep{lin2025orthogonalarrays}, built so that every pair of factor levels among the four
-dimensions in Table~\ref{tab:sweep-dims} occurs together equally often.
-This makes each dimension's effect readable on its own, without being distorted by the others, while
+Rather than a full grid search, the sweep uses a near-orthogonal balanced factorial design over the
+dimensions in Table~\ref{tab:sweep-dims}, crossed with two tickers, MSFT and TSLA.
+A strength-two mixed orthogonal array (Definition~1.2 of \citealp{lin2025orthogonalarrays}) requires
+every pair of factor levels to co-occur an equal number of times, which forces its index
+$\lambda = N / (s_i s_j)$ to be an integer for every pair of factors with $s_i$ and $s_j$ levels.
+For the level set used here --- two four-level factors (lookback, prompt), two three-level factors
+(steps, chain hops) and one two-level factor (ticker) --- that condition is only satisfiable at
+$N = 144$ runs.
+At the $N = 72$ runs affordable under the compute budget, the design attains exact pairwise balance
+for nine of the ten factor pairs; the single unavoidable exception is lookback--prompt, where
+$72/16 = 4.5$ is not an integer and each lookback level therefore leaves one prompt unobserved,
+rotating across the four prompts.
+This keeps each dimension's effect readable on its own, without being distorted by the others, while
 needing far fewer runs than testing every combination would --- designs of this kind have been shown
 to be effective specifically for exploring machine-learning hyperparameter spaces~\citep{shi2023hpdesigns}.
-The design is crossed with two tickers, MSFT and TSLA.
 Candidates per step is fixed at 3, articles per day at 4, and feature mode at \texttt{hybrid}
 (Section~\ref{sec:features}) throughout.
 
@@ -120,25 +128,11 @@ underlying prediction-difficulty tasks), two complementary analyses are supporte
 Per-ticker, each 36-configuration design is independently balanced on its own: steps and chain-hops
 effects, the two dimensions of primary interest, are read directly from per-group means, while
 lookback and evolution-prompt effects require OLS regression jointly on all four within-ticker
-dimensions, since the Latin-square construction leaves a small number of lookback--prompt cells
-unobserved within each ticker.
+dimensions, on account of the unobserved lookback--prompt combinations noted above.
 Pooling both tickers supports the same distinction with ticker added as a covariate: per-group means
 for steps and chain-hops, OLS regression for lookback and evolution-prompt, with ticker-level
 differences absorbed as a covariate and cancelling out of marginal contrasts along the other
 dimensions.
-Figure~\ref{fig:balance} verifies this directly against the realized 72-configuration design: every
-pair of dimensions is perfectly balanced (a uniform count in every cell) except lookback--prompt,
-where the Latin-square construction leaves exactly one cell empty per lookback level, rotating
-across prompts --- the source of the one exception noted above.
-
-\begin{figure}[tbp]
-  \centering
-  \includegraphics[width=0.92\linewidth]{figures/balance_matrix.png}
-  \caption{Pairwise co-occurrence counts across all ten dimension pairs in the realized 72-configuration
-    design. Nine pairs are perfectly uniform; lookback--prompt (top row, third panel) has one empty
-    cell per lookback level, rotating across the four prompts.}
-  \label{fig:balance}
-\end{figure}
 
 \subsection{Infrastructure}
 \label{sec:infrastructure}

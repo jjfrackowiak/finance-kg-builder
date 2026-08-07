@@ -62,9 +62,12 @@ def tick_label(factor, level):
     return str(level)
 
 
+# Figure is sized so that, once scaled to the text width in the manuscript, the
+# in-cell numbers stay legible: fonts are set large relative to a deliberately
+# modest canvas rather than small relative to a large one.
 n = len(FACTORS)
-fig = plt.figure(figsize=(14, 14))
-gs = fig.add_gridspec(n, n, hspace=0.5, wspace=0.35)
+fig = plt.figure(figsize=(11, 11))
+gs = fig.add_gridspec(n, n, hspace=0.42, wspace=0.3)
 
 max_abs_dev = 0.0
 cell_data = {}

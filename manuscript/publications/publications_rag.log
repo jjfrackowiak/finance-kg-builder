@@ -160,3 +160,5 @@
 2026-08-07 19:04:03 DEBUG    Embedded batch 100–182
 2026-08-07 19:04:03 INFO     Finished embedding 183 chunks
 2026-08-07 19:04:03 INFO     sync() done — added=1 reindexed=0 removed=0 unchanged=35 embedded=183
+2026-08-07 19:22:04 DEBUG    get_page() lin_2025_orthogonalarrays.pdf p1
+2026-08-07 19:22:12 DEBUG    get_page() lin_2025_orthogonalarrays.pdf p2
