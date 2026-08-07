@@ -121,14 +121,18 @@ Evolution prompt & \texttt{default}, \texttt{fundamental}, \texttt{event-driven}
 
 The four evolution-prompt variants bias the Ontology Evolution Agent toward different semantic
 categories when proposing new node and relationship types.
-Each ticker receives its own independently-balanced 36-configuration design over the remaining four
-dimensions, for 72 configurations in total (36 MSFT, 36 TSLA).
+Each ticker receives its own 36-configuration design over the remaining four dimensions, for 72
+configurations in total (36 MSFT, 36 TSLA).
+The same balance property holds within each ticker separately, and fails in the same one place: five
+of the six within-ticker factor pairs are exactly balanced, while lookback--prompt again has a
+non-integral index ($36/16 = 2.25$) and leaves the same four combinations unobserved.
+The two per-ticker designs are structurally identical --- the unobserved combinations coincide
+exactly --- so per-ticker estimates are directly comparable with one another.
 Because raw predictive AUC differs systematically between the two tickers (they pose different
 underlying prediction-difficulty tasks), two complementary analyses are supported.
-Per-ticker, each 36-configuration design is independently balanced on its own: steps and chain-hops
-effects, the two dimensions of primary interest, are read directly from per-group means, while
-lookback and evolution-prompt effects require OLS regression jointly on all four within-ticker
-dimensions, on account of the unobserved lookback--prompt combinations noted above.
+Per-ticker, steps and chain-hops effects --- the two dimensions of primary interest --- are read
+directly from per-group means, while lookback and evolution-prompt effects require OLS regression
+jointly on all four within-ticker dimensions, on account of those unobserved combinations.
 Pooling both tickers supports the same distinction with ticker added as a covariate: per-group means
 for steps and chain-hops, OLS regression for lookback and evolution-prompt, with ticker-level
 differences absorbed as a covariate and cancelling out of marginal contrasts along the other
