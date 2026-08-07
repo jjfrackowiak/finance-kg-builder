@@ -233,6 +233,14 @@ def build_job_manifest(
             ],
             env=[
                 client.V1EnvVar(name="NEO4J_AUTH",                              value="neo4j/sweeppass"),
+                # APOC was missing entirely (confirmed live: apoc.path.expandConfig ->
+                # ProcedureNotFound), which silently zeroed the entire path-embedding
+                # feature block for the whole sweep to date (relationship_chains.py's
+                # extract_chains_batch catches the exception and returns {}, triggering
+                # the zero-vector fallback on every call). Installing + unrestricting it here.
+                client.V1EnvVar(name="NEO4J_PLUGINS",                           value='["apoc"]'),
+                client.V1EnvVar(name="NEO4J_dbms_security_procedures_unrestricted", value="apoc.*"),
+                client.V1EnvVar(name="NEO4J_dbms_security_procedures_allowlist",    value="apoc.*"),
                 client.V1EnvVar(name="NEO4J_server_memory_heap_initial__size",   value="256m"),
                 client.V1EnvVar(name="NEO4J_server_memory_heap_max__size",       value="1g"),
                 client.V1EnvVar(name="NEO4J_server_memory_pagecache_size",       value="128m"),

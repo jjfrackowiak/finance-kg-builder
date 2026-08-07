@@ -97,7 +97,7 @@ def extract_chains_batch(
       WHERE NONE(r IN relationships(path) WHERE type(r) IN excluded_rels)
         AND ALL(n IN nodes(path) WHERE
           (n.candidate_tags IS NULL OR ANY(t IN n.candidate_tags WHERE t IN allowed_tags))
-          AND n.first_seen <= eval_date
+          AND (n.first_seen IS NULL OR n.first_seen <= eval_date)
         )
     
       WITH path, length(path) AS hop_count,

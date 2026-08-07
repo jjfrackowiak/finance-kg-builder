@@ -53,20 +53,34 @@ def embed_text_local(text: str, model_name: str = "all-MiniLM-L6-v2") -> np.ndar
     return embedding.astype(np.float32)
 
 
+_remote_embedding_dim_cache: Dict[str, int] = {}
+
+
 def get_embedding_dim(embedding_type: str = "local", local_model: str = "all-MiniLM-L6-v2") -> int:
     """Get embedding dimension for the specified type.
-    
+
     Args:
-        embedding_type: "local" or "openai"
-        local_model: Sentence-transformers model name (for local only)
-    
+        embedding_type: "local", "remote", or "openai"
+        local_model: Sentence-transformers model name (for local; also identifies the
+            served model for "remote", used only as a cache key)
+
     Returns:
-        Embedding dimension (384 for local all-MiniLM-L6-v2, 1536 for OpenAI)
+        Embedding dimension
     """
     if embedding_type == "local":
         model = get_local_embedder(local_model)
         return model.get_sentence_embedding_dimension()
-    return 1536  # openai / remote (text-embeddings-inference default)
+    if embedding_type == "remote":
+        # Was previously hardcoded to 1536 regardless of the actually-served model
+        # (real deployment serves all-MiniLM-L6-v2, 384-dim) -- probe the live
+        # service once and cache, rather than assume a fixed dimension.
+        if local_model not in _remote_embedding_dim_cache:
+            probe = embed_text_deterministic(
+                "dimension probe", embedding_type="remote", local_model=local_model
+            )
+            _remote_embedding_dim_cache[local_model] = len(probe)
+        return _remote_embedding_dim_cache[local_model]
+    return 1536  # openai (text-embedding-3-small)
 
 
 def compute_hope_embeddings(edges: List[Tuple[str, str]], dim: int = 128) -> Dict[str, np.ndarray]:
