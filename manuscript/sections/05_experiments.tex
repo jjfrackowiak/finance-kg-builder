@@ -124,10 +124,16 @@ The two per-ticker designs share the same structure, so the effect of a given di
 read off in each and the two readings set side by side.
 Effects are read from group means: the configurations sharing a given level of one dimension are
 averaged and compared against those sharing each other level.
-Evolution steps and chain hops --- the two dimensions of primary interest --- are balanced against
-every other dimension, so these comparisons are clean.
-Lookback and evolution prompt are balanced against everything except each other, where a few joint
-combinations go uncovered, so comparisons along those two dimensions are read with more caution.
+Every dimension is balanced against every other one, with the single exception that lookback and
+evolution prompt are balanced against everything except each other.
+Comparisons along evolution steps and chain hops --- the two dimensions of primary interest --- are
+therefore exact: the groups being compared contain identical distributions of all remaining
+dimensions.
+Comparisons along lookback and evolution prompt are likewise balanced on every other dimension, and
+differ only in that each group omits one level of the other of the two; a contrast between two
+lookback windows consequently carries, in addition to the lookback effect, one third of the
+difference between the single pair of prompts that distinguishes the two groups, which is
+negligible where prompt effects are small relative to the lookback effect being measured.
 
 \subsection{Infrastructure}
 \label{sec:infrastructure}
