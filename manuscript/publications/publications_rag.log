@@ -137,3 +137,26 @@
 2026-07-11 19:36:12 INFO     publications-rag MCP server initialised
 2026-07-12 15:09:28 INFO     publications-rag MCP server initialised
 2026-07-12 15:51:35 INFO     publications-rag MCP server initialised
+2026-07-17 18:57:59 INFO     publications-rag MCP server initialised
+2026-07-18 18:44:06 INFO     publications-rag MCP server initialised
+2026-07-20 22:09:27 INFO     publications-rag MCP server initialised
+2026-07-25 11:15:27 INFO     publications-rag MCP server initialised
+2026-08-03 20:25:08 INFO     publications-rag MCP server initialised
+2026-08-03 21:00:29 INFO     publications-rag MCP server initialised
+2026-08-07 18:58:28 INFO     sync() started
+2026-08-07 18:58:28 INFO     Found 35 PDFs on disk, 34 sources in index
+2026-08-07 18:58:28 DEBUG    Indexing shi_2023_hpdesigns.pdf (bib_key=shi2023hpdesigns)
+2026-08-07 18:58:29 INFO     Indexed shi_2023_hpdesigns.pdf — 63 chunks
+2026-08-07 18:58:29 INFO     Embedding 63 chunks in batches of 100
+2026-08-07 18:58:32 DEBUG    Embedded batch 0–62
+2026-08-07 18:58:32 INFO     Finished embedding 63 chunks
+2026-08-07 18:58:32 INFO     sync() done — added=1 reindexed=0 removed=0 unchanged=34 embedded=63
+2026-08-07 19:03:59 INFO     sync() started
+2026-08-07 19:03:59 INFO     Found 36 PDFs on disk, 35 sources in index
+2026-08-07 19:03:59 DEBUG    Indexing lin_2025_orthogonalarrays.pdf (bib_key=lin2025orthogonalarrays)
+2026-08-07 19:04:00 INFO     Indexed lin_2025_orthogonalarrays.pdf — 183 chunks
+2026-08-07 19:04:00 INFO     Embedding 183 chunks in batches of 100
+2026-08-07 19:04:02 DEBUG    Embedded batch 0–99
+2026-08-07 19:04:03 DEBUG    Embedded batch 100–182
+2026-08-07 19:04:03 INFO     Finished embedding 183 chunks
+2026-08-07 19:04:03 INFO     sync() done — added=1 reindexed=0 removed=0 unchanged=35 embedded=183

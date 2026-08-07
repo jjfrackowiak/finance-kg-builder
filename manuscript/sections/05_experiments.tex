@@ -84,12 +84,13 @@ Inference (TEI) on a CPU node.
 \subsection{Sweep Configuration}
 \label{sec:sweep-config}
 
-Rather than a full grid search, the sweep uses a pairwise-balanced factorial design: a strength-2
-orthogonal array, constructed via a Latin-square scheme, over the four dimensions in
-Table~\ref{tab:sweep-dims}, crossed with two tickers, MSFT and TSLA.
-Every pair of factor levels co-occurs an equal number of times by construction, so marginal
-comparisons along any one dimension are not confounded by the others, at a fraction of the runs a
-full grid over the same levels would require.
+Rather than a full grid search, the sweep uses a balanced factorial design: a mixed orthogonal
+array~\citep{lin2025orthogonalarrays}, built so that every pair of factor levels among the four
+dimensions in Table~\ref{tab:sweep-dims} occurs together equally often.
+This makes each dimension's effect readable on its own, without being distorted by the others, while
+needing far fewer runs than testing every combination would --- designs of this kind have been shown
+to be effective specifically for exploring machine-learning hyperparameter spaces~\citep{shi2023hpdesigns}.
+The design is crossed with two tickers, MSFT and TSLA.
 Candidates per step is fixed at 3, articles per day at 4, and feature mode at \texttt{hybrid}
 (Section~\ref{sec:features}) throughout.
 
