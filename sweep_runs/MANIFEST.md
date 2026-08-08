@@ -30,6 +30,14 @@ waiting on MSFT. Within each ticker, chunks run light-to-heavy (steps 3 -> 5 -> 
 
 8 vLLM GPU workers (g5.xlarge / A10G), 5 CPU nodes, 6 embedding workers, sidecar Neo4j.
 2 candidates per evolution step (fixed across all 72 configs; not a design factor).
+
+**Expected: the h5 arm carries no path features.** Measured chain yield falls sharply with
+depth -- chunk 01 gave path_mean_norm 0.79 and 0.55 at h3, 0.088 at h4, and exactly 0 at h5
+(max_hops 0 in both train and validation). Two earlier probes agreed on the same ordering.
+This is a property of the graph density and the expansion filters (labelFilter -Article|-Day,
+excluded rels PUBLISHED_ON/WRITTEN_BY/MENTIONS/MENTIONED_IN/REFERENCES, candidate_tags and
+first_seen predicates), not a defect -- do not 'fix' it. It makes the 24 h5 runs an implicit
+subgraph+topology ablation, balanced by construction against the h3 and h4 arms.
 Chunk sizing: steps=3 -> 4 configs/chunk (sem 220); steps=5 -> 3/chunk (sem 293); steps=7 -> 2/chunk (sem 440).
 
 Dispatch one run: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_runs/run_NN.json)" -f n_workers=8 -f n_embedding_workers=6 -f gpu_nodes=8 -f cpu_nodes=5 -f neo4j_mode=sidecar`
