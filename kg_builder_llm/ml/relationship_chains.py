@@ -339,6 +339,64 @@ def embed_relationship_chains(
             logger.error("Failed to batch encode chains: %s", str(e))
             return []
     
+    elif embedding_type == "remote":
+        # REMOTE: batch against the embedding service (OpenAI-compatible /v1).
+        #
+        # "remote" previously fell through to the OpenAI branch below, whose
+        # call hardcodes embedding_type="openai". Every EKS run sets
+        # EMBEDDING_TYPE=remote via the kg-config configmap, so on the cluster
+        # each chain raised, was swallowed by that branch's per-chain except
+        # (a warning, not an error), and this function returned []. Chains were
+        # extracted correctly and then discarded here, leaving the 384-dim path
+        # block all zeros for the entire sweep -- max_hops stayed 0 because it
+        # is only updated while grouping successfully embedded chains.
+        try:
+            import os
+
+            from openai import OpenAI
+
+            chain_texts = [chain.get("chain_text") for _, chain in valid_chains]
+            base_url = os.getenv("EMBEDDING_BASE_URL", "").rstrip("/") + "/v1"
+            client = OpenAI(api_key="na", base_url=base_url)
+            model_name = os.getenv(
+                "EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+            )
+
+            # Chunked, not one request per chain: a 200-day window produces
+            # thousands of chains and per-chain round trips would dominate runtime.
+            batch_size = 64
+            vectors = []
+            for i in range(0, len(chain_texts), batch_size):
+                response = client.embeddings.create(
+                    input=chain_texts[i:i + batch_size], model=model_name
+                )
+                # Sort by index rather than trusting response order.
+                vectors.extend(
+                    np.array(d.embedding, dtype=np.float32)
+                    for d in sorted(response.data, key=lambda d: d.index)
+                )
+
+            for (idx, chain), embedding in zip(valid_chains, vectors):
+                embedded_chain = {
+                    "chain_text": chain.get("chain_text"),
+                    "embedding": embedding,
+                    "hop_count": chain.get("hop_count") or 0,
+                }
+                if "_article_idx" in chain:
+                    embedded_chain["_article_idx"] = chain["_article_idx"]
+                embedded_chains.append(embedded_chain)
+
+            logger.info(
+                "✓ Batch encoded %d chains with remote embedding service (%s)",
+                len(embedded_chains), model_name,
+            )
+
+        except Exception as e:
+            # Loud: this block going empty silently is exactly what hid the
+            # original defect for an entire sweep.
+            logger.error("Failed to embed chains remotely: %s", str(e))
+            return []
+
     else:
         # OPENAI: Sequential processing (no longer async)
         for idx, chain in valid_chains:
