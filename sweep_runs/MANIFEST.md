@@ -47,8 +47,8 @@ Dispatch one run: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_r
 | 01 | TSLA | 3 | ✅ DONE (auto) | TSLA·lb3·s3·default·h3<br>TSLA·lb3·s3·event_dri·h5<br>TSLA·lb3·s3·fundament·h4<br>TSLA·lb8·s3·default·h3 | 220 | ~85min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31259971075) |
 | 02 | TSLA | 3 | ✅ DONE (auto) | TSLA·lb8·s3·event_dri·h5<br>TSLA·lb8·s3·fundament·h4<br>TSLA·lb10·s3·default·h3<br>TSLA·lb10·s3·event_dri·h5 | 220 | ~85min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31263190583) |
 | 03 | TSLA | 3 | ✅ DONE (auto) | TSLA·lb10·s3·fundament·h4<br>TSLA·lb20·s3·default·h3<br>TSLA·lb20·s3·event_dri·h5<br>TSLA·lb20·s3·fundament·h4 | 220 | ~85min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31266647013) |
-| 04 | TSLA | 5 | ⏳ DISPATCHED (auto) | TSLA·lb3·s5·default·h4<br>TSLA·lb3·s5·event_dri·h3<br>TSLA·lb3·s5·fundament·h5 | 293 | ~135min | — |
-| 05 | TSLA | 5 | · pending | TSLA·lb8·s5·default·h4<br>TSLA·lb8·s5·event_dri·h3<br>TSLA·lb8·s5·fundament·h5 | 293 | ~135min | — |
+| 04 | TSLA | 5 | ✅ DONE (auto) | TSLA·lb3·s5·default·h4<br>TSLA·lb3·s5·event_dri·h3<br>TSLA·lb3·s5·fundament·h5 | 293 | ~135min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31270281084) |
+| 05 | TSLA | 5 | ⏳ DISPATCHED (auto) | TSLA·lb8·s5·default·h4<br>TSLA·lb8·s5·event_dri·h3<br>TSLA·lb8·s5·fundament·h5 | 293 | ~135min | — |
 | 06 | TSLA | 5 | · pending | TSLA·lb10·s5·default·h4<br>TSLA·lb10·s5·event_dri·h3<br>TSLA·lb10·s5·fundament·h5 | 293 | ~135min | — |
 | 07 | TSLA | 5 | · pending | TSLA·lb20·s5·default·h4<br>TSLA·lb20·s5·event_dri·h3<br>TSLA·lb20·s5·fundament·h5 | 293 | ~135min | — |
 | 08 | TSLA | 7 | · pending | TSLA·lb3·s7·default·h5<br>TSLA·lb3·s7·event_dri·h4 | 440 | ~185min | — |
