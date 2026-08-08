@@ -9,8 +9,8 @@
     "articles_per_day": 4,
     "evolution_prompt": "resources/fundamental_prompt_template.txt",
     "lookback_days": 10,
-    "min_chain_hops": 5,
-    "max_chain_hops": 5,
+    "min_chain_hops": 4,
+    "max_chain_hops": 4,
     "single_addition": true,
     "auc_drop_tolerance": 0,
     "semaphore_limit": 220
@@ -41,8 +41,8 @@
     "articles_per_day": 4,
     "evolution_prompt": "resources/event_driven_prompt_template.txt",
     "lookback_days": 20,
-    "min_chain_hops": 6,
-    "max_chain_hops": 6,
+    "min_chain_hops": 5,
+    "max_chain_hops": 5,
     "single_addition": true,
     "auc_drop_tolerance": 0,
     "semaphore_limit": 220
@@ -57,8 +57,8 @@
     "articles_per_day": 4,
     "evolution_prompt": "resources/fundamental_prompt_template.txt",
     "lookback_days": 20,
-    "min_chain_hops": 5,
-    "max_chain_hops": 5,
+    "min_chain_hops": 4,
+    "max_chain_hops": 4,
     "single_addition": true,
     "auc_drop_tolerance": 0,
     "semaphore_limit": 220
