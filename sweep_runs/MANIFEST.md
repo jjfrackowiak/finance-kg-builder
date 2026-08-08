@@ -36,8 +36,8 @@ Dispatch one run: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_r
 
 | Run | Ticker | Steps | Status | Configs (ticker·lookback·steps·prompt·hops) | Sem | ~Time | GHA |
 |----|----|----|----|----|----|----|----|
-| 01 | TSLA | 3 | · pending | TSLA·lb3·s3·default·h3<br>TSLA·lb3·s3·event_dri·h5<br>TSLA·lb3·s3·fundament·h4<br>TSLA·lb8·s3·default·h3 | 220 | ~85min | — |
-| 02 | TSLA | 3 | · pending | TSLA·lb8·s3·event_dri·h5<br>TSLA·lb8·s3·fundament·h4<br>TSLA·lb10·s3·default·h3<br>TSLA·lb10·s3·event_dri·h5 | 220 | ~85min | — |
+| 01 | TSLA | 3 | ✅ DONE (auto) | TSLA·lb3·s3·default·h3<br>TSLA·lb3·s3·event_dri·h5<br>TSLA·lb3·s3·fundament·h4<br>TSLA·lb8·s3·default·h3 | 220 | ~85min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31259971075) |
+| 02 | TSLA | 3 | ⏳ DISPATCHED (auto) | TSLA·lb8·s3·event_dri·h5<br>TSLA·lb8·s3·fundament·h4<br>TSLA·lb10·s3·default·h3<br>TSLA·lb10·s3·event_dri·h5 | 220 | ~85min | — |
 | 03 | TSLA | 3 | · pending | TSLA·lb10·s3·fundament·h4<br>TSLA·lb20·s3·default·h3<br>TSLA·lb20·s3·event_dri·h5<br>TSLA·lb20·s3·fundament·h4 | 220 | ~85min | — |
 | 04 | TSLA | 5 | · pending | TSLA·lb3·s5·default·h4<br>TSLA·lb3·s5·event_dri·h3<br>TSLA·lb3·s5·fundament·h5 | 293 | ~135min | — |
 | 05 | TSLA | 5 | · pending | TSLA·lb8·s5·default·h4<br>TSLA·lb8·s5·event_dri·h3<br>TSLA·lb8·s5·fundament·h5 | 293 | ~135min | — |
