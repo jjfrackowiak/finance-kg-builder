@@ -29,35 +29,36 @@ A complete, self-contained TSLA analysis is therefore possible once chunk 13 fin
 waiting on MSFT. Within each ticker, chunks run light-to-heavy (steps 3 -> 5 -> 7).
 
 8 vLLM GPU workers (g5.xlarge / A10G), 5 CPU nodes, 6 embedding workers, sidecar Neo4j.
+2 candidates per evolution step (fixed across all 72 configs; not a design factor).
 Chunk sizing: steps=3 -> 4 configs/chunk (sem 220); steps=5 -> 3/chunk (sem 293); steps=7 -> 2/chunk (sem 440).
 
 Dispatch one run: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_runs/run_NN.json)" -f n_workers=8 -f n_embedding_workers=6 -f gpu_nodes=8 -f cpu_nodes=5 -f neo4j_mode=sidecar`
 
 | Run | Ticker | Steps | Status | Configs (ticker·lookback·steps·prompt·hops) | Sem | ~Time | GHA |
 |----|----|----|----|----|----|----|----|
-| 01 | TSLA | 3 | · pending | TSLA·lb3·s3·default·h3<br>TSLA·lb3·s3·event_dri·h5<br>TSLA·lb3·s3·fundament·h4<br>TSLA·lb8·s3·default·h3 | 220 | ~130min | — |
-| 02 | TSLA | 3 | · pending | TSLA·lb8·s3·event_dri·h5<br>TSLA·lb8·s3·fundament·h4<br>TSLA·lb10·s3·default·h3<br>TSLA·lb10·s3·event_dri·h5 | 220 | ~130min | — |
-| 03 | TSLA | 3 | · pending | TSLA·lb10·s3·fundament·h4<br>TSLA·lb20·s3·default·h3<br>TSLA·lb20·s3·event_dri·h5<br>TSLA·lb20·s3·fundament·h4 | 220 | ~130min | — |
-| 04 | TSLA | 5 | · pending | TSLA·lb3·s5·default·h4<br>TSLA·lb3·s5·event_dri·h3<br>TSLA·lb3·s5·fundament·h5 | 293 | ~203min | — |
-| 05 | TSLA | 5 | · pending | TSLA·lb8·s5·default·h4<br>TSLA·lb8·s5·event_dri·h3<br>TSLA·lb8·s5·fundament·h5 | 293 | ~203min | — |
-| 06 | TSLA | 5 | · pending | TSLA·lb10·s5·default·h4<br>TSLA·lb10·s5·event_dri·h3<br>TSLA·lb10·s5·fundament·h5 | 293 | ~203min | — |
-| 07 | TSLA | 5 | · pending | TSLA·lb20·s5·default·h4<br>TSLA·lb20·s5·event_dri·h3<br>TSLA·lb20·s5·fundament·h5 | 293 | ~203min | — |
-| 08 | TSLA | 7 | · pending | TSLA·lb3·s7·default·h5<br>TSLA·lb3·s7·event_dri·h4 | 440 | ~276min | — |
-| 09 | TSLA | 7 | · pending | TSLA·lb3·s7·fundament·h3<br>TSLA·lb8·s7·default·h5 | 440 | ~276min | — |
-| 10 | TSLA | 7 | · pending | TSLA·lb8·s7·event_dri·h4<br>TSLA·lb8·s7·fundament·h3 | 440 | ~276min | — |
-| 11 | TSLA | 7 | · pending | TSLA·lb10·s7·default·h5<br>TSLA·lb10·s7·event_dri·h4 | 440 | ~276min | — |
-| 12 | TSLA | 7 | · pending | TSLA·lb10·s7·fundament·h3<br>TSLA·lb20·s7·default·h5 | 440 | ~276min | — |
-| 13 | TSLA | 7 | · pending | TSLA·lb20·s7·event_dri·h4<br>TSLA·lb20·s7·fundament·h3 | 440 | ~276min | — |
-| 14 | MSFT | 3 | · pending | MSFT·lb3·s3·default·h3<br>MSFT·lb3·s3·event_dri·h5<br>MSFT·lb3·s3·fundament·h4<br>MSFT·lb8·s3·default·h3 | 220 | ~130min | — |
-| 15 | MSFT | 3 | · pending | MSFT·lb8·s3·event_dri·h5<br>MSFT·lb8·s3·fundament·h4<br>MSFT·lb10·s3·default·h3<br>MSFT·lb10·s3·event_dri·h5 | 220 | ~130min | — |
-| 16 | MSFT | 3 | · pending | MSFT·lb10·s3·fundament·h4<br>MSFT·lb20·s3·default·h3<br>MSFT·lb20·s3·event_dri·h5<br>MSFT·lb20·s3·fundament·h4 | 220 | ~130min | — |
-| 17 | MSFT | 5 | · pending | MSFT·lb3·s5·default·h4<br>MSFT·lb3·s5·event_dri·h3<br>MSFT·lb3·s5·fundament·h5 | 293 | ~203min | — |
-| 18 | MSFT | 5 | · pending | MSFT·lb8·s5·default·h4<br>MSFT·lb8·s5·event_dri·h3<br>MSFT·lb8·s5·fundament·h5 | 293 | ~203min | — |
-| 19 | MSFT | 5 | · pending | MSFT·lb10·s5·default·h4<br>MSFT·lb10·s5·event_dri·h3<br>MSFT·lb10·s5·fundament·h5 | 293 | ~203min | — |
-| 20 | MSFT | 5 | · pending | MSFT·lb20·s5·default·h4<br>MSFT·lb20·s5·event_dri·h3<br>MSFT·lb20·s5·fundament·h5 | 293 | ~203min | — |
-| 21 | MSFT | 7 | · pending | MSFT·lb3·s7·default·h5<br>MSFT·lb3·s7·event_dri·h4 | 440 | ~276min | — |
-| 22 | MSFT | 7 | · pending | MSFT·lb3·s7·fundament·h3<br>MSFT·lb8·s7·default·h5 | 440 | ~276min | — |
-| 23 | MSFT | 7 | · pending | MSFT·lb8·s7·event_dri·h4<br>MSFT·lb8·s7·fundament·h3 | 440 | ~276min | — |
-| 24 | MSFT | 7 | · pending | MSFT·lb10·s7·default·h5<br>MSFT·lb10·s7·event_dri·h4 | 440 | ~276min | — |
-| 25 | MSFT | 7 | · pending | MSFT·lb10·s7·fundament·h3<br>MSFT·lb20·s7·default·h5 | 440 | ~276min | — |
-| 26 | MSFT | 7 | · pending | MSFT·lb20·s7·event_dri·h4<br>MSFT·lb20·s7·fundament·h3 | 440 | ~276min | — |
+| 01 | TSLA | 3 | · pending | TSLA·lb3·s3·default·h3<br>TSLA·lb3·s3·event_dri·h5<br>TSLA·lb3·s3·fundament·h4<br>TSLA·lb8·s3·default·h3 | 220 | ~85min | — |
+| 02 | TSLA | 3 | · pending | TSLA·lb8·s3·event_dri·h5<br>TSLA·lb8·s3·fundament·h4<br>TSLA·lb10·s3·default·h3<br>TSLA·lb10·s3·event_dri·h5 | 220 | ~85min | — |
+| 03 | TSLA | 3 | · pending | TSLA·lb10·s3·fundament·h4<br>TSLA·lb20·s3·default·h3<br>TSLA·lb20·s3·event_dri·h5<br>TSLA·lb20·s3·fundament·h4 | 220 | ~85min | — |
+| 04 | TSLA | 5 | · pending | TSLA·lb3·s5·default·h4<br>TSLA·lb3·s5·event_dri·h3<br>TSLA·lb3·s5·fundament·h5 | 293 | ~135min | — |
+| 05 | TSLA | 5 | · pending | TSLA·lb8·s5·default·h4<br>TSLA·lb8·s5·event_dri·h3<br>TSLA·lb8·s5·fundament·h5 | 293 | ~135min | — |
+| 06 | TSLA | 5 | · pending | TSLA·lb10·s5·default·h4<br>TSLA·lb10·s5·event_dri·h3<br>TSLA·lb10·s5·fundament·h5 | 293 | ~135min | — |
+| 07 | TSLA | 5 | · pending | TSLA·lb20·s5·default·h4<br>TSLA·lb20·s5·event_dri·h3<br>TSLA·lb20·s5·fundament·h5 | 293 | ~135min | — |
+| 08 | TSLA | 7 | · pending | TSLA·lb3·s7·default·h5<br>TSLA·lb3·s7·event_dri·h4 | 440 | ~185min | — |
+| 09 | TSLA | 7 | · pending | TSLA·lb3·s7·fundament·h3<br>TSLA·lb8·s7·default·h5 | 440 | ~185min | — |
+| 10 | TSLA | 7 | · pending | TSLA·lb8·s7·event_dri·h4<br>TSLA·lb8·s7·fundament·h3 | 440 | ~185min | — |
+| 11 | TSLA | 7 | · pending | TSLA·lb10·s7·default·h5<br>TSLA·lb10·s7·event_dri·h4 | 440 | ~185min | — |
+| 12 | TSLA | 7 | · pending | TSLA·lb10·s7·fundament·h3<br>TSLA·lb20·s7·default·h5 | 440 | ~185min | — |
+| 13 | TSLA | 7 | · pending | TSLA·lb20·s7·event_dri·h4<br>TSLA·lb20·s7·fundament·h3 | 440 | ~185min | — |
+| 14 | MSFT | 3 | · pending | MSFT·lb3·s3·default·h3<br>MSFT·lb3·s3·event_dri·h5<br>MSFT·lb3·s3·fundament·h4<br>MSFT·lb8·s3·default·h3 | 220 | ~85min | — |
+| 15 | MSFT | 3 | · pending | MSFT·lb8·s3·event_dri·h5<br>MSFT·lb8·s3·fundament·h4<br>MSFT·lb10·s3·default·h3<br>MSFT·lb10·s3·event_dri·h5 | 220 | ~85min | — |
+| 16 | MSFT | 3 | · pending | MSFT·lb10·s3·fundament·h4<br>MSFT·lb20·s3·default·h3<br>MSFT·lb20·s3·event_dri·h5<br>MSFT·lb20·s3·fundament·h4 | 220 | ~85min | — |
+| 17 | MSFT | 5 | · pending | MSFT·lb3·s5·default·h4<br>MSFT·lb3·s5·event_dri·h3<br>MSFT·lb3·s5·fundament·h5 | 293 | ~135min | — |
+| 18 | MSFT | 5 | · pending | MSFT·lb8·s5·default·h4<br>MSFT·lb8·s5·event_dri·h3<br>MSFT·lb8·s5·fundament·h5 | 293 | ~135min | — |
+| 19 | MSFT | 5 | · pending | MSFT·lb10·s5·default·h4<br>MSFT·lb10·s5·event_dri·h3<br>MSFT·lb10·s5·fundament·h5 | 293 | ~135min | — |
+| 20 | MSFT | 5 | · pending | MSFT·lb20·s5·default·h4<br>MSFT·lb20·s5·event_dri·h3<br>MSFT·lb20·s5·fundament·h5 | 293 | ~135min | — |
+| 21 | MSFT | 7 | · pending | MSFT·lb3·s7·default·h5<br>MSFT·lb3·s7·event_dri·h4 | 440 | ~185min | — |
+| 22 | MSFT | 7 | · pending | MSFT·lb3·s7·fundament·h3<br>MSFT·lb8·s7·default·h5 | 440 | ~185min | — |
+| 23 | MSFT | 7 | · pending | MSFT·lb8·s7·event_dri·h4<br>MSFT·lb8·s7·fundament·h3 | 440 | ~185min | — |
+| 24 | MSFT | 7 | · pending | MSFT·lb10·s7·default·h5<br>MSFT·lb10·s7·event_dri·h4 | 440 | ~185min | — |
+| 25 | MSFT | 7 | · pending | MSFT·lb10·s7·fundament·h3<br>MSFT·lb20·s7·default·h5 | 440 | ~185min | — |
+| 26 | MSFT | 7 | · pending | MSFT·lb20·s7·event_dri·h4<br>MSFT·lb20·s7·fundament·h3 | 440 | ~185min | — |

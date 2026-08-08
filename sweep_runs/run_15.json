@@ -2,7 +2,7 @@
   {
     "ticker": "MSFT",
     "steps": 3,
-    "candidates": 3,
+    "candidates": 2,
     "feature_mode": "hybrid",
     "day_start": "2022-05-02",
     "day_end": "2022-11-18",
@@ -18,7 +18,7 @@
   {
     "ticker": "MSFT",
     "steps": 3,
-    "candidates": 3,
+    "candidates": 2,
     "feature_mode": "hybrid",
     "day_start": "2022-05-02",
     "day_end": "2022-11-18",
@@ -34,7 +34,7 @@
   {
     "ticker": "MSFT",
     "steps": 3,
-    "candidates": 3,
+    "candidates": 2,
     "feature_mode": "hybrid",
     "day_start": "2022-05-02",
     "day_end": "2022-11-18",
@@ -50,7 +50,7 @@
   {
     "ticker": "MSFT",
     "steps": 3,
-    "candidates": 3,
+    "candidates": 2,
     "feature_mode": "hybrid",
     "day_start": "2022-05-02",
     "day_end": "2022-11-18",
