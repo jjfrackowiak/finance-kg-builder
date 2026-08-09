@@ -193,6 +193,14 @@ Examples:
         help="Allowed AUC regression before a step is dropped by the acceptance gate (default: 0.0)",
     )
     exp_group.add_argument(
+        "--fixed-ontology",
+        type=str,
+        default="",
+        help="Path to a saved ontology JSON (e.g. an evolved schema from a sweep run). "
+        "Skips ontology evolution entirely and builds the graph once from that schema — "
+        "the out-of-sample test mode. --steps is ignored when this is set.",
+    )
+    exp_group.add_argument(
         "--single-addition",
         action="store_true",
         help="Each candidate proposes exactly one new node type + one new relationship "
@@ -318,6 +326,7 @@ def setup_config(args: argparse.Namespace) -> Config:
     config.experiment.drop_regressing_steps = not args.keep_regressing_steps
     config.experiment.auc_drop_tolerance = args.auc_drop_tolerance
     config.experiment.single_addition = args.single_addition
+    config.experiment.fixed_ontology = args.fixed_ontology
     config.experiment.feature.embedding_type = args.embedding_type
     config.experiment.feature.local_model_name = args.local_model
     config.experiment.feature.lookback_days = args.lookback_days
@@ -345,6 +354,8 @@ def setup_config(args: argparse.Namespace) -> Config:
     logger.info(f"  - MAX_METAPATH_HOPS={config.experiment.feature.max_metapath_hops}")
     logger.info(f"  - TRAIN_RATIO={config.experiment.feature.train_ratio:.2f}")
     logger.info(f"  - EVOLUTION_PROMPT={config.experiment.evolution_prompt_template}")
+    if config.experiment.fixed_ontology:
+        logger.info(f"  - FIXED_ONTOLOGY={config.experiment.fixed_ontology} (evolution disabled)")
 
     return config
 
@@ -579,6 +590,11 @@ def _make_run_name(args: argparse.Namespace, config: Config) -> str:
         suffix += "-singleadd"
     if args.keep_regressing_steps:
         suffix += "-keepregress"
+    if args.fixed_ontology:
+        # OOS runs do not evolve, so steps/candidates/prompt carry no meaning here.
+        from pathlib import Path as _Path
+
+        return f"OOS-{ticker}-{_Path(args.fixed_ontology).stem}-{args.feature_mode}-{day_start}"
     return (
         f"{ticker}-steps{args.steps}-cands{args.candidates}"
         f"-{args.feature_mode}-{prompt_label}-{day_start}{suffix}"
@@ -601,6 +617,8 @@ def _log_params(args: argparse.Namespace, config: Config) -> None:
             "candidates": args.candidates,
             "semaphore_limit": args.semaphore_limit,
             "evolution_prompt": args.evolution_prompt,
+            "fixed_ontology": args.fixed_ontology or "none",
+            "run_mode": "oos_fixed_ontology" if args.fixed_ontology else "evolution",
             # --- embedding ---
             "embedding_type": args.embedding_type,
             "local_model": args.local_model,

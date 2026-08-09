@@ -70,3 +70,27 @@ Dispatch one run: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_r
 | 24 | MSFT | 7 | · pending | MSFT·lb10·s7·default·h5<br>MSFT·lb10·s7·event_dri·h4 | 440 | ~185min | — |
 | 25 | MSFT | 7 | · pending | MSFT·lb10·s7·fundament·h3<br>MSFT·lb20·s7·default·h5 | 440 | ~185min | — |
 | 26 | MSFT | 7 | · pending | MSFT·lb20·s7·event_dri·h4<br>MSFT·lb20·s7·fundament·h3 | 440 | ~185min | — |
+
+---
+
+## Out-of-sample runs (Phase 2)
+
+Not part of the balanced design. Each OOS run takes a schema an earlier sweep already
+selected, holds it fixed (`--fixed-ontology`), and builds a graph on a window the sweep
+never saw. Nothing is fitted to the OOS window except the downstream classifier, so the
+number it produces tests the *selection*, not the search.
+
+**One config per dispatch, always.** OOS runs use `neo4j_mode=external` (AuraDB) so the
+graph survives the job and can be inspected afterwards. Every job wipes the database on
+startup, so two concurrent jobs in external mode would destroy each other's graph;
+`sweep.py` now refuses more than one config in external mode.
+
+Dispatch: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_runs/oos_01.json)" -f n_workers=2 -f n_embedding_workers=2 -f gpu_nodes=2 -f cpu_nodes=1 -f neo4j_mode=external -f timeout_minutes=120`
+
+| Run | Ticker | Ontology | Window | Status | GHA |
+|----|----|----|----|----|----|
+| oos_01 | TSLA | `resources/ontologies/tsla_best_step_1_candidate_1.json` — sweep winner (base + `EarningsReport`/`HAS_EARNINGS`), in-sample AUC 0.787 | 2023-08-16 → 2023-12-16 | · pending | — |
+
+Feature hyperparameters are carried over from the winning sweep config (lookback 3,
+hops 3-3, hybrid, 4 articles/day) — they are part of what was selected, so changing
+them would test a different thing.

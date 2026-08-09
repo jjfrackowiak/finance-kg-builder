@@ -18,6 +18,27 @@ Identical dates for all tickers (see manuscript figure for window visualisation)
 
 OOS jobs use `--fixed-ontology <path>` to load the evolved schema from Phase 1.
 
+**`--fixed-ontology` implemented 2026-08-09.** The flag was specified here from the start but
+had no implementation until the first OOS run. It loads a saved ontology JSON, skips ontology
+evolution entirely (no LLM proposal, no acceptance gate, `--steps` ignored), builds the graph
+once from that schema, and evaluates it against the article-text baseline logged for the same
+window. Runs are named `OOS-<ticker>-<ontology>-…` and carry `run_mode=oos_fixed_ontology`, so
+they never contaminate a sweep pull. See `sweep_runs/MANIFEST.md` § Out-of-sample runs.
+
+**Window note.** The 338/88-day split in the table above belongs to the original full-volume
+design. The sweep window was later cut to 200 days (2022-05-02 → 2022-11-18, see "Window
+increased to 200 days" below), so the *training* row no longer describes what was run. The
+**OOS window is unchanged and still used as written** — 2023-08-16 → 2023-12-16 — and is now
+separated from the sweep window by a nine-month gap rather than being adjacent to it. That
+gap makes the hold-out stricter, not weaker, but it also means the OOS window sits in a
+different market regime, which belongs in any reading of the result.
+
+**What the OOS number does and does not test.** The ontology and every hyperparameter are
+fixed in advance, so nothing about the *schema* is fitted to the hold-out. The downstream
+classifier is still retrained inside the OOS window on its own train split — there is no
+cross-window model transfer. So the claim the test supports is "a schema selected on 2022 data
+still earns its baseline lift on unseen 2023 data," not "the trained predictor generalises."
+
 ---
 
 ## Ticker Selection

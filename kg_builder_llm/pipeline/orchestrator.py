@@ -22,7 +22,11 @@ from kg_builder_llm.core.graph import GraphDriver
 from kg_builder_llm.core.ids import article_text_id
 from kg_builder_llm.core.neo4j_io import write_price_labels_to_days
 from kg_builder_llm.core.ontology import OntologyCandidate, create_base_ontology
-from kg_builder_llm.core.ontology_io import save_ontology_candidate, save_ontology_summary
+from kg_builder_llm.core.ontology_io import (
+    load_ontology_candidate,
+    save_ontology_candidate,
+    save_ontology_summary,
+)
 from kg_builder_llm.core.tagging import tag_candidate_entities
 from kg_builder_llm.ml.modeling import ModelMetrics
 from kg_builder_llm.mutations.base import build_kg_incremental_candidate
@@ -169,6 +173,14 @@ class Orchestrator:
         self._mlflow.log_baseline(baseline_metrics)
         self._mlflow.log_step_to_parent(baseline_metrics, step=0)
 
+        # OOS mode: no evolution. Build once from a schema fixed in advance and
+        # evaluate it against the same article-text baseline as any sweep run.
+        if self.config.experiment.fixed_ontology:
+            await self._run_fixed_ontology(articles_df, price_df)
+            logger.info("Experiment completed (fixed-ontology mode)")
+            self._save_ontologies()
+            return self.results
+
         # STEP 1+: Evolve and evaluate ontologies using incremental mutation
         # num_steps=0 means only base, num_steps=1 means base + 1 evolution step, etc.
         best_candidate = base_ontology
@@ -295,6 +307,124 @@ class Orchestrator:
             )
 
         logger.info("✓ Wrote text embeddings for %d / %d articles", len(rows), len(articles_df))
+
+    async def _run_fixed_ontology(
+        self,
+        articles_df: pd.DataFrame,
+        price_df: pd.DataFrame,
+    ) -> OntologyCandidate:
+        """Build and evaluate one graph from a schema fixed before the run.
+
+        This is the out-of-sample test path of the experiment plan: the schema is
+        the one an earlier sweep selected, so nothing about it is fitted to this
+        window. No LLM proposes anything, no acceptance gate runs, and the AUC of
+        the single resulting candidate is the whole result — comparable to the
+        article-text baseline logged for the same window.
+
+        Args:
+            articles_df: Articles data for the out-of-sample window
+            price_df: Price data with returns for the same window
+
+        Returns:
+            The evaluated OntologyCandidate.
+        """
+        path = Path(self.config.experiment.fixed_ontology)
+        if not path.exists():
+            raise FileNotFoundError(f"--fixed-ontology path does not exist: {path}")
+
+        candidate, source_metrics = load_ontology_candidate(path)
+        # Retag so this run's graph and MLflow child run are not confused with the
+        # sweep run the schema came from, and record the provenance explicitly.
+        source_tag = candidate.candidate_tag
+        candidate.candidate_tag = "fixed_ontology"
+        candidate.parent_tag = "base_structure"
+        candidate.step_index = 1
+        candidate.description = (
+            f"Fixed ontology from {path.name} (source candidate {source_tag}, "
+            f"AUC {source_metrics.auc:.4f} on its own window)"
+        )
+
+        node_labels = [
+            n.get("label", "") if isinstance(n, dict) else str(n)
+            for n in candidate.schema.get("node_types", [])
+        ]
+        logger.info(
+            "=== Fixed ontology (OOS) === %s: %d node types (%s), %d relationship types",
+            path,
+            len(node_labels),
+            ", ".join(node_labels),
+            len(candidate.schema.get("relationship_types", [])),
+        )
+
+        nodes_before = self.driver.get_count()
+        rels_before = self.driver.get_relationship_count()
+
+        await build_kg_incremental_candidate(
+            self.driver,
+            self.config.neo4j,
+            self.config.experiment,
+            self.llm,
+            candidate,
+            articles_df,
+            candidate.candidate_tag,
+            ["base_structure"],
+        )
+
+        nodes_after = self.driver.get_count()
+        rels_after = self.driver.get_relationship_count()
+        logger.info(
+            "DELTA for %s: +%d nodes, +%d relationships",
+            candidate.candidate_tag,
+            nodes_after - nodes_before,
+            rels_after - rels_before,
+        )
+
+        tag_candidate_entities(self.driver, candidate.candidate_tag)
+        self._deduplicate_graph(candidate.candidate_tag)
+
+        metrics = evaluate_candidate(
+            self.driver,
+            self.embedder,
+            [candidate.candidate_tag],
+            self._extract_day_labels(price_df),
+            price_df,
+            allowed_tags=["base_structure", candidate.candidate_tag],
+            embedding_type=self.config.experiment.feature.embedding_type,
+            local_model=self.config.experiment.feature.local_model_name,
+            lookback_days=self.config.experiment.feature.lookback_days,
+            min_chain_hops=self.config.experiment.feature.min_chain_hops,
+            max_chain_hops=self.config.experiment.feature.max_chain_hops,
+            path_uniqueness=self.config.experiment.feature.path_uniqueness,
+            feature_mode=self.config.experiment.feature.feature_mode,
+            max_metapath_hops=self.config.experiment.feature.max_metapath_hops,
+            train_ratio=self.config.experiment.feature.train_ratio,
+        )
+
+        self.results[candidate.candidate_tag] = metrics
+        self.candidates_per_step[1] = [candidate]
+        delta_auc, delta_reference = self._compute_delta_auc(metrics.auc)
+        logger.info(
+            "Fixed ontology: AUC=%.4f, F1=%.4f, ΔAUC=%s (vs %s)",
+            metrics.auc,
+            metrics.f1,
+            f"{delta_auc:+.4f}" if delta_auc is not None else "n/a",
+            delta_reference or "n/a",
+        )
+
+        self._mlflow.log_candidate(
+            candidate,
+            metrics,
+            step=1,
+            variant_idx=0,
+            nodes_added=nodes_after - nodes_before,
+            rels_added=rels_after - rels_before,
+            nodes_total=nodes_after,
+            rels_total=rels_after,
+            delta_auc=delta_auc,
+            delta_reference=delta_reference,
+        )
+        self._mlflow.log_step_to_parent(metrics, step=1)
+        return candidate
 
     async def _run_step_incremental_evolution(
         self,

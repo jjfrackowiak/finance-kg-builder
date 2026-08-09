@@ -103,6 +103,9 @@ class ExperimentConfig:
     drop_regressing_steps: bool = True
     auc_drop_tolerance: float = 0.0
     single_addition: bool = False
+    # Path to a saved ontology JSON. When set, evolution is skipped entirely and
+    # the graph is built once from that schema — the out-of-sample test mode.
+    fixed_ontology: str = ""
     feature: FeatureConfig = None
 
     def __post_init__(self) -> None:
@@ -123,6 +126,7 @@ class ExperimentConfig:
             in ("1", "true", "yes"),
             auc_drop_tolerance=float(os.getenv("AUC_DROP_TOLERANCE", "0.0")),
             single_addition=os.getenv("SINGLE_ADDITION", "false").lower() in ("1", "true", "yes"),
+            fixed_ontology=os.getenv("FIXED_ONTOLOGY", ""),
             feature=FeatureConfig.from_env(),
         )
 

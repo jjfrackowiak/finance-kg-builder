@@ -6,6 +6,9 @@ on:
     branches: [dev, prod, qa]
     paths:
       - "kg_builder_llm/**"
+      # Baked into the image by the Dockerfile (prompt templates, fixed ontologies),
+      # so a change here must rebuild or jobs run against a stale copy.
+      - "resources/**"
       - "pyproject.toml"
       - "uv.lock"
 

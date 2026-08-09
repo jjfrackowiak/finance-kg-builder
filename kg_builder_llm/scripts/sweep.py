@@ -21,6 +21,7 @@ SWEEP_LABEL = "sweep-id"
 # args that sweep configs should be able to vary.
 OPTIONAL_ARG_SPECS = [
     ("single_addition", "--single-addition", "flag"),
+    ("fixed_ontology", "--fixed-ontology", "value"),
     ("keep_regressing_steps", "--keep-regressing-steps", "flag"),
     ("auc_drop_tolerance", "--auc-drop-tolerance", "value"),
     ("embedding_type", "--embedding-type", "value"),
@@ -546,6 +547,17 @@ def main():
         args.image = "busybox"
 
     configs = json.loads(args.configs)
+
+    # All jobs in external mode share one AuraDB, and every job wipes the graph
+    # (MATCH (n) DETACH DELETE n) before it builds. Concurrent jobs would delete
+    # each other's data mid-run and silently produce garbage metrics.
+    if args.neo4j_mode == "external" and len(configs) > 1 and not args.stub:
+        parser.error(
+            f"--neo4j-mode external supports exactly one config per dispatch "
+            f"(got {len(configs)}): all jobs would share one database and each "
+            f"wipes it on startup. Use sidecar mode, or dispatch one config at a time."
+        )
+
     sweep_id = str(uuid.uuid4())[:8]
 
     mlflow = MlflowClient()

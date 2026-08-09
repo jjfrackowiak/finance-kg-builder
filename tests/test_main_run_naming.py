@@ -21,6 +21,7 @@ def _args(**overrides):
         evolution_prompt="default",
         single_addition=False,
         keep_regressing_steps=False,
+        fixed_ontology="",
     )
     defaults.update(overrides)
     return argparse.Namespace(**defaults)
@@ -47,3 +48,17 @@ class TestMakeRunName:
         assert both_name != default_name
         assert "-singleadd" in both_name
         assert "-keepregress" in both_name
+
+    def test_fixed_ontology_names_the_run_oos(self):
+        """OOS runs must not be mistaken for sweep runs when pulling MLflow."""
+        name = _make_run_name(
+            _args(
+                fixed_ontology="resources/ontologies/tsla_best_step_1_candidate_1.json",
+                day_start="2023-08-16",
+                feature_mode="hybrid",
+            ),
+            _Config(),
+        )
+        assert name == "OOS-TSLA-tsla_best_step_1_candidate_1-hybrid-2023-08-16"
+        # steps/candidates/prompt are meaningless without evolution — keep them out.
+        assert "steps" not in name and "cands" not in name

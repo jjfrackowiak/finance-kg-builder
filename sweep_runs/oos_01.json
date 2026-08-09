@@ -1,0 +1,16 @@
+[
+  {
+    "ticker": "TSLA",
+    "steps": 0,
+    "candidates": 1,
+    "feature_mode": "hybrid",
+    "day_start": "2023-08-16",
+    "day_end": "2023-12-16",
+    "articles_per_day": 4,
+    "lookback_days": 3,
+    "min_chain_hops": 3,
+    "max_chain_hops": 3,
+    "fixed_ontology": "resources/ontologies/tsla_best_step_1_candidate_1.json",
+    "semaphore_limit": 220
+  }
+]

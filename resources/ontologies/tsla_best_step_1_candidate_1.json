@@ -1,0 +1,151 @@
+{
+  "candidate_tag": "step_1_candidate_1",
+  "description": "Evolved from base_structure (variant 1)",
+  "step_index": 1,
+  "parent_tag": "base_structure",
+  "schema": {
+    "node_types": [
+      {
+        "label": "Company",
+        "properties": [
+          {
+            "name": "symbol",
+            "type": "STRING",
+            "required": true
+          }
+        ]
+      },
+      {
+        "label": "Article",
+        "properties": [
+          {
+            "name": "headline",
+            "type": "STRING"
+          },
+          {
+            "name": "timestamp",
+            "type": "STRING"
+          },
+          {
+            "name": "url",
+            "type": "STRING"
+          },
+          {
+            "name": "source",
+            "type": "STRING"
+          }
+        ]
+      },
+      {
+        "label": "Day",
+        "properties": [
+          {
+            "name": "date",
+            "type": "STRING",
+            "required": true
+          }
+        ]
+      },
+      {
+        "label": "Author",
+        "properties": [
+          {
+            "name": "name",
+            "type": "STRING"
+          },
+          {
+            "name": "email",
+            "type": "STRING"
+          }
+        ]
+      },
+      {
+        "label": "EarningsReport",
+        "properties": [
+          {
+            "name": "actual",
+            "type": "FLOAT"
+          },
+          {
+            "name": "estimate",
+            "type": "FLOAT"
+          },
+          {
+            "name": "surprise_percent",
+            "type": "FLOAT"
+          }
+        ]
+      }
+    ],
+    "relationship_types": [
+      "MENTIONS",
+      "RELATES_TO",
+      "WRITTEN_BY",
+      "PUBLISHED_ON",
+      "HAS_EARNINGS"
+    ],
+    "patterns": [
+      [
+        "Article",
+        "MENTIONS",
+        "Company"
+      ],
+      [
+        "Article",
+        "WRITTEN_BY",
+        "Author"
+      ],
+      [
+        "Article",
+        "PUBLISHED_ON",
+        "Day"
+      ],
+      [
+        "Company",
+        "HAS_EARNINGS",
+        "EarningsReport"
+      ]
+    ],
+    "additional_node_types": true,
+    "additional_relationship_types": true,
+    "additional_patterns": true
+  },
+  "metrics": {
+    "auc": 0.7871853546910755,
+    "f1": 0.7142857142857143,
+    "max_hops_train": 3,
+    "max_hops_val": 3
+  },
+  "provenance": {
+    "source": "TSLA 200-day sweep, best of 36 configs by best_auc",
+    "mlflow_run_id": "fe10350f1eb54fef84a9ca753174ad31",
+    "mlflow_run_name": "TSLA-steps3-cands2-hybrid-default-2022-05-02-singleadd",
+    "source_candidate_tag": "step_1_candidate_1",
+    "sweep_window": "2022-05-02 \u2192 2022-11-18",
+    "sweep_config": {
+      "lookback_days": 3,
+      "steps": 3,
+      "candidates": 2,
+      "min_chain_hops": 3,
+      "max_chain_hops": 3,
+      "evolution_prompt": "default",
+      "feature_mode": "hybrid",
+      "articles_per_day": 4,
+      "single_addition": true
+    },
+    "addition_vs_base": {
+      "node": "EarningsReport",
+      "relationship": "HAS_EARNINGS",
+      "patterns": [
+        [
+          "Company",
+          "HAS_EARNINGS",
+          "EarningsReport"
+        ]
+      ]
+    },
+    "in_sample_auc": 0.7871853546910755,
+    "in_sample_baseline_auc": 0.5217391304347826,
+    "note": "Selected as the argmax over 36 TSLA configs on a ~42-day validation window; the selection itself is subject to winner's curse. The OOS run is what tests whether it holds up."
+  }
+}
