@@ -385,6 +385,16 @@ signal to separate KG variants at this sample size.</li>
 <li>Steps = 7 is hard to justify on this evidence — acceptance collapses after step 1
 and the AUC gain over steps = 3 is +0.016.</li>
 <li>Run MSFT as-is for replication, or fix the feature arm first?</li>
+
+<li><b>Infrastructure — the CPU node group never scales to zero.</b>
+<span class="k">min_size = 1</span> in <span class="k">infra/eks.tf</span> keeps one
+t3.xlarge running at about $4.60/day whether or not anything is scheduled, and the sweep's
+cleanup step hardcodes <span class="k">desiredSize=1</span>, so the two would have to change
+together. Nothing needs it while idle — only CoreDNS and the EFS CSI controller would go
+Pending, and both reschedule as soon as a node returns. Worth roughly $140/month against
+2–3 minutes of node provisioning at the start of the next sweep. Idle cost is currently
+$8.53/day: $4.61 that node, $2.40 EKS control plane, $1.31 NAT gateway and EBS, $0.18
+VPC and EFS.</li>
 </ul>
 
 <hr>
