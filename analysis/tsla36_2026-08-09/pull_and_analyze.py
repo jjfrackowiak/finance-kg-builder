@@ -201,20 +201,37 @@ def main() -> None:
         f"  difference {st.mean(h5) - st.mean(rest):+.4f} SE {ab_se:.4f} t={(st.mean(h5) - st.mean(rest)) / ab_se:+.2f}",
         f"  empty path blocks (path_mean_norm == 0): {empty} of {len(rows)}",
         "",
-        "NODE EFFECTS (best first, n >= 8)",
+        "ADDITION EFFECTS (best first, n >= 8)",
+        "  Measured within-step: each candidate's AUC minus the mean AUC of its own step.",
+        "  Candidates in a step share one graph and one day set, so this has no reference",
+        "  bias -- unlike AUC-minus-current-best, where the gate makes the reference the",
+        "  running maximum and ~88% of candidates score negative regardless of quality.",
+        "  Zero-sum by construction: ranks additions against each other, not in absolute terms.",
+        "  Grouped by (node, relationship) because that pair is what a candidate proposes.",
     ]
-    by_node = defaultdict(list)
+    steps_groups = defaultdict(list)
+    for a in additions:
+        steps_groups[(a["run_id"], a["step"])].append(a)
+    for group in steps_groups.values():
+        mean_auc = st.mean(a["auc"] for a in group if a.get("auc") is not None)
+        for a in group:
+            a["within_step"] = a["auc"] - mean_auc
+
+    by_pair = defaultdict(list)
     for a in additions:
         if a.get("delta_auc") is not None:
-            by_node[a["node"]].append((a["delta_auc"], a["status"]))
-    node_stats = [
-        (st.mean([d for d, _ in v]), k, len(v), st.stdev([d for d, _ in v]),
-         100 * sum(1 for _, s in v if s == "accepted") / len(v))
-        for k, v in by_node.items()
-        if len(v) >= 8
+            by_pair[(a["node"], a["relationship"])].append(a["within_step"])
+    pair_stats = [
+        (st.mean(v), k, len(v), st.stdev(v)) for k, v in by_pair.items() if len(v) >= 8
     ]
-    for mean, node, n, sd, acc in sorted(node_stats, reverse=True):
-        out.append(f"  {node:<26} n={n:<3} mean={mean:+.4f} sd={sd:.3f} accepted={acc:.0f}%")
+    for mean, (node, rel), n, sd in sorted(pair_stats, reverse=True):
+        out.append(f"  {node:<24} {rel:<32} n={n:<3} {mean:+.4f} sd={sd:.3f}")
+    out.append(
+        f"  ({len(pair_stats)} pairs clear n>=8, covering "
+        f"{sum(n for _, _, n, _ in pair_stats)} of {len(additions)} records; "
+        f"{len({a['node'] for a in additions})} node types across "
+        f"{len(by_pair)} distinct pairs)"
+    )
 
     by_step = defaultdict(list)
     for a in additions:

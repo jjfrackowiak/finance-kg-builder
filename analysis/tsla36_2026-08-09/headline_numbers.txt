@@ -31,21 +31,27 @@ PATH ABLATION
   difference +0.0277 SE 0.0219 t=+1.26
   empty path blocks (path_mean_norm == 0): 10 of 36
 
-NODE EFFECTS (best first, n >= 8)
-  RegulatoryBody             n=38  mean=-0.0326 sd=0.096 accepted=63%
-  CreditRating               n=36  mean=-0.0536 sd=0.098 accepted=19%
-  EarningsReport             n=22  mean=-0.0796 sd=0.119 accepted=23%
-  EconomicIndicator          n=36  mean=-0.0823 sd=0.102 accepted=25%
-  LegalAction                n=11  mean=-0.0882 sd=0.114 accepted=18%
-  RegulatoryAnnouncement     n=24  mean=-0.1006 sd=0.092 accepted=17%
-  GeographicRegion           n=31  mean=-0.1018 sd=0.081 accepted=6%
-  MergerAcquisition          n=10  mean=-0.1027 sd=0.096 accepted=10%
-  Product                    n=11  mean=-0.1053 sd=0.111 accepted=27%
-  MarketIndex                n=16  mean=-0.1128 sd=0.101 accepted=6%
-  CorporateAction            n=28  mean=-0.1131 sd=0.114 accepted=7%
-  MarketEvent                n=24  mean=-0.1186 sd=0.086 accepted=4%
-  Executive                  n=13  mean=-0.1229 sd=0.110 accepted=8%
-  Industry                   n=17  mean=-0.1368 sd=0.122 accepted=6%
+ADDITION EFFECTS (best first, n >= 8)
+  Measured within-step: each candidate's AUC minus the mean AUC of its own step.
+  Candidates in a step share one graph and one day set, so this has no reference
+  bias -- unlike AUC-minus-current-best, where the gate makes the reference the
+  running maximum and ~88% of candidates score negative regardless of quality.
+  Zero-sum by construction: ranks additions against each other, not in absolute terms.
+  Grouped by (node, relationship) because that pair is what a candidate proposes.
+  RegulatoryBody           MENTIONS_REGULATORY_BODY         n=27  +0.0478 sd=0.061
+  CreditRating             HAS_CREDIT_RATING                n=35  +0.0150 sd=0.051
+  RegulatoryBody           ISSUED_BY                        n=8   +0.0126 sd=0.042
+  Product                  MENTIONS_PRODUCT                 n=11  +0.0095 sd=0.050
+  MarketIndex              MENTIONS_MARKET_INDEX            n=12  +0.0044 sd=0.035
+  Executive                MENTIONS_EXECUTIVE               n=12  +0.0010 sd=0.046
+  EarningsReport           HAS_EARNINGS_REPORT              n=12  -0.0031 sd=0.058
+  LegalAction              INVOLVES_LEGAL_ACTION            n=9   -0.0038 sd=0.037
+  RegulatoryAnnouncement   MENTIONS_REGULATORY_ANNOUNCEMENT n=8   -0.0040 sd=0.022
+  Industry                 OPERATES_IN                      n=17  -0.0125 sd=0.038
+  MarketEvent              TRIGGERS                         n=10  -0.0143 sd=0.052
+  GeographicRegion         LOCATED_IN                       n=25  -0.0218 sd=0.056
+  EconomicIndicator        REFERENCES                       n=36  -0.0388 sd=0.062
+  (13 pairs clear n>=8, covering 222 of 360 records; 32 node types across 80 distinct pairs)
 
 ACCEPTANCE BY STEP
   step 1: 50% of 72
