@@ -265,7 +265,9 @@ jobs:
           wait_active "${{ steps.config.outputs.prefix }}-gpu"
           aws eks update-nodegroup-config --cluster-name "$CLUSTER" --nodegroup-name "${{ steps.config.outputs.prefix }}-gpu" --scaling-config desiredSize=0 --region "$REGION" 2>&1 || echo "::warning::GPU scale-down API call failed"
           wait_active "${{ steps.config.outputs.prefix }}-cpu"
-          aws eks update-nodegroup-config --cluster-name "$CLUSTER" --nodegroup-name "${{ steps.config.outputs.prefix }}-cpu" --scaling-config desiredSize=1 --region "$REGION" 2>&1 || echo "::warning::CPU scale-down API call failed"
+          # Idle to 0, not 1: an empty t3.xlarge costs ~$4.60/day and nothing needs it
+          # between sweeps (coredns and efs-csi-controller just wait for the next node).
+          aws eks update-nodegroup-config --cluster-name "$CLUSTER" --nodegroup-name "${{ steps.config.outputs.prefix }}-cpu" --scaling-config desiredSize=0 --region "$REGION" 2>&1 || echo "::warning::CPU scale-down API call failed"
 
           # Verify it actually landed. Loud (::error:: annotation, visible in
           # the run summary) but deliberately NOT `exit 1` -- this step has

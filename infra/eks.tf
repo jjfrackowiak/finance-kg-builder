@@ -169,8 +169,13 @@ resource "aws_eks_node_group" "cpu" {
   }
 
   scaling_config {
-    desired_size = 1
-    min_size     = 1
+    # Idle to ZERO. Nothing needs a CPU node between sweeps: vllm/embeddings are
+    # scaled to 0 replicas by the sweep cleanup, and the only non-DaemonSet pods
+    # left (coredns, efs-csi-controller) simply go Pending and reschedule when a
+    # node returns. One t3.xlarge costs ~$4.60/day, ~$140/month, to sit empty.
+    # sweep.yml scales this up before a run and back to 0 afterwards.
+    desired_size = 0
+    min_size     = 0
     # Ceiling for MANUAL scaling (no autoscaler runs here). ~4-5 job pods fit per
     # t3.xlarge, so ~12 nodes already runs all 48 sweep jobs concurrently; 16 is
     # headroom for embeddings + system. More is useless (only 48 jobs exist).
