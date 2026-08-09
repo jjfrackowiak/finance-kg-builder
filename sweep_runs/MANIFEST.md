@@ -89,7 +89,7 @@ Dispatch: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_runs/oos_
 
 | Run | Ticker | Ontology | Window | Status | GHA |
 |----|----|----|----|----|----|
-| oos_01 | TSLA | `resources/ontologies/tsla_best_step_1_candidate_1.json` — sweep winner (base + `EarningsReport`/`HAS_EARNINGS`), in-sample AUC 0.787 | 2023-08-16 → 2023-12-16 | · pending | — |
+| oos_01 | TSLA | `resources/ontologies/tsla_best_step_1_candidate_1.json` — sweep winner (base + `EarningsReport`/`HAS_EARNINGS`), in-sample AUC 0.787 | 2023-08-16 → 2023-12-16 | ✅ DONE — AUC 0.503 vs baseline 0.719 (−0.216) | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31316716018) |
 
 Feature hyperparameters are carried over from the winning sweep config (lookback 3,
 hops 3-3, hybrid, 4 articles/day) — they are part of what was selected, so changing
