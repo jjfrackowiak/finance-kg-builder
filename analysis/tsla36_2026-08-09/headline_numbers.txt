@@ -1,0 +1,57 @@
+n = 36 configs, 360 addition records
+
+final AUC                  mean=0.6168 sd=0.0649 median=0.6098 min=0.4691 max=0.7872
+baseline AUC               mean=0.5629 sd=0.0531 median=0.5400 min=0.5217 max=0.6499
+delta                      mean=0.0538 sd=0.0844 median=0.0606 min=-0.1259 max=0.2654
+paired t = +3.83 (SE 0.0141)
+beat baseline: 28 | below: 8 | equal: 0
+
+FACTOR MEANS (best first)
+  lookback_days:
+    10             n=9   mean=0.6428 sd=0.0468
+    20             n=9   mean=0.6212 sd=0.0711
+    3              n=9   mean=0.6064 sd=0.0719
+    8              n=9   mean=0.5967 sd=0.0683
+  steps:
+    7              n=12  mean=0.6287 sd=0.0411
+    3              n=12  mean=0.6125 sd=0.0918
+    5              n=12  mean=0.6091 sd=0.0552
+  chain_hops:
+    5              n=12  mean=0.6352 sd=0.0592
+    3              n=12  mean=0.6266 sd=0.0841
+    4              n=12  mean=0.5885 sd=0.0384
+  evolution_prompt:
+    event_driven   n=12  mean=0.6384 sd=0.0628
+    default        n=12  mean=0.6125 sd=0.0832
+    fundamental    n=12  mean=0.5994 sd=0.0409
+
+PATH ABLATION
+  h5   n=12 mean=0.6352 sd=0.0592
+  h3+4 n=24 mean=0.6076 sd=0.0669
+  difference +0.0277 SE 0.0219 t=+1.26
+  empty path blocks (path_mean_norm == 0): 10 of 36
+
+NODE EFFECTS (best first, n >= 8)
+  RegulatoryBody             n=38  mean=-0.0326 sd=0.096 accepted=63%
+  CreditRating               n=36  mean=-0.0536 sd=0.098 accepted=19%
+  EarningsReport             n=22  mean=-0.0796 sd=0.119 accepted=23%
+  EconomicIndicator          n=36  mean=-0.0823 sd=0.102 accepted=25%
+  LegalAction                n=11  mean=-0.0882 sd=0.114 accepted=18%
+  RegulatoryAnnouncement     n=24  mean=-0.1006 sd=0.092 accepted=17%
+  GeographicRegion           n=31  mean=-0.1018 sd=0.081 accepted=6%
+  MergerAcquisition          n=10  mean=-0.1027 sd=0.096 accepted=10%
+  Product                    n=11  mean=-0.1053 sd=0.111 accepted=27%
+  MarketIndex                n=16  mean=-0.1128 sd=0.101 accepted=6%
+  CorporateAction            n=28  mean=-0.1131 sd=0.114 accepted=7%
+  MarketEvent                n=24  mean=-0.1186 sd=0.086 accepted=4%
+  Executive                  n=13  mean=-0.1229 sd=0.110 accepted=8%
+  Industry                   n=17  mean=-0.1368 sd=0.122 accepted=6%
+
+ACCEPTANCE BY STEP
+  step 1: 50% of 72
+  step 2: 15% of 72
+  step 3: 6% of 72
+  step 4: 10% of 48
+  step 5: 8% of 48
+  step 6: 12% of 24
+  step 7: 12% of 24
