@@ -1,16 +1,17 @@
-"""Effect of each proposed (node, relationship) addition, measured without reference bias.
+"""How often each proposed (node, relationship) addition beat the alternative.
 
-The obvious measure — each candidate's AUC minus the run's current best — is unusable:
-the acceptance gate makes the reference the maximum seen so far, so almost any candidate
-scores negative whatever its quality. That is regression to the maximum, not evidence.
+Scoring a candidate against the run's best-so-far does not work: the acceptance gate makes
+that reference the maximum seen so far, so a candidate's score mostly reflects how lucky
+step 1 was in its run rather than how good the addition is.
 
-Within a single step the two candidates are built on the *same* graph and scored on the
-same days, so comparing them to each other carries no reference bias at all. Each
-candidate's effect is its AUC minus the mean AUC of its own step. Positive means it beat
-the alternative proposed alongside it. The measure is zero-sum by construction, so it
-ranks additions against each other and says nothing about whether additions help in
-absolute terms — that needs the base graph scored on its own, which the pipeline does not
-currently do.
+The two candidates within a step are the fair comparison — same graph, same days, same
+point in the run, differing only in which type was added. We report the **win rate**: how
+often an addition scored higher than the one proposed alongside it. The AUC gaps
+themselves are not worth reading at 42 validation days; which one won is.
+
+Win rate averages 50% by construction, so it ranks additions against each other and says
+nothing about whether additions help in absolute terms — that needs the base graph scored
+on its own, which the pipeline does not currently do.
 
 Writes node_effects.png; embed with embed_figure.py.
 """
@@ -31,7 +32,8 @@ POS, NEG = "#0f8f62", "#c2521f"
 MIN_N = 8
 
 
-def within_step_effects(path: Path) -> list:
+def head_to_head(path: Path) -> list:
+    """Mark each candidate as having won or lost against its own step's alternative."""
     recs = [r for r in csv.DictReader(open(path)) if r["delta_auc"]]
     for r in recs:
         r["auc"] = float(r["auc"])
@@ -39,20 +41,22 @@ def within_step_effects(path: Path) -> list:
     for r in recs:
         steps[(r["run_id"], r["step"])].append(r)
     for group in steps.values():
-        mean = st.mean(x["auc"] for x in group)
+        top = max(x["auc"] for x in group)
+        winners = [x for x in group if x["auc"] == top]
         for x in group:
-            x["within"] = x["auc"] - mean
+            # An exact tie (one step in 180) counts as a loss for both.
+            x["won"] = x["auc"] == top and len(winners) == 1
     return recs
 
 
 def main() -> None:
-    recs = within_step_effects(HERE / "additions.csv")
+    recs = head_to_head(HERE / "additions.csv")
     groups = defaultdict(list)
     for r in recs:
-        groups[(r["node"], r["relationship"])].append(r["within"])
+        groups[(r["node"], r["relationship"])].append(r["won"])
 
     rows = sorted(
-        ((st.mean(v), k, len(v)) for k, v in groups.items() if len(v) >= MIN_N),
+        ((100 * sum(v) / len(v), k, len(v)) for k, v in groups.items() if len(v) >= MIN_N),
         reverse=True,
     )
     covered = sum(n for _, _, n in rows)
@@ -64,24 +68,21 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(13.5, 7.2), facecolor=GROUND)
     ax.set_facecolor(GROUND)
     ys = range(len(rows))
-    ax.barh(list(ys), means, color=[POS if m > 0 else NEG for m in means],
+    ax.barh(list(ys), means, color=[POS if m > 50 else NEG for m in means],
             alpha=0.85, height=0.68, zorder=3)
-    ax.axvline(0, color=INK, lw=1.1, zorder=4)
+    ax.axvline(50, color=INK, lw=1.1, zorder=4)
 
     for y, (m, n) in enumerate(zip(means, counts)):
-        off = 0.0016 if m > 0 else -0.0016
-        ax.annotate(f"{m:+.3f}  (n={n})", (m, y), va="center",
-                    ha="left" if m > 0 else "right",
-                    xytext=(4 if m > 0 else -4, 0), textcoords="offset points",
+        ax.annotate(f"{m:.0f}%   n={n}", (m, y), va="center", ha="left",
+                    xytext=(6, 0), textcoords="offset points",
                     fontsize=11, color=INK, family="monospace")
-        del off
 
     ax.set_yticks(list(ys))
     ax.set_yticklabels(labels, fontsize=11, color=INK, family="monospace")
     ax.invert_yaxis()
-    ax.set_xlabel("AUC relative to the alternative proposed at the same step",
-                  fontsize=12, color=MUTED)
-    ax.set_xlim(-0.075, 0.085)
+    ax.set_xlabel("share of head-to-heads won against the alternative proposed "
+                  "at the same step", fontsize=12, color=MUTED)
+    ax.set_xlim(0, 100)
     ax.tick_params(axis="x", labelsize=11, colors=MUTED)
     ax.grid(axis="x", color=RULE, lw=0.8)
     ax.set_axisbelow(True)
@@ -89,8 +90,8 @@ def main() -> None:
         ax.spines[side].set_visible(False)
     ax.spines["bottom"].set_color(RULE)
     fig.suptitle(
-        f"Effect per proposed addition — {len(rows)} pairs with n ≥ {MIN_N} "
-        f"({covered} of {len(recs)} records)",
+        f"Win rate per proposed addition — {len(rows)} pairs with n ≥ {MIN_N} "
+        f"({covered} of {len(recs)} records); the line is 50%",
         fontsize=15, color=INK, x=0.008, ha="left", y=0.975,
     )
 

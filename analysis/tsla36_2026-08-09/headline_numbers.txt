@@ -31,26 +31,26 @@ PATH ABLATION
   difference +0.0277 SE 0.0219 t=+1.26
   empty path blocks (path_mean_norm == 0): 10 of 36
 
-ADDITION EFFECTS (best first, n >= 8)
-  Measured within-step: each candidate's AUC minus the mean AUC of its own step.
-  Candidates in a step share one graph and one day set, so this has no reference
-  bias -- unlike AUC-minus-current-best, where the gate makes the reference the
-  running maximum and ~88% of candidates score negative regardless of quality.
-  Zero-sum by construction: ranks additions against each other, not in absolute terms.
+ADDITION WIN RATES (best first, n >= 8)
+  How often an addition beat the alternative proposed at the same step. Both
+  candidates in a step are built on one graph and scored on one day set, so this
+  carries no reference bias -- unlike AUC-minus-current-best, where the gate makes
+  the reference the running maximum and the score mostly reflects how lucky step 1
+  was. Averages 50% by construction: ranks additions, says nothing absolute.
   Grouped by (node, relationship) because that pair is what a candidate proposes.
-  RegulatoryBody           MENTIONS_REGULATORY_BODY         n=27  +0.0478 sd=0.061
-  CreditRating             HAS_CREDIT_RATING                n=35  +0.0150 sd=0.051
-  RegulatoryBody           ISSUED_BY                        n=8   +0.0126 sd=0.042
-  Product                  MENTIONS_PRODUCT                 n=11  +0.0095 sd=0.050
-  MarketIndex              MENTIONS_MARKET_INDEX            n=12  +0.0044 sd=0.035
-  Executive                MENTIONS_EXECUTIVE               n=12  +0.0010 sd=0.046
-  EarningsReport           HAS_EARNINGS_REPORT              n=12  -0.0031 sd=0.058
-  LegalAction              INVOLVES_LEGAL_ACTION            n=9   -0.0038 sd=0.037
-  RegulatoryAnnouncement   MENTIONS_REGULATORY_ANNOUNCEMENT n=8   -0.0040 sd=0.022
-  Industry                 OPERATES_IN                      n=17  -0.0125 sd=0.038
-  MarketEvent              TRIGGERS                         n=10  -0.0143 sd=0.052
-  GeographicRegion         LOCATED_IN                       n=25  -0.0218 sd=0.056
-  EconomicIndicator        REFERENCES                       n=36  -0.0388 sd=0.062
+  RegulatoryBody           MENTIONS_REGULATORY_BODY         n=27  won 21  = 78%
+  RegulatoryBody           ISSUED_BY                        n=8   won 6   = 75%
+  Product                  MENTIONS_PRODUCT                 n=11  won 8   = 73%
+  MarketEvent              TRIGGERS                         n=10  won 6   = 60%
+  CreditRating             HAS_CREDIT_RATING                n=35  won 19  = 54%
+  RegulatoryAnnouncement   MENTIONS_REGULATORY_ANNOUNCEMENT n=8   won 4   = 50%
+  MarketIndex              MENTIONS_MARKET_INDEX            n=12  won 6   = 50%
+  Executive                MENTIONS_EXECUTIVE               n=12  won 6   = 50%
+  LegalAction              INVOLVES_LEGAL_ACTION            n=9   won 4   = 44%
+  GeographicRegion         LOCATED_IN                       n=25  won 11  = 44%
+  Industry                 OPERATES_IN                      n=17  won 6   = 35%
+  EarningsReport           HAS_EARNINGS_REPORT              n=12  won 4   = 33%
+  EconomicIndicator        REFERENCES                       n=36  won 8   = 22%
   (13 pairs clear n>=8, covering 222 of 360 records; 32 node types across 80 distinct pairs)
 
 ACCEPTANCE BY STEP

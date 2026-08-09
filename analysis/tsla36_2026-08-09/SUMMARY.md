@@ -13,7 +13,8 @@ Supersedes `analysis/interim_2026-08-07/` and
 | `report.ipynb` | **Notebook walkthrough** — every figure in the report recomputed from the CSVs, with the reasoning behind each measure. |
 | `pull_and_analyze.py` | Reproducible pull + analysis. Documents the run-selection filter and the "final AUC" definition. |
 | `plot_group_means.py` | Section D figure — factor means over the between-run SD band. |
-| `plot_node_effects.py` | Section E figure — within-step effect per (node, relationship). |
+| `plot_node_effects.py` | Section E figure — win rate per (node, relationship). |
+| `plot_reference_bias.py` | Section E figure — why AUC-minus-current-best manufactures a decline. |
 | `embed_figure.py` | Swaps a regenerated PNG into the report by figure index. |
 | `results.csv` | 36 configs, **sorted best first** by final AUC. |
 | `additions.csv` | 360 addition records (one per step × candidate), with ΔAUC and accept/reject. |
@@ -70,12 +71,15 @@ in this sweep tested text + graph against text.
 - **No factor separates.** Widest spreads are lookback (0.597 → 0.643) and prompt
   (0.599 → 0.638), against a between-run SD of 0.065. Residual dominates.
 - **Additions rank cleanly once the reference bias is removed.** Scoring a candidate as
-  AUC-minus-current-best is unusable — the gate makes the reference the running maximum, so
-  88% of candidates score negative regardless of quality. Measured within-step instead
-  (each candidate against the mean of its own step, which shares one graph and one day set),
-  `RegulatoryBody`/`MENTIONS_REGULATORY_BODY` leads at +0.048 and
-  `EconomicIndicator`/`REFERENCES` trails at −0.039. Grouped by **(node, relationship)**,
-  since that pair is what a candidate proposes: 32 node types span 80 distinct pairs.
+  AUC-minus-current-best is unusable: the gate makes the reference the running maximum, so
+  the score mostly reflects how lucky step 1 was in that run. Mean candidate AUC is flat
+  across steps (0.52 → 0.51) while the reference climbs (0.563 → 0.626), pushing the share
+  scoring "negative" from 62% to ~90%. Scored instead by **win rate** against the
+  alternative proposed at the same step — same graph, same days, no reference bias —
+  `RegulatoryBody`/`MENTIONS_REGULATORY_BODY` wins 78% and `EconomicIndicator`/`REFERENCES`
+  wins 22% despite being the most-proposed addition of all. Grouped by
+  **(node, relationship)**, since that pair is what a candidate proposes: 32 node types span
+  80 distinct pairs.
 - **Acceptance collapses after step 1**: 50%, then 6–15% from step 2 onward.
 
 ## One correction this analysis forced
