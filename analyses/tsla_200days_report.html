@@ -140,7 +140,7 @@ and each pair occurring 3 or 4 times depending on how many levels the two factor
 <span class="k">Δ</span> is structural minus text on the same days.</p>
 
 <div class="scroll"><table>
-<tr><th>#</th><th>AUC</th><th>text</th><th>Δ</th><th>lookback</th><th>steps</th><th>hops</th><th>prompt</th><th>path signal</th></tr>
+<tr><th>#</th><th>AUC</th><th>text *</th><th>Δ</th><th>lookback</th><th>steps</th><th>hops</th><th>prompt</th><th>path signal</th></tr>
 <tr><td class="n">1</td><td class="n"><b>0.787</b></td><td class="n">0.522</td><td class="n pos">+0.265</td><td class="n">3</td><td class="n">3</td><td class="n">3</td><td>default</td><td class="n">0.79</td></tr>
 <tr><td class="n">2</td><td class="n">0.744</td><td class="n">0.650</td><td class="n pos">+0.094</td><td class="n">20</td><td class="n">5</td><td class="n">3</td><td>event_driven</td><td class="n">0.15</td></tr>
 <tr><td class="n">3</td><td class="n">0.730</td><td class="n">0.522</td><td class="n pos">+0.208</td><td class="n">10</td><td class="n">3</td><td class="n">5</td><td>event_driven</td><td class="n">0.00</td></tr>
@@ -152,6 +152,8 @@ and each pair occurring 3 or 4 times depending on how many levels the two factor
 <tr><td class="n">9</td><td class="n">0.634</td><td class="n">0.650</td><td class="n neg">−0.016</td><td class="n">20</td><td class="n">7</td><td class="n">4</td><td>event_driven</td><td class="n">0.38</td></tr>
 <tr><td class="n">10</td><td class="n">0.634</td><td class="n">0.558</td><td class="n pos">+0.076</td><td class="n">8</td><td class="n">7</td><td class="n">5</td><td>default</td><td class="n">0.12</td></tr>
 </table></div>
+
+<p class="muted">* The text baseline is built over the same lookback window as the structural arm, so <span class="k">lookback_days</span> changes it — 0.522 at lookback 3 and 10, 0.558 at 8, 0.650 at 20 — while no other factor does.</p>
 
 <p>Across all 36:</p>
 
