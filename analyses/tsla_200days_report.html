@@ -73,6 +73,7 @@
   hr { border:0; border-top:1px solid var(--rule); margin:48px 0; }
   .foot { font-size:12.5px; color:var(--muted); font-family:var(--sans);
           margin-top:44px; }
+  .muted { color:var(--muted); }
   a { color:var(--accent); }
   :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 </style>
@@ -95,10 +96,23 @@ representation beat a text-only baseline in 28 of 36 head-to-head runs and lost 
 </div>
 
 <h2>A · What was run</h2>
-<p>A per-ticker orthogonal array <span class="k">OA(36, 4¹3³, 2)</span>: four factors,
-all six factor pairs balanced at λ = 3 or 4. Balance was verified directly against the
-config files and again against the returned results — 12 runs per steps level, 12 per
-hop level, 9 per lookback level, 12 per prompt.</p>
+<p>Four hyperparameters were varied at once. Trying every combination would take
+4 × 3 × 3 × 3 = <b>108 runs</b>; we ran <b>36</b> — one third of them — picked so that the
+comparisons still come out fair.</p>
+
+<p>What makes them fair is that every <em>pair</em> of settings occurs together the same
+number of times. Compare <span class="k">steps=3</span> against
+<span class="k">steps=7</span>, for instance, and the two groups of 12 runs contain exactly
+the same mix of lookback windows, hop depths and prompts. Nothing else differs
+systematically between them, so a gap in AUC belongs to <span class="k">steps</span> and
+nothing else — no statistical adjustment is needed, and none is used anywhere in this
+report. <span class="muted">(Formally: a strength-2 orthogonal array,
+<span class="k">OA(36, 4¹3³, 2)</span>.)</span></p>
+
+<p>This was checked twice — against the 36 config files before dispatch, and against the
+returned MLflow runs afterwards. Each lookback value appears in 9 runs; each steps, hop and
+prompt value in 12. All six factor pairs are complete, with <b>no missing combination</b>
+and each pair occurring 3 or 4 times depending on how many levels the two factors have.</p>
 
 <div class="scroll"><table>
 <tr><th>Factor</th><th>Levels</th><th>Runs / level</th></tr>
