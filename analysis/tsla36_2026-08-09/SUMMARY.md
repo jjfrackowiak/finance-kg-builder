@@ -10,6 +10,7 @@ Supersedes `analysis/interim_2026-08-07/` and
 
 | File | Contents |
 |---|---|
+| `report.ipynb` | **Notebook walkthrough** — every figure in the report recomputed from the CSVs, with the reasoning behind each measure. |
 | `pull_and_analyze.py` | Reproducible pull + analysis. Documents the run-selection filter and the "final AUC" definition. |
 | `plot_group_means.py` | Section D figure — factor means over the between-run SD band. |
 | `plot_node_effects.py` | Section E figure — within-step effect per (node, relationship). |
