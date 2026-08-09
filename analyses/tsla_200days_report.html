@@ -135,14 +135,6 @@ and each pair occurring 3 or 4 times depending on how many levels the two factor
 <tr><td><b>total</b></td><td class="n">13</td><td class="n">36</td><td class="n">—</td><td class="n"><b>23.2 h</b></td></tr>
 </table></div>
 
-<div class="call warn">
-<p><b>A defect invalidates all earlier sweep results.</b> <span class="k">embed_relationship_chains</span>
-had no <span class="k">remote</span> branch, so on every cluster run chains were extracted
-correctly and then discarded at the embedding step — the path feature block was silently
-all zeros. Fixed in <span class="k">36f4f88</span>; per-block coverage metrics were added
-at the same time. Runs before 2026-08-08 must not be pooled with these.</p>
-</div>
-
 <h2>B · Results, best first</h2>
 <p>Each run's <b>final accepted ontology</b> and its own text baseline. Top 10 of 36;
 <span class="k">Δ</span> is structural minus text on the same days.</p>
