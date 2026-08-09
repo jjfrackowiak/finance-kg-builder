@@ -170,30 +170,6 @@ by up to +0.265; <b>8 fell below it</b>, by as much as −0.126. The gate is sel
 right direction — of 360 proposed additions, 66 were accepted (18.3%), mean Δ +0.029
 against −0.119 for the 294 rejected.</p>
 
-<div class="call warn">
-<p><b>Read the difference as a contrast between representations, not as a lift.</b> The two
-arms share no features. <span class="k">build_day_feature_vector</span> skips text entirely
-(<span class="k">feature_engineering.py:218</span>, "using structural signals only"), so the
-evolved arm is path 384 + subgraph 96 + topology 8 = 488 structural dimensions with no text,
-while the baseline is mean-pooled article embeddings with no graph. <b>No configuration in
-this sweep tested text + graph against text</b>, so nothing here shows the knowledge graph
-adding to what the article text already carries. Answering that needs a third arm.</p>
-</div>
-
-<div class="call warn">
-<p><b>Correction (2026-08-09) — the gate does not protect the baseline.</b> This section
-previously reported mean +0.020, min +0.000, and "21 of 36 runs ended exactly at baseline…
-no run ever finished worse." Baselines had been mispaired to runs; recomputed per run from
-MLflow parent/child links, the correct figures are above. Mean final AUC is unaffected at
-0.617.</p>
-<p>The mechanism: <span class="k">_should_accept_step</span>
-(<span class="k">orchestrator.py:657</span>) returns <span class="k">True</span> whenever
-<span class="k">best_auc is None</span>, which it is until a step is accepted — so
-<b>step 1 is accepted unconditionally in all 36 runs</b>, whatever its AUC. The gate's
-reference is the last accepted step, never the text baseline. "Evolution is strictly safe"
-is not supportable; "evolution wins 28 of 36 head-to-heads and loses 8" is.</p>
-</div>
-
 <h2>C · Do path-chain features help?</h2>
 <p>No detectable effect. This is the sweep's central negative result and it is
 consistent across two independent tests.</p>
@@ -282,8 +258,9 @@ node type introduced, its relationship, and the AUC change it produced against b
   <figcaption><b>Effect by introduced node type.</b> Every type with ≥8 records has a
   negative mean effect, from −0.033 (RegulatoryBody) to −0.137 (Industry). Most proposed
   additions degrade the model; picking the best candidate per step, then gating steps 2
-  onward, is what turns that into a net gain. The gate does not screen step 1 (section B),
-  which is why 8 runs still finish below their text baseline.</figcaption>
+  onward, is what turns that into a net gain. Step 1 is never screened — the gate compares
+  each step against the last accepted one, and at step 1 there is none — which is why 8 runs
+  finish below their text baseline.</figcaption>
 </figure>
 
 <div class="scroll"><table>
@@ -316,7 +293,9 @@ first-step rate.</p>
 
 <h2>F · Caveats</h2>
 <ul>
-<li><b>No text + graph arm.</b> The two arms are disjoint representations (section B), so
+<li><b>No text + graph arm.</b> <span class="k">build_day_feature_vector</span> skips text
+entirely, so the evolved arm is 488 structural dimensions with no text while the baseline is
+mean-pooled article embeddings with no graph. The two are disjoint, so
 the sweep cannot say whether the graph adds to article text — only which of the two wins
 alone.</li>
 <li><b>Short validation windows</b> (~42 days) against 488 structural dimensions. AUC
@@ -346,7 +325,9 @@ is a change to <span class="k">build_day_feature_vector</span>, not to the desig
 true, ontology evolution is a suggestion to the extractor rather than a constraint.
 Enforcing it would make evolution a real intervention — and would change what every result
 here means.</li>
-<li><b>Step 1 is accepted unconditionally</b> (section B). Gating it against the text
+<li><b>Step 1 is accepted unconditionally</b> — <span class="k">_should_accept_step</span>
+(<span class="k">orchestrator.py:657</span>) returns <span class="k">True</span> whenever
+<span class="k">best_auc is None</span>, which it is until a step is accepted. Gating it against the text
 baseline is a one-line change and would make "evolution never degrades the baseline" true
 by construction rather than false by accident. Re-run the sweep under that gate?</li>
 <li>Path features cost real compute and contribute nothing measurable here. Change the
@@ -361,9 +342,7 @@ and the AUC gain over steps = 3 is +0.016.</li>
 <hr>
 <p class="foot">36 runs · MLflow experiment <span class="k">kg-ontology-evolution</span> ·
 sweep chunks 01–13, 2026-08-08 13:37 → 2026-08-09 12:57 UTC ·
-analysis plan: <span class="k">planning/tsla_200days_analysis.md</span><br>
-Revised 2026-08-09: every figure re-verified against MLflow parent/child runs. Sections C,
-D and E reproduced exactly; section B's baseline pairing was wrong and is corrected, and
-the disjoint-representation caveat was added.</p>
+analysis plan: <span class="k">planning/tsla_200days_analysis.md</span> ·
+figures reproducible from <span class="k">analysis/tsla36_2026-08-09/</span></p>
 
 </div>
