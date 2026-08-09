@@ -99,7 +99,19 @@ resource "aws_security_group" "eks_cluster" {
 resource "aws_eks_cluster" "main" {
   name     = "${var.prefix}-eks"
   role_arn = aws_iam_role.eks_cluster.arn
-  version  = "1.33"
+
+  # Keep this on a version still in STANDARD support. Extended support is billed at
+  # $0.60/hr against $0.10/hr — an extra ~$360/month — and it starts silently the day
+  # standard support lapses. 1.33 lapsed 2026-07-29 and cost ~$130 before it was
+  # noticed. Check `aws eks describe-cluster-versions` before pinning a new value.
+  version = "1.34"
+
+  # Without this the default is EXTENDED, i.e. "let the bill rise rather than upgrade".
+  # STANDARD makes AWS auto-upgrade when standard support ends, so a lapse can never
+  # turn into a surcharge again.
+  upgrade_policy {
+    support_type = "STANDARD"
+  }
 
   vpc_config {
     subnet_ids              = concat(aws_subnet.private[*].id, aws_subnet.public[*].id)
@@ -159,7 +171,10 @@ resource "aws_eks_node_group" "cpu" {
   scaling_config {
     desired_size = 1
     min_size     = 1
-    max_size     = 12
+    # Ceiling for MANUAL scaling (no autoscaler runs here). ~4-5 job pods fit per
+    # t3.xlarge, so ~12 nodes already runs all 48 sweep jobs concurrently; 16 is
+    # headroom for embeddings + system. More is useless (only 48 jobs exist).
+    max_size     = 16
   }
 
   labels = { node-role = "cpu" }
@@ -212,7 +227,12 @@ resource "aws_eks_node_group" "gpu" {
   scaling_config {
     desired_size = 0
     min_size     = 0
-    max_size     = 10
+    # Ceiling for MANUAL scaling (no autoscaler). Raising this alone does NOTHING
+    # until (a) AWS grants more G-instance vCPU quota (48 g5.xlarge = 192 vCPU) and
+    # (b) you set desiredSize>0 via `aws eks update-nodegroup-config`. 48 is the max
+    # USEFUL count: there are 48 sweep jobs and each job's steps/candidates run
+    # sequentially, so >48 GPUs cannot speed the sweep up. Keep at 0 desired when idle.
+    max_size     = 48
   }
 
   labels = { node-role = "gpu" }
