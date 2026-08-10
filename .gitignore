@@ -1,2 +1,13 @@
-.env
-__pycache__/.mcp.json
+__pycache__/
+*.pyc
+*.egg-info/
+.coverage
+.DS_Store
+logs/
+mlruns/
+results/
+.terraform/
+*.tfstate
+*.tfstate.backup
+data/
+.vscode/
