@@ -1,0 +1,24 @@
+2026-04-12 11:10:59 [INFO] root: Logging to file: logs/kg_builder_20260412_111059.log
+2026-04-12 11:10:59 [INFO] __main__: ================================================================================
+2026-04-12 11:10:59 [INFO] __main__: KG Builder - Knowledge Graph Evolution with LLM
+2026-04-12 11:10:59 [INFO] __main__: ================================================================================
+2026-04-12 11:10:59 [INFO] __main__: Loading configuration from environment...
+2026-04-12 11:10:59 [INFO] __main__: ✓ Configuration loaded:
+2026-04-12 11:10:59 [INFO] __main__:   - NEO4J_URI=neo4j+s://bec71427.databases.neo4j.io
+2026-04-12 11:10:59 [INFO] __main__:   - NEO4J_USERNAME=neo4j
+2026-04-12 11:10:59 [INFO] __main__:   - NEO4J_DATABASE=neo4j
+2026-04-12 11:10:59 [INFO] __main__:   - OPENAI_MODEL=gpt-4o-mini
+2026-04-12 11:10:59 [INFO] __main__:   - EMBEDDING_TYPE=local
+2026-04-12 11:10:59 [INFO] __main__:   - LOCAL_MODEL=all-MiniLM-L6-v2
+2026-04-12 11:10:59 [INFO] __main__:   - LOOKBACK_DAYS=2
+2026-04-12 11:10:59 [INFO] __main__:   - CHAIN_HOPS=5-5
+2026-04-12 11:10:59 [INFO] __main__:   - PATH_UNIQUENESS=NODE_PATH
+2026-04-12 11:10:59 [INFO] __main__:   - FEATURE_MODE=path
+2026-04-12 11:10:59 [INFO] __main__:   - MAX_METAPATH_HOPS=2
+2026-04-12 11:10:59 [INFO] __main__:   - TRAIN_RATIO=0.70
+2026-04-12 11:10:59 [INFO] __main__:   - EVOLUTION_PROMPT=default
+2026-04-12 11:10:59 [INFO] __main__: Connecting to Neo4j...
+2026-04-12 11:10:59 [INFO] kg_builder_llm.core.graph: Connecting to Neo4j at neo4j+s://bec71427.databases.neo4j.io
+2026-04-12 11:11:02 [INFO] __main__: ✓ Connected to Neo4j
+2026-04-12 11:11:02 [INFO] __main__: Loading articles from data/fnspid_sample_nasdaq_long_text.csv...
+2026-04-12 11:11:02 [ERROR] __main__: ✗ File not found: Data file not found: data/fnspid_sample_nasdaq_long_text.csv

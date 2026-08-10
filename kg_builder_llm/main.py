@@ -461,6 +461,13 @@ def load_and_prepare_data(
     articles_df = prepare_articles(articles_df)
     logger.info("✓ Prepared articles")
 
+    # Resolve the ticker BEFORE filtering: it now selects the articles as well as the
+    # price series, so it cannot be read back off the already-filtered frame.
+    ticker = os.getenv("TARGET_TICKER") or (
+        articles_df["ticker"].iloc[0] if "ticker" in articles_df.columns else "TSLA"
+    )
+    logger.info("Target ticker: %s (articles and price series)", ticker)
+
     # Filter to date window
     effective_days = _resolve_time_window(args)
     logger.info(
@@ -471,13 +478,11 @@ def load_and_prepare_data(
         num_days=effective_days,
         articles_per_day=args.articles_per_day,
         start_date=_parse_day_start(args.day_start),
+        ticker=ticker,
     )
     logger.info(f"✓ Filtered to {len(articles_df)} articles in {effective_days}-day window")
 
-    # Fetch price data — TARGET_TICKER env var takes precedence over CSV column
-    ticker = os.getenv("TARGET_TICKER") or (
-        articles_df["ticker"].iloc[0] if "ticker" in articles_df.columns else "TSLA"
-    )
+    # Fetch price data for the same ticker the articles were filtered to
     price_raw = fetch_stooq_prices(ticker)
     price_df = build_return_labels(price_raw)
 

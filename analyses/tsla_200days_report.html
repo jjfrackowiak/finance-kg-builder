@@ -335,13 +335,14 @@ type helps at all, only which types beat the alternatives they were proposed aga
 <ul>
 <li><b>Articles were never filtered to the target ticker.</b> The 4-articles/day cap is
 applied with no ticker filter — <span class="k">TARGET_TICKER</span> selects only the price
-series — so the 794 articles are <b>712 MSFT, 51 NVDA and 31 TSLA</b>. The graph is built
-almost entirely from Microsoft news while the label is Tesla's next-day direction, and 2,607
-TSLA articles inside the window went unselected. The pipeline assumes
-<span class="k">--data</span> points at a single-ticker file (its price-fetch fallback reads
-the ticker from the first article row); the sweep pointed it at a three-ticker file. This
-sits prior to every result below, and the runs need repeating before the sweep can be called
-a TSLA experiment.</li>
+series — so the 794 articles are <b>340 TSLA (43%), 295 MSFT (37%) and 159 NVDA (20%)</b>.
+Well over half the graph is built from news about other companies while the label is Tesla's
+next-day direction, and 2,298 of the 2,638 TSLA articles available in the window went
+unselected. The pipeline assumes <span class="k">--data</span> points at a single-ticker file
+— its price-fetch fallback reads the ticker from the first article row — and the sweep
+pointed it at a three-ticker file. Filtering to TSLA yields 728 articles over 198 days, more
+than double the on-target volume at comparable total size. This sits prior to every result
+below.</li>
 
 <li><b>No text + graph arm.</b> <span class="k">build_day_feature_vector</span> skips text
 entirely, so the evolved arm is 488 structural dimensions with no text while the baseline is

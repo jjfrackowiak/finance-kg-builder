@@ -29,6 +29,11 @@ class ModelMetrics:
     precision: float = 0.0
     recall: float = 0.0
     brier_score: float = 0.0
+    # Same model scored on the data it was fitted on. The gap against `auc` is the
+    # overfitting diagnostic: with ~488 structural features against ~98 training days
+    # the model can memorise, and only train-vs-val shows how much of `auc` is real.
+    train_auc: float = 0.0
+    train_brier: float = 0.0
     n_train_days: int = 0
     n_val_days: int = 0
     n_nodes_total: int = 0
@@ -238,6 +243,17 @@ def train_classifier_on_embeddings(
     else:
         auc = float("nan")
         brier = float("nan")
+
+    # Score the training split with the same model. train_auc - auc is the
+    # overfitting gap; a train_auc near 1.0 against a val AUC near 0.5 means the
+    # features are being memorised rather than generalising.
+    y_train_proba = model.predict_proba(X_train)[:, 1]
+    if len(np.unique(y_train)) > 1:
+        train_auc = roc_auc_score(y_train, y_train_proba)
+        train_brier = brier_score_loss(y_train, y_train_proba)
+    else:
+        train_auc = float("nan")
+        train_brier = float("nan")
     f1 = f1_score(y_val, y_pred, zero_division=0.0)
     prec = precision_score(y_val, y_pred, zero_division=0.0)
     rec = recall_score(y_val, y_pred, zero_division=0.0)
@@ -249,6 +265,10 @@ def train_classifier_on_embeddings(
         "Validation metrics — AUC: %.4f, F1: %.4f, Precision: %.4f, Recall: %.4f, Brier: %.4f",
         auc, f1, prec, rec, brier,
     )
+    logger.info(
+        "Train vs validation — train AUC: %.4f, val AUC: %.4f, gap: %+.4f",
+        train_auc, auc, train_auc - auc,
+    )
 
     return ModelMetrics(
         auc=auc,
@@ -256,6 +276,8 @@ def train_classifier_on_embeddings(
         precision=prec,
         recall=rec,
         brier_score=brier,
+        train_auc=train_auc,
+        train_brier=train_brier,
         max_hops_train=len(train_df),
         max_hops_val=len(val_df),
         n_train_days=n_train_days,

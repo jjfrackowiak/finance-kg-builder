@@ -42,6 +42,7 @@ def filter_articles_by_date_window(
     num_days: int,
     articles_per_day: Optional[int] = None,
     start_date: Optional[date] = None,
+    ticker: Optional[str] = None,
 ) -> pd.DataFrame:
     """Filter articles to a consecutive date window.
 
@@ -50,6 +51,12 @@ def filter_articles_by_date_window(
         num_days: Number of consecutive days to use
         articles_per_day: Max articles per day (None = no limit)
         start_date: Window start date (default: earliest date in dataset)
+        ticker: Keep only articles for this ticker (None = every ticker in the file).
+            Applied BEFORE the per-day cap: capping first would fill the quota with
+            whichever tickers happen to lead the file and leave almost nothing after
+            filtering. The 2026-08 TSLA sweep hit exactly this — with no filter the
+            794 selected articles were 712 MSFT, 51 NVDA and 31 TSLA, while 2,607
+            TSLA articles in the same window went unselected.
 
     Returns:
         Filtered DataFrame spanning num_days
@@ -77,6 +84,24 @@ def filter_articles_by_date_window(
     logger.info(
         "Filtered to date window: %s to %s (%d articles)", start_date, end_date, len(df_window)
     )
+
+    # Keep only the target ticker, before the per-day cap (see the `ticker` docstring).
+    if ticker and "ticker" in df_window.columns:
+        before = len(df_window)
+        df_window = df_window[df_window["ticker"] == ticker].copy()
+        logger.info(
+            "Filtered to ticker %s: %d of %d articles kept", ticker, len(df_window), before
+        )
+        if df_window.empty:
+            raise ValueError(
+                f"No articles for ticker {ticker!r} in {start_date}..{end_date}. "
+                f"Tickers present in the window: "
+                f"{sorted(df[mask]['ticker'].dropna().unique().tolist())[:10]}"
+            )
+    elif ticker:
+        logger.warning(
+            "ticker=%s requested but the data has no 'ticker' column — no filter applied", ticker
+        )
 
     # Further limit articles per day if requested
     if articles_per_day:
