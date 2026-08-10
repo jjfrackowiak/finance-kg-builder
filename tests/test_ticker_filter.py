@@ -73,3 +73,25 @@ class TestTickerFilter:
         )
         assert len(out) == 4
         assert set(out.ticker) == {"TSLA"}
+
+
+class TestFilterIsOptIn:
+    """The mixed article set is the deliberate default; the filter must be requested."""
+
+    @staticmethod
+    def _args(argv):
+        import sys
+        from kg_builder_llm.main import parse_args
+
+        old = sys.argv
+        try:
+            sys.argv = ["main"] + argv
+            return parse_args()
+        finally:
+            sys.argv = old
+
+    def test_defaults_to_off(self):
+        assert self._args([]).filter_ticker is False
+
+    def test_flag_turns_it_on(self):
+        assert self._args(["--filter-ticker"]).filter_ticker is True

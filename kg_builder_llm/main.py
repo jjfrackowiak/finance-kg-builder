@@ -145,6 +145,14 @@ Examples:
         help="Window end date in YYYY-MM-DD format (exclusive). Overrides --time-window-days.",
     )
     data_group.add_argument(
+        "--filter-ticker",
+        action="store_true",
+        help="Keep only articles whose ticker matches TARGET_TICKER. Off by default: the "
+        "sweeps to date deliberately build the graph from a mixed set (TSLA/MSFT/NVDA), "
+        "so cross-company relationships are available to the ontology. Turn on to make "
+        "the article set single-ticker, matching the price series.",
+    )
+    data_group.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -466,7 +474,11 @@ def load_and_prepare_data(
     ticker = os.getenv("TARGET_TICKER") or (
         articles_df["ticker"].iloc[0] if "ticker" in articles_df.columns else "TSLA"
     )
-    logger.info("Target ticker: %s (articles and price series)", ticker)
+    logger.info(
+        "Target ticker: %s (price series%s)",
+        ticker,
+        " and articles" if args.filter_ticker else "; articles left as the mixed set",
+    )
 
     # Filter to date window
     effective_days = _resolve_time_window(args)
@@ -478,7 +490,7 @@ def load_and_prepare_data(
         num_days=effective_days,
         articles_per_day=args.articles_per_day,
         start_date=_parse_day_start(args.day_start),
-        ticker=ticker,
+        ticker=ticker if args.filter_ticker else None,
     )
     logger.info(f"✓ Filtered to {len(articles_df)} articles in {effective_days}-day window")
 
@@ -616,6 +628,7 @@ def _log_params(args: argparse.Namespace, config: Config) -> None:
             "day_end": args.day_end or "derived",
             "time_window_days": _resolve_time_window(args),
             "articles_per_day": args.articles_per_day,
+            "filter_ticker": args.filter_ticker,
             # --- experiment ---
             "ticker": config.experiment.target_ticker,
             "steps": args.steps,

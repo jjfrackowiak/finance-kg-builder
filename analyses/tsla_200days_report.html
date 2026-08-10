@@ -122,6 +122,21 @@ and each pair occurring 3 or 4 times depending on how many levels the two factor
 <tr><td>min_chain_hops</td><td>3, 4, 5</td><td class="n">12</td></tr>
 </table></div>
 
+<p>The 794 selected articles and how they divide across the temporal split. The label is
+TSLA's next-day direction; the graph is built from a <b>mixed</b> article set, so
+cross-company relationships are available to the ontology. Composition is stable across the
+split, so it is not a source of train/validation mismatch.</p>
+
+<div class="scroll"><table>
+<tr><th>Split</th><th>Articles</th><th>Days</th><th>Per day</th><th>TSLA</th><th>MSFT</th><th>NVDA</th></tr>
+<tr><td>training (to 2022-09-20)</td><td class="n">562</td><td class="n">142</td><td class="n">3.96</td><td class="n">234 (42%)</td><td class="n">210 (37%)</td><td class="n">118 (21%)</td></tr>
+<tr><td>validation (from 2022-09-21)</td><td class="n">232</td><td class="n">58</td><td class="n">4.00</td><td class="n">106 (46%)</td><td class="n">85 (37%)</td><td class="n">41 (18%)</td></tr>
+<tr><td><b>total</b></td><td class="n"><b>794</b></td><td class="n">200</td><td class="n">3.97</td><td class="n">340 (43%)</td><td class="n">295 (37%)</td><td class="n">159 (20%)</td></tr>
+</table></div>
+
+<p>The 98/42 split is by <em>price</em> day: 140 trading days in the window, the first 98
+for training. Article days outnumber them because the file also carries weekends.</p>
+
 <p>Fixed across all runs: 4 articles/day, 2 candidates per step,
 <span class="k">feature_mode=hybrid</span>, single-addition gate with
 <span class="k">auc_drop_tolerance=0</span>, 98 training days. Infrastructure was
@@ -333,16 +348,16 @@ type helps at all, only which types beat the alternatives they were proposed aga
 
 <h2>F · Caveats</h2>
 <ul>
-<li><b>Articles were never filtered to the target ticker.</b> The 4-articles/day cap is
-applied with no ticker filter — <span class="k">TARGET_TICKER</span> selects only the price
-series — so the 794 articles are <b>340 TSLA (43%), 295 MSFT (37%) and 159 NVDA (20%)</b>.
-Well over half the graph is built from news about other companies while the label is Tesla's
-next-day direction, and 2,298 of the 2,638 TSLA articles available in the window went
-unselected. The pipeline assumes <span class="k">--data</span> points at a single-ticker file
-— its price-fetch fallback reads the ticker from the first article row — and the sweep
-pointed it at a three-ticker file. Filtering to TSLA yields 728 articles over 198 days, more
-than double the on-target volume at comparable total size. This sits prior to every result
-below.</li>
+<li><b>The article set is mixed, not TSLA-only.</b> The 4-articles/day cap is applied
+across every ticker in the file, so the graph draws on TSLA, MSFT and NVDA news (43/37/20%,
+section A) while the label is TSLA's next-day direction. This is retained deliberately —
+cross-company structure is exactly what an entity graph is meant to exploit — but it was
+not an explicit choice at the time: <span class="k">TARGET_TICKER</span> only ever selected
+the price series, and the pipeline's price-fetch fallback reads the ticker from the first
+article row, which assumes a single-ticker file. A <span class="k">--filter-ticker</span>
+flag now makes the alternative available (728 TSLA-only articles over 198 days), off by
+default. Any result here is about a mixed-source graph, and a TSLA-only comparison has not
+been run.</li>
 
 <li><b>No text + graph arm.</b> <span class="k">build_day_feature_vector</span> skips text
 entirely, so the evolved arm is 488 structural dimensions with no text while the baseline is

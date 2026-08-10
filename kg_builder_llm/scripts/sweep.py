@@ -22,6 +22,7 @@ SWEEP_LABEL = "sweep-id"
 OPTIONAL_ARG_SPECS = [
     ("single_addition", "--single-addition", "flag"),
     ("fixed_ontology", "--fixed-ontology", "value"),
+    ("filter_ticker", "--filter-ticker", "flag"),
     ("keep_regressing_steps", "--keep-regressing-steps", "flag"),
     ("auc_drop_tolerance", "--auc-drop-tolerance", "value"),
     ("embedding_type", "--embedding-type", "value"),
