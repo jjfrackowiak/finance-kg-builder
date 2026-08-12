@@ -13,7 +13,8 @@
     "max_chain_hops": 4,
     "single_addition": true,
     "auc_drop_tolerance": 0,
-    "semaphore_limit": 293
+    "semaphore_limit": 293,
+    "filter_ticker": true
   },
   {
     "ticker": "MSFT",
@@ -29,7 +30,8 @@
     "max_chain_hops": 3,
     "single_addition": true,
     "auc_drop_tolerance": 0,
-    "semaphore_limit": 293
+    "semaphore_limit": 293,
+    "filter_ticker": true
   },
   {
     "ticker": "MSFT",
@@ -45,6 +47,7 @@
     "max_chain_hops": 5,
     "single_addition": true,
     "auc_drop_tolerance": 0,
-    "semaphore_limit": 293
+    "semaphore_limit": 293,
+    "filter_ticker": true
   }
 ]

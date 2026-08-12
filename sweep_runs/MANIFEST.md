@@ -40,6 +40,16 @@ first_seen predicates), not a defect -- do not 'fix' it. It makes the 24 h5 runs
 subgraph+topology ablation, balanced by construction against the h3 and h4 arms.
 Chunk sizing: steps=3 -> 4 configs/chunk (sem 220); steps=5 -> 3/chunk (sem 293); steps=7 -> 2/chunk (sem 440).
 
+**The MSFT half (14-26) runs ticker-filtered; the TSLA half (01-13) did not.** Chunks 14-26 carry
+`"filter_ticker": true`, so `--filter-ticker` reaches main.py and the 4-articles/day cap draws only
+from MSFT: 712 articles over 196 of the 200 days, 100% MSFT, verified against
+data/fnspid_sample_nasdaq_long_text.csv. Unfiltered the same window gives a mixed 794 (TSLA 310 /
+MSFT 309 / NVDA 175), which is what chunks 01-13 used and what the TSLA report's caveat records.
+The two halves are therefore no longer directly comparable on article composition -- that is
+deliberate, the MSFT half is the focused-corpus condition. An unfiltered MSFT attempt on
+2026-08-11 (GHA 31482545723, chunks 14-16 only) is superseded by this re-run and must not be
+pooled with it.
+
 Dispatch one run: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_runs/run_NN.json)" -f n_workers=8 -f n_embedding_workers=6 -f gpu_nodes=8 -f cpu_nodes=5 -f neo4j_mode=sidecar`
 
 | Run | Ticker | Steps | Status | Configs (ticker·lookback·steps·prompt·hops) | Sem | ~Time | GHA |
