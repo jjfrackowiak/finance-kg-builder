@@ -69,8 +69,8 @@ Dispatch one run: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_r
 | 13 | TSLA | 7 | ✅ DONE (auto) | TSLA·lb20·s7·event_dri·h4<br>TSLA·lb20·s7·fundament·h3 | 440 | ~185min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31309446284) |
 | 14 | MSFT | 3 | ✅ DONE (auto) | MSFT·lb3·s3·default·h3<br>MSFT·lb3·s3·event_dri·h5<br>MSFT·lb3·s3·fundament·h4<br>MSFT·lb8·s3·default·h3 | 220 | ~85min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31596379653) |
 | 15 | MSFT | 3 | ✅ DONE (auto) | MSFT·lb8·s3·event_dri·h5<br>MSFT·lb8·s3·fundament·h4<br>MSFT·lb10·s3·default·h3<br>MSFT·lb10·s3·event_dri·h5 | 220 | ~85min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31604338667) |
-| 16 | MSFT | 3 | ⏳ DISPATCHED (auto) | MSFT·lb10·s3·fundament·h4<br>MSFT·lb20·s3·default·h3<br>MSFT·lb20·s3·event_dri·h5<br>MSFT·lb20·s3·fundament·h4 | 220 | ~85min | — |
-| 17 | MSFT | 5 | · pending | MSFT·lb3·s5·default·h4<br>MSFT·lb3·s5·event_dri·h3<br>MSFT·lb3·s5·fundament·h5 | 293 | ~135min | — |
+| 16 | MSFT | 3 | ✅ DONE (auto) | MSFT·lb10·s3·fundament·h4<br>MSFT·lb20·s3·default·h3<br>MSFT·lb20·s3·event_dri·h5<br>MSFT·lb20·s3·fundament·h4 | 220 | ~85min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31612426094) |
+| 17 | MSFT | 5 | ⏳ DISPATCHED (auto) | MSFT·lb3·s5·default·h4<br>MSFT·lb3·s5·event_dri·h3<br>MSFT·lb3·s5·fundament·h5 | 293 | ~135min | — |
 | 18 | MSFT | 5 | · pending | MSFT·lb8·s5·default·h4<br>MSFT·lb8·s5·event_dri·h3<br>MSFT·lb8·s5·fundament·h5 | 293 | ~135min | — |
 | 19 | MSFT | 5 | · pending | MSFT·lb10·s5·default·h4<br>MSFT·lb10·s5·event_dri·h3<br>MSFT·lb10·s5·fundament·h5 | 293 | ~135min | — |
 | 20 | MSFT | 5 | · pending | MSFT·lb20·s5·default·h4<br>MSFT·lb20·s5·event_dri·h3<br>MSFT·lb20·s5·fundament·h5 | 293 | ~135min | — |
