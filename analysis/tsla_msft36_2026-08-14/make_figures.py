@@ -307,75 +307,48 @@ def fig_delta_vs_noise(rows):
 
 
 # ---------------------------------------------------------------- figure 8
-def _running_max_curve(records):
-    """Per run, the best candidate AUC seen up to and including each step."""
-    by_run = defaultdict(list)
-    for a in records:
-        by_run[a["run_id"]].append(a)
-    curves = {}
-    for rid, rows in by_run.items():
-        best, cur = {}, float("-inf")
-        for st_ in sorted({r["step"] for r in rows}):
-            cur = max(cur, max(r["auc"] for r in rows if r["step"] == st_))
-            best[st_] = cur
-        curves[rid] = best
-    return curves
+def fig_step_curve(adds):
+    """Running best AUC per step, with the per-step candidate mean alongside it.
 
-
-def _mean_by_step(curves):
-    acc = defaultdict(list)
-    for best in curves.values():
-        for st_, v in best.items():
-            acc[st_].append(v)
-    return {k: st.mean(v) for k, v in sorted(acc.items())}, {k: len(v) for k, v in sorted(acc.items())}
-
-
-def fig_step_curve(adds, n_perm=300, seed=0):
-    """Best-so-far AUC by step, against the same runs reshuffled across steps.
-
-    The observed curve rises by construction: it is a running maximum, and a running
-    maximum climbs whether or not later steps are any better. The reshuffled band is
-    the honest reference — the same candidate AUCs, reassigned to steps at random,
-    so any climb it shows is pure maximum-taking.
+    The running best climbs by construction — it is a maximum over an accumulating
+    pool. The per-step mean does not accumulate, so it rises only if the proposals
+    themselves are getting better. Plotting both makes the difference visible
+    without needing a null.
     """
-    rng = np.random.default_rng(seed)
     fig, axes = plt.subplots(1, 2, figsize=(15.5, 5.2), facecolor=GROUND, sharey=True)
-    suptitle(fig, "Best ontology AUC so far, by evolution step — against the same runs "
-                  "reshuffled across steps")
+    suptitle(fig, "Best ontology AUC so far, and the mean candidate proposed at each step")
     for ax, t in zip(axes, TICKERS):
         recs = [a for a in adds if a["ticker"] == t]
-        obs, n_by_step = _mean_by_step(_running_max_curve(recs))
-        steps = sorted(obs)
+        steps = sorted({a["step"] for a in recs})
 
-        sims = defaultdict(list)
-        for _ in range(n_perm):
-            shuffled = []
-            by_run = defaultdict(list)
-            for a in recs:
-                by_run[a["run_id"]].append(a)
-            for rid, rows in by_run.items():
-                perm = rng.permutation([r["step"] for r in rows])
-                shuffled += [{**r, "step": int(sv)} for r, sv in zip(rows, perm)]
-            m, _ = _mean_by_step(_running_max_curve(shuffled))
-            for k, v in m.items():
-                sims[k].append(v)
-        lo = [np.quantile(sims[s_], 0.05) for s_ in steps]
-        hi = [np.quantile(sims[s_], 0.95) for s_ in steps]
-        mid = [st.mean(sims[s_]) for s_ in steps]
+        # mean AUC of candidates proposed AT that step — not cumulative
+        per_step = [st.mean([a["auc"] for a in recs if a["step"] == s_]) for s_ in steps]
 
-        ax.fill_between(steps, lo, hi, color=MUTED, alpha=0.18, zorder=0,
-                        label="reshuffled, 5–95%")
-        ax.plot(steps, mid, ls="--", color=MUTED, lw=1.6, zorder=1, label="reshuffled mean")
-        ax.plot(steps, [obs[s_] for s_ in steps], "o-", color=COLOR[t], lw=2.2, ms=7,
-                zorder=2, label="observed")
-        for s_ in steps:
-            ax.annotate(f"n={n_by_step[s_]}", (s_, 0.6565), fontsize=9, color=MUTED,
+        # running best within each run, then averaged across runs
+        by_run = defaultdict(list)
+        for a in recs:
+            by_run[a["run_id"]].append(a)
+        acc = defaultdict(list)
+        for rows in by_run.values():
+            cur = float("-inf")
+            for s_ in sorted({r["step"] for r in rows}):
+                cur = max(cur, max(r["auc"] for r in rows if r["step"] == s_))
+                acc[s_].append(cur)
+        running = [st.mean(acc[s_]) for s_ in steps]
+        n_by_step = [len(acc[s_]) for s_ in steps]
+
+        ax.plot(steps, running, "o-", color=COLOR[t], lw=2.2, ms=7,
+                label="best found so far (accumulates)")
+        ax.plot(steps, per_step, "s--", color=NEG, lw=2, ms=6,
+                label="mean candidate at this step")
+        ax.axhline(0.5, color=INK, ls=":", lw=1.1, zorder=0)
+        for s_, n in zip(steps, n_by_step):
+            ax.annotate(f"n={n}", (s_, 0.662), fontsize=9, color=MUTED,
                         ha="center", family="monospace")
-        style(ax, SUBTITLE[t], "evolution step",
-              "mean best-so-far AUC" if t == "TSLA" else None)
+        style(ax, SUBTITLE[t], "evolution step", "AUC" if t == "TSLA" else None)
         ax.set_xticks(steps)
-        ax.set_ylim(0.505, 0.663)
-        ax.legend(fontsize=10, frameon=False, loc="lower right", labelcolor=MUTED)
+        ax.set_ylim(0.45, 0.672)
+        ax.legend(fontsize=10, frameon=False, loc="lower left", labelcolor=MUTED)
     save(fig, "fig_step_curve.png")
 
 

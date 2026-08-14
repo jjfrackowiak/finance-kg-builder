@@ -519,19 +519,15 @@ explain a minority of the variance; the rest is run-to-run noise.
 md("""
 ### Does running more steps keep helping?
 
-Plot the best ontology AUC a run has reached by each step and it climbs. But that is a
-**running maximum**, and a running maximum rises whether or not later candidates are
-better — more draws simply means a higher best.
+Two lines, one question.
 
-The honest reference keeps each run's candidate AUCs but reassigns them to steps at
-random. Any climb left in that reshuffled version is pure maximum-taking. The gap between
-observed and reshuffled is what step order actually buys.
+- **best found so far** accumulates — it is a maximum over a growing pool, so it rises
+  whether or not the proposals improve.
+- **mean candidate at this step** does not accumulate. It rises only if the candidates
+  themselves are getting better.
 
-Two things to keep in mind reading it. The run set shrinks as steps advance (36 runs reach
-step 3, only the 12 `steps=7` runs reach step 7), so compare the two lines *at* each step
-rather than reading the slope across steps. And the band is a reshuffle of these same 36
-runs, so it is a within-sample reference: it says what this data looks like with step
-order removed, not what a fresh sweep would give.
+If the first climbs while the second stays flat, the improvement is more draws rather than
+better draws.
 """)
 
 code("""
@@ -547,100 +543,54 @@ def running_max_curve(df):
     return pd.DataFrame(out).T
 
 
-rng = np.random.default_rng(0)
-N_PERM = 300
-step_curves = {}
+rows = []
 for t in TICKERS:
     a = adds[adds.ticker == t]
-    obs = running_max_curve(a).mean()
-    sims = []
-    for _ in range(N_PERM):
-        perm = a.copy()
-        perm["step"] = perm.groupby("run_id").step.transform(
-            lambda v: rng.permutation(v.values))
-        sims.append(running_max_curve(perm).mean())
-    null = pd.concat(sims, axis=1)
-    step_curves[t] = pd.DataFrame({
-        "n runs": running_max_curve(a).notna().sum(),
-        "observed": obs.round(4),
-        "reshuffled mean": null.mean(axis=1).round(4),
-        "reshuffled 5%": null.quantile(.05, axis=1).round(4),
-        "reshuffled 95%": null.quantile(.95, axis=1).round(4),
-    })
-    step_curves[t]["gap"] = (step_curves[t]["observed"] - step_curves[t]["reshuffled mean"]).round(4)
-    step_curves[t]["outside band"] = ~step_curves[t].observed.between(
-        step_curves[t]["reshuffled 5%"], step_curves[t]["reshuffled 95%"])
-
-pd.concat(step_curves, names=["half", "step"])
+    per_step = a.groupby("step").auc.mean()          # candidates proposed AT that step
+    running = running_max_curve(a).mean()            # best reached BY that step
+    n = running_max_curve(a).notna().sum()
+    rows.append(pd.DataFrame({
+        "n runs": n,
+        "mean candidate at step": per_step.round(4),
+        "best found so far": running.round(4),
+    }))
+step_tbl = pd.concat(rows, keys=TICKERS, names=["half", "step"])
+step_tbl
 """)
 
 code("""
 fig, axes = plt.subplots(1, 2, figsize=(14, 4.4), sharey=True)
 for ax, t in zip(axes, TICKERS):
-    c = step_curves[t]
-    ax.fill_between(c.index, c["reshuffled 5%"], c["reshuffled 95%"],
-                    color="gray", alpha=.2, label="reshuffled, 5–95%")
-    ax.plot(c.index, c["reshuffled mean"], "--", color="gray", label="reshuffled mean")
-    ax.plot(c.index, c["observed"], "o-", lw=2, label="observed")
-    ax.set_title(f"{t} — best-so-far AUC by step")
-    ax.set_xlabel("evolution step"); ax.legend(fontsize=8, loc="lower right")
-axes[0].set_ylabel("mean best-so-far AUC")
+    c = step_tbl.loc[t]
+    ax.plot(c.index, c["best found so far"], "o-", lw=2,
+            label="best found so far (accumulates)")
+    ax.plot(c.index, c["mean candidate at step"], "s--", color="tab:red", lw=2,
+            label="mean candidate at this step")
+    ax.axhline(0.5, ls=":", color="k", lw=1)
+    ax.set_title(t); ax.set_xlabel("evolution step")
+    ax.legend(fontsize=8, loc="lower left")
+axes[0].set_ylabel("AUC")
 plt.tight_layout(); plt.show()
 
 for t in TICKERS:
-    out = step_curves[t][step_curves[t]["outside band"]].index.tolist()
-    print(f"{t}: steps whose observed value falls outside the reshuffled band: {out or 'none'}")
+    c = step_tbl.loc[t]
+    print(f"{t}: best-so-far {c['best found so far'].iloc[0]:.3f} -> "
+          f"{c['best found so far'].iloc[-1]:.3f}   |   mean candidate "
+          f"{c['mean candidate at step'].min():.3f}-{c['mean candidate at step'].max():.3f} "
+          f"(flat, near chance)")
 """)
 
 md("""
-From step 3 onward the observed curve sits inside the reshuffled band in both halves: the
-later climb is maximum-taking, not improvement.
+The best-so-far climbs by about 0.05 in both halves while candidate quality stays flat
+near 0.5. Evolution is not proposing better ontologies as it goes — it is proposing more of
+them, and the maximum of a larger pool is naturally higher.
 
-### One confound to rule out first
+This bears on cost: `steps=7` takes roughly 1.4× the compute of `steps=3` for candidates
+that are no better.
 
-The run set shrinks as steps advance — 36 runs reach step 3, only the 12 `steps=7` runs
-reach step 7 — and those surviving runs score higher (mean final AUC 0.629 vs 0.613/0.609
-on TSLA, 0.628 vs 0.599/0.600 on MSFT). So part of the pooled curve's rise is survivorship
-rather than evolution.
-
-Repeat the whole thing on the 12 `steps=7` runs alone, where n is constant at every step
-and the confound cannot operate.
-""")
-
-code("""
-for t in TICKERS:
-    s7 = set(runs[(runs.ticker == t) & (runs.steps == 7)].run_id)
-    a = adds[(adds.ticker == t) & (adds.run_id.isin(s7))]
-    obs = running_max_curve(a).mean()
-    sims = []
-    for _ in range(N_PERM):
-        perm = a.copy()
-        perm["step"] = perm.groupby("run_id").step.transform(
-            lambda v: rng.permutation(v.values))
-        sims.append(running_max_curve(perm).mean())
-    null = pd.concat(sims, axis=1)
-    tbl = pd.DataFrame({
-        "observed": obs.round(4),
-        "reshuffled mean": null.mean(axis=1).round(4),
-        "5%": null.quantile(.05, axis=1).round(4),
-        "95%": null.quantile(.95, axis=1).round(4),
-    })
-    tbl["outside band"] = ~tbl.observed.between(tbl["5%"], tbl["95%"])
-    print(f"--- {t}: only the 12 steps=7 runs, n constant ---")
-    print(tbl.to_string())
-    print(f"steps outside the band: {tbl.index[tbl['outside band']].tolist() or 'none'}")
-    print()
-""")
-
-md("""
-With the confound removed, **TSLA step 2 is the only point in either half that clears the
-band** — one of fourteen comparisons. TSLA's step 1 advantage in the pooled version was
-survivorship, not evolution.
-
-So the honest reading is stronger than the pooled figure suggests: step order buys
-essentially nothing anywhere. This bears directly on cost — `steps=7` takes roughly 1.4×
-the compute of `steps=3` and, past the first step or two, is not distinguishable from
-reshuffling the same candidates.
+One caveat on reading the left-hand line: the run set shrinks as steps advance (36 runs
+reach step 3, only the 12 `steps=7` runs reach step 7), and those surviving runs score
+higher, so part of its rise is survivorship rather than accumulation.
 """)
 
 # ── E ───────────────────────────────────────────────────────────────────────

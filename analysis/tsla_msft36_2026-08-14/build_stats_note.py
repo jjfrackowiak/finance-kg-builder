@@ -292,6 +292,82 @@ relationship whatsoever. Whatever the within-half tests are picking up does not 
 change of ticker, so it should not be read as "these concepts matter for prediction".
 """)
 
+md("""
+## 5b · Does step order carry any information?
+
+The report shows that the best-so-far AUC climbs while per-step candidate quality stays
+flat — the climb is accumulation. This is the formal version of that argument.
+
+Keep each run's candidate AUCs but **reshuffle which step they arrived at**. Nothing is
+invented or removed; only the arrival order changes. If evolution front-loads its good
+proposals, the real ordering should reach high values sooner than a random one.
+""")
+
+code("""
+def running_max_curve(df):
+    out = {}
+    for rid, g in df.groupby("run_id"):
+        best, cur = {}, -np.inf
+        for s_ in sorted(g.step.unique()):
+            cur = max(cur, g.loc[g.step == s_, "auc"].max())
+            best[s_] = cur
+        out[rid] = best
+    return pd.DataFrame(out).T
+
+
+def reshuffle_test(a, rng, n_perm=300):
+    obs = running_max_curve(a).mean()
+    sims = []
+    for _ in range(n_perm):
+        perm = a.copy()
+        perm["step"] = perm.groupby("run_id").step.transform(
+            lambda v: rng.permutation(v.values))
+        sims.append(running_max_curve(perm).mean())
+    null = pd.concat(sims, axis=1)
+    out = pd.DataFrame({"n runs": running_max_curve(a).notna().sum(),
+                        "observed": obs.round(4),
+                        "reshuffled mean": null.mean(axis=1).round(4),
+                        "5%": null.quantile(.05, axis=1).round(4),
+                        "95%": null.quantile(.95, axis=1).round(4)})
+    out["outside band"] = ~out.observed.between(out["5%"], out["95%"])
+    return out
+
+
+rng = np.random.default_rng(0)
+for t in TICKERS:
+    print(f"--- {t}: all 36 runs (n shrinks as steps advance) ---")
+    print(reshuffle_test(adds[adds.ticker == t], rng).to_string())
+    print()
+""")
+
+md("""
+One confound first: the run set shrinks as steps advance — 36 runs reach step 3, only the
+12 `steps=7` runs reach step 7 — and those surviving runs score higher (mean final AUC
+0.629 vs 0.613/0.609 on TSLA, 0.628 vs 0.599/0.600 on MSFT). Part of the rise is
+survivorship. Repeat on the `steps=7` runs alone, where n is constant.
+""")
+
+code("""
+for t in TICKERS:
+    s7 = set(runs[(runs.ticker == t) & (runs.steps == 7)].run_id)
+    sub = adds[(adds.ticker == t) & (adds.run_id.isin(s7))]
+    res = reshuffle_test(sub, rng)
+    print(f"--- {t}: only the 12 steps=7 runs, n constant ---")
+    print(res.to_string())
+    print(f"steps outside the band: {res.index[res['outside band']].tolist() or 'none'}")
+    print()
+""")
+
+md("""
+With the confound removed, **TSLA step 2 is the only point in either half that clears the
+band** — one of fourteen comparisons. TSLA's step 1 advantage in the pooled version was
+survivorship, not evolution.
+
+So step order buys essentially nothing. Combined with the flat per-step candidate quality
+in the report, the picture is consistent: evolution generates more candidates, not better
+ones, and the acceptance gate then selects the maximum of a growing pool.
+""")
+
 # ── 6 ───────────────────────────────────────────────────────────────────────
 md("""
 ## 6 · Does the acceptance gate discriminate?
