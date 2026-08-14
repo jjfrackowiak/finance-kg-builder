@@ -79,7 +79,7 @@ Dispatch one run: `gh workflow run sweep.yml --ref dev -f configs="$(cat sweep_r
 | 23 | MSFT | 7 | ✅ DONE (auto) | MSFT·lb8·s7·event_dri·h4<br>MSFT·lb8·s7·fundament·h3 | 440 | ~185min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31665427548) |
 | 24 | MSFT | 7 | ✅ DONE (auto) | MSFT·lb10·s7·default·h5<br>MSFT·lb10·s7·event_dri·h4 | 440 | ~185min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31671870725) |
 | 25 | MSFT | 7 | ✅ DONE (auto) | MSFT·lb10·s7·fundament·h3<br>MSFT·lb20·s7·default·h5 | 440 | ~185min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31739605720) |
-| 26 | MSFT | 7 | ⏳ DISPATCHED (auto) | MSFT·lb20·s7·event_dri·h4<br>MSFT·lb20·s7·fundament·h3 | 440 | ~185min | — |
+| 26 | MSFT | 7 | ✅ DONE (auto) | MSFT·lb20·s7·event_dri·h4<br>MSFT·lb20·s7·fundament·h3 | 440 | ~185min | [link](https://github.com/jjfrackowiak/finance-kg-builder/actions/runs/31749166556) |
 
 ---
 
