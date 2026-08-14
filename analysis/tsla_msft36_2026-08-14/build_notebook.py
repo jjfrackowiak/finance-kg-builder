@@ -594,11 +594,53 @@ for t in TICKERS:
 
 md("""
 From step 3 onward the observed curve sits inside the reshuffled band in both halves: the
-later climb is maximum-taking, not improvement. Only TSLA's first two steps clear the
-band, and MSFT's do not — so even that does not replicate across the halves.
+later climb is maximum-taking, not improvement.
 
-This bears on cost. `steps=7` costs roughly 1.4× the compute of `steps=3`, and past step 3
-the extra steps are not distinguishable from reshuffling the same candidates.
+### One confound to rule out first
+
+The run set shrinks as steps advance — 36 runs reach step 3, only the 12 `steps=7` runs
+reach step 7 — and those surviving runs score higher (mean final AUC 0.629 vs 0.613/0.609
+on TSLA, 0.628 vs 0.599/0.600 on MSFT). So part of the pooled curve's rise is survivorship
+rather than evolution.
+
+Repeat the whole thing on the 12 `steps=7` runs alone, where n is constant at every step
+and the confound cannot operate.
+""")
+
+code("""
+for t in TICKERS:
+    s7 = set(runs[(runs.ticker == t) & (runs.steps == 7)].run_id)
+    a = adds[(adds.ticker == t) & (adds.run_id.isin(s7))]
+    obs = running_max_curve(a).mean()
+    sims = []
+    for _ in range(N_PERM):
+        perm = a.copy()
+        perm["step"] = perm.groupby("run_id").step.transform(
+            lambda v: rng.permutation(v.values))
+        sims.append(running_max_curve(perm).mean())
+    null = pd.concat(sims, axis=1)
+    tbl = pd.DataFrame({
+        "observed": obs.round(4),
+        "reshuffled mean": null.mean(axis=1).round(4),
+        "5%": null.quantile(.05, axis=1).round(4),
+        "95%": null.quantile(.95, axis=1).round(4),
+    })
+    tbl["outside band"] = ~tbl.observed.between(tbl["5%"], tbl["95%"])
+    print(f"--- {t}: only the 12 steps=7 runs, n constant ---")
+    print(tbl.to_string())
+    print(f"steps outside the band: {tbl.index[tbl['outside band']].tolist() or 'none'}")
+    print()
+""")
+
+md("""
+With the confound removed, **TSLA step 2 is the only point in either half that clears the
+band** — one of fourteen comparisons. TSLA's step 1 advantage in the pooled version was
+survivorship, not evolution.
+
+So the honest reading is stronger than the pooled figure suggests: step order buys
+essentially nothing anywhere. This bears directly on cost — `steps=7` takes roughly 1.4×
+the compute of `steps=3` and, past the first step or two, is not distinguishable from
+reshuffling the same candidates.
 """)
 
 # ── E ───────────────────────────────────────────────────────────────────────
