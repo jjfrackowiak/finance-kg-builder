@@ -411,9 +411,41 @@ print(runs[runs.ticker == "MSFT"].groupby("evolution_prompt").final_auc.mean().r
 agree
 """)
 
+md("""
+### How much of the variation do the factors explain?
+
+The measure is **eta-squared**: the share of the spread in AUC that lines up with a factor.
+
+- **denominator** `SS_total` — take all 36 runs, measure how far each AUC sits from the
+  overall average, square, add up. One number for *how much the runs disagree in total*.
+- **numerator** `SS_between` — replace each run by its group's average (every `hops=4` run
+  becomes 0.5885, and so on), then measure how far those group averages sit from the
+  overall average, square, weight by group size, add up. This is *the disagreement you
+  could predict knowing only which level a run used*.
+
+The ratio answers: if the only thing you knew about a run was its setting for this factor,
+what share of the run-to-run variation could you account for?
+""")
+
 code("""
-# How much of the run-to-run variation do the factors explain at all? The design is
-# balanced, so a one-way eta^2 per factor is interpretable without adjustment.
+# The intermediate sums of squares, not just the ratio.
+rows = []
+for t in TICKERS:
+    s = runs[runs.ticker == t]
+    gm = s.final_auc.mean()
+    ss_total = ((s.final_auc - gm) ** 2).sum()
+    for f in FACTORS:
+        g = s.groupby(f).final_auc
+        ss_between = (g.count() * (g.mean() - gm) ** 2).sum()
+        rows.append({"half": t, "factor": f,
+                     "SS_between (numerator)": round(ss_between, 6),
+                     "SS_total (denominator)": round(ss_total, 6),
+                     "eta^2": round(ss_between / ss_total, 3)})
+pd.DataFrame(rows).set_index(["half", "factor"])
+""")
+
+code("""
+# Rolled up per half, with the residual. This is the report's table.
 rows = []
 for t in TICKERS:
     s = runs[runs.ticker == t]
@@ -429,6 +461,34 @@ for t in TICKERS:
     r["residual"] = round(1 - explained, 3)
     rows.append(r)
 pd.DataFrame(rows)
+""")
+
+md("""
+**Why the four shares may be added.** Summing eta-squared values is normally invalid —
+factors usually share variance, so you would double-count. It is legitimate here only
+because the orthogonal array makes the factors exactly uncorrelated. Worth verifying
+rather than assuming: fit one joint model with dummies for every level of every factor and
+compare its R-squared against the naive sum.
+""")
+
+code("""
+for t in TICKERS:
+    s = runs[runs.ticker == t]
+    gm = s.final_auc.mean()
+    ss_total = ((s.final_auc - gm) ** 2).sum()
+    naive = sum((s.groupby(f).final_auc.count() *
+                 (s.groupby(f).final_auc.mean() - gm) ** 2).sum() / ss_total
+                for f in FACTORS)
+    X = pd.get_dummies(s[FACTORS].astype(str), drop_first=True).astype(float)
+    X.insert(0, "const", 1.0)
+    y = s.final_auc.values
+    beta, *_ = np.linalg.lstsq(X.values, y, rcond=None)
+    r2 = 1 - ((y - X.values @ beta) ** 2).sum() / ss_total
+    print(f"{t}: sum of individual eta^2 = {naive:.4f}   joint model R^2 = {r2:.4f}   "
+          f"difference = {abs(naive - r2):.1e}")
+print()
+print("Agreement to machine precision confirms the design is orthogonal, so the")
+print("per-factor shares partition the variance without overlap.")
 """)
 
 code("""
