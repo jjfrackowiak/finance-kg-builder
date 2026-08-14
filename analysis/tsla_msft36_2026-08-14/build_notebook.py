@@ -516,6 +516,91 @@ Every level sits inside its own ticker's ±1 SD band, in both halves. The factor
 explain a minority of the variance; the rest is run-to-run noise.
 """)
 
+md("""
+### Does running more steps keep helping?
+
+Plot the best ontology AUC a run has reached by each step and it climbs. But that is a
+**running maximum**, and a running maximum rises whether or not later candidates are
+better — more draws simply means a higher best.
+
+The honest reference keeps each run's candidate AUCs but reassigns them to steps at
+random. Any climb left in that reshuffled version is pure maximum-taking. The gap between
+observed and reshuffled is what step order actually buys.
+
+Two things to keep in mind reading it. The run set shrinks as steps advance (36 runs reach
+step 3, only the 12 `steps=7` runs reach step 7), so compare the two lines *at* each step
+rather than reading the slope across steps. And the band is a reshuffle of these same 36
+runs, so it is a within-sample reference: it says what this data looks like with step
+order removed, not what a fresh sweep would give.
+""")
+
+code("""
+def running_max_curve(df):
+    \"\"\"Per run, the best candidate AUC seen up to and including each step.\"\"\"
+    out = {}
+    for rid, g in df.groupby("run_id"):
+        best, cur = {}, -np.inf
+        for s_ in sorted(g.step.unique()):
+            cur = max(cur, g.loc[g.step == s_, "auc"].max())
+            best[s_] = cur
+        out[rid] = best
+    return pd.DataFrame(out).T
+
+
+rng = np.random.default_rng(0)
+N_PERM = 300
+step_curves = {}
+for t in TICKERS:
+    a = adds[adds.ticker == t]
+    obs = running_max_curve(a).mean()
+    sims = []
+    for _ in range(N_PERM):
+        perm = a.copy()
+        perm["step"] = perm.groupby("run_id").step.transform(
+            lambda v: rng.permutation(v.values))
+        sims.append(running_max_curve(perm).mean())
+    null = pd.concat(sims, axis=1)
+    step_curves[t] = pd.DataFrame({
+        "n runs": running_max_curve(a).notna().sum(),
+        "observed": obs.round(4),
+        "reshuffled mean": null.mean(axis=1).round(4),
+        "reshuffled 5%": null.quantile(.05, axis=1).round(4),
+        "reshuffled 95%": null.quantile(.95, axis=1).round(4),
+    })
+    step_curves[t]["gap"] = (step_curves[t]["observed"] - step_curves[t]["reshuffled mean"]).round(4)
+    step_curves[t]["outside band"] = ~step_curves[t].observed.between(
+        step_curves[t]["reshuffled 5%"], step_curves[t]["reshuffled 95%"])
+
+pd.concat(step_curves, names=["half", "step"])
+""")
+
+code("""
+fig, axes = plt.subplots(1, 2, figsize=(14, 4.4), sharey=True)
+for ax, t in zip(axes, TICKERS):
+    c = step_curves[t]
+    ax.fill_between(c.index, c["reshuffled 5%"], c["reshuffled 95%"],
+                    color="gray", alpha=.2, label="reshuffled, 5–95%")
+    ax.plot(c.index, c["reshuffled mean"], "--", color="gray", label="reshuffled mean")
+    ax.plot(c.index, c["observed"], "o-", lw=2, label="observed")
+    ax.set_title(f"{t} — best-so-far AUC by step")
+    ax.set_xlabel("evolution step"); ax.legend(fontsize=8, loc="lower right")
+axes[0].set_ylabel("mean best-so-far AUC")
+plt.tight_layout(); plt.show()
+
+for t in TICKERS:
+    out = step_curves[t][step_curves[t]["outside band"]].index.tolist()
+    print(f"{t}: steps whose observed value falls outside the reshuffled band: {out or 'none'}")
+""")
+
+md("""
+From step 3 onward the observed curve sits inside the reshuffled band in both halves: the
+later climb is maximum-taking, not improvement. Only TSLA's first two steps clear the
+band, and MSFT's do not — so even that does not replicate across the halves.
+
+This bears on cost. `steps=7` costs roughly 1.4× the compute of `steps=3`, and past step 3
+the extra steps are not distinguishable from reshuffling the same candidates.
+""")
+
 # ── E ───────────────────────────────────────────────────────────────────────
 md("""
 ## E · Ontology-change analysis
