@@ -284,19 +284,32 @@ md("""
 
 Each run pairs a graph AUC with a text AUC on the same validation days, so the lift is a
 within-run contrast. Both halves land on exactly 28 of 36.
+
+The shaded band is ±1 SD of that ticker's own 36 final AUCs — the ordinary scatter between
+runs. It is the reference used throughout the report: a difference smaller than this band
+is not distinguishable from the variation between two runs of the same configuration.
 """)
 
 code("""
 fig, axes = plt.subplots(1, 2, figsize=(14, 4.4), sharey=True)
 for ax, t in zip(axes, TICKERS):
-    d = runs[runs.ticker == t].delta.sort_values().reset_index(drop=True)
+    sub = runs[runs.ticker == t]
+    sd = sub.final_auc.std()                      # between-run SD of AUC
+    d = sub.delta.sort_values().reset_index(drop=True)
+    ax.axhspan(-sd, sd, color="gray", alpha=.15, label=f"±1 SD of AUC = ±{sd:.3f}")
     ax.bar(d.index, d, color=np.where(d > 0, "tab:green", "tab:red"), alpha=.85)
     ax.axhline(0, color="k", lw=1.2)
     ax.axhline(d.mean(), ls="--", lw=1.4)
-    ax.set_title(f"{t} — mean {d.mean():+.3f}, {int((d>0).sum())}/36 beat text")
+    ax.set_title(f"{t} — mean {d.mean():+.3f}, {int((d > 0).sum())}/36 beat text")
     ax.set_xlabel("run (sorted by lift)")
+    ax.legend(fontsize=8, loc="upper left")
 axes[0].set_ylabel("final AUC − text AUC")
 plt.tight_layout(); plt.show()
+
+for t in TICKERS:
+    sub = runs[runs.ticker == t]
+    print(f"{t}: mean lift {sub.delta.mean():+.4f}   between-run SD of AUC "
+          f"{sub.final_auc.std():.4f}   {int((sub.delta > 0).sum())}/36 beat text")
 """)
 
 # ── C ───────────────────────────────────────────────────────────────────────
