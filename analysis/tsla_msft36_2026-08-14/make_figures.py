@@ -28,9 +28,8 @@ TICKERS = ("TSLA", "MSFT")
 # consistently in every figure so the eye can pair panels across sections.
 COLOR = {"TSLA": ACCENT, "MSFT": "#8c5bd8"}
 SUBTITLE = {"TSLA": "TSLA — mixed articles", "MSFT": "MSFT — MSFT-only articles"}
-# Sign-test p for "the graph arm beat the text baseline", 28 of 36 in each half.
-# Computed in report.ipynb; quoted here only for the figure annotation.
-SIGN_P = {"TSLA": 0.0012, "MSFT": 0.0012}
+# Per-ticker between-run SD of final AUC, used as the scatter reference in the
+# lift figure. Computed from results.csv in report.ipynb.
 
 FACTORS = [
     ("lookback_days", "Lookback (days)", None),
@@ -284,11 +283,16 @@ def fig_delta_vs_noise(rows):
     been dropped in favour of the sign test, which uses the runs as replicates.
     """
     fig, axes = plt.subplots(1, 2, figsize=(15.5, 5.4), facecolor=GROUND, sharey=True)
-    suptitle(fig, "Per-run lift over each run's own text baseline — 36 runs per ticker, sorted")
+    sds = {t: st.stdev([r["final_auc"] for r in rows if r["ticker"] == t]) for t in TICKERS}
+    suptitle(fig, "Per-run lift over each run's own text baseline — shaded band is ±1 SD of that "
+                  f"ticker's 36 final AUCs (TSLA {sds['TSLA']:.3f}, MSFT {sds['MSFT']:.3f})")
     for ax, t in zip(axes, TICKERS):
         sub = sorted([r for r in rows if r["ticker"] == t], key=lambda r: r["delta"])
         d = [r["delta"] for r in sub]
+        sd = st.stdev([r["final_auc"] for r in rows if r["ticker"] == t])
         xs = np.arange(len(d))
+        # Shade +/- the between-run SD of AUC: the scatter any single run sits within.
+        ax.axhspan(-sd, sd, color=MUTED, alpha=0.14, zorder=0)
         ax.bar(xs, d, color=[POS if v > 0 else NEG for v in d], alpha=0.85, width=0.72, zorder=2)
         ax.axhline(0, color=INK, lw=1.2, zorder=3)
         m = st.mean(d)
@@ -296,7 +300,7 @@ def fig_delta_vs_noise(rows):
         ax.annotate(f"mean {m:+.3f}", (0.3, m), fontsize=11, color=COLOR[t], va="bottom",
                     family="monospace", bbox=dict(facecolor=GROUND, edgecolor="none", pad=1.5))
         won = sum(1 for v in d if v > 0)
-        style(ax, f"{SUBTITLE[t]}   {won}/{len(d)} beat text   (sign test p = {SIGN_P[t]:.4f})",
+        style(ax, f"{SUBTITLE[t]}   {won}/{len(d)} beat text   mean {m:+.3f}",
               "run (sorted by lift)", "final AUC − text AUC" if t == "TSLA" else None)
         ax.set_ylim(-0.20, 0.30)
     save(fig, "fig_delta_vs_noise.png")
