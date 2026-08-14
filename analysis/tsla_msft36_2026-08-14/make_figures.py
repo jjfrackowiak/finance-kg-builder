@@ -28,12 +28,9 @@ TICKERS = ("TSLA", "MSFT")
 # consistently in every figure so the eye can pair panels across sections.
 COLOR = {"TSLA": ACCENT, "MSFT": "#8c5bd8"}
 SUBTITLE = {"TSLA": "TSLA — mixed articles", "MSFT": "MSFT — MSFT-only articles"}
-# SE of a single AUC on the realised validation split, under H0:
-#   SE = sqrt((n1 + n0 + 1) / (12 * n1 * n0))     [Mann-Whitney U variance]
-# with the actual up/down day counts — TSLA 19/22, MSFT 20/21. A perfectly balanced
-# 21/21 split would give 0.0901, so these are marginally the more conservative figure.
-# Derived and Monte-Carlo checked in report.ipynb.
-NOISE_SE = {"TSLA": 0.0915, "MSFT": 0.0913}
+# Sign-test p for "the graph arm beat the text baseline", 28 of 36 in each half.
+# Computed in report.ipynb; quoted here only for the figure annotation.
+SIGN_P = {"TSLA": 0.0012, "MSFT": 0.0012}
 
 FACTORS = [
     ("lookback_days", "Lookback (days)", None),
@@ -280,23 +277,26 @@ def fig_acceptance(adds):
 
 # ---------------------------------------------------------------- figure 7
 def fig_delta_vs_noise(rows):
-    """Every run's delta against the noise floor — the report's central claim."""
+    """Every run's lift over its own text baseline — the report's one positive result.
+
+    Filename kept for continuity with earlier drafts; the band it once carried (the
+    sampling SE of a single AUC) was the wrong reference for this comparison and has
+    been dropped in favour of the sign test, which uses the runs as replicates.
+    """
     fig, axes = plt.subplots(1, 2, figsize=(15.5, 5.4), facecolor=GROUND, sharey=True)
-    suptitle(fig, "Per-run lift over text baseline, against the ±1 SE noise floor of a single validation AUC")
+    suptitle(fig, "Per-run lift over each run's own text baseline — 36 runs per ticker, sorted")
     for ax, t in zip(axes, TICKERS):
-        se = NOISE_SE[t]
         sub = sorted([r for r in rows if r["ticker"] == t], key=lambda r: r["delta"])
         d = [r["delta"] for r in sub]
         xs = np.arange(len(d))
-        ax.axhspan(-se, se, color=MUTED, alpha=0.16, zorder=0)
         ax.bar(xs, d, color=[POS if v > 0 else NEG for v in d], alpha=0.85, width=0.72, zorder=2)
-        ax.axhline(0, color=INK, lw=1.0, zorder=3)
+        ax.axhline(0, color=INK, lw=1.2, zorder=3)
         m = st.mean(d)
         ax.axhline(m, color=COLOR[t], ls="--", lw=1.5, zorder=4)
         ax.annotate(f"mean {m:+.3f}", (0.3, m), fontsize=11, color=COLOR[t], va="bottom",
                     family="monospace", bbox=dict(facecolor=GROUND, edgecolor="none", pad=1.5))
-        inside = sum(1 for v in d if abs(v) <= se)
-        style(ax, f"{SUBTITLE[t]}   ({inside}/{len(d)} runs inside ±{se:.3f})",
+        won = sum(1 for v in d if v > 0)
+        style(ax, f"{SUBTITLE[t]}   {won}/{len(d)} beat text   (sign test p = {SIGN_P[t]:.4f})",
               "run (sorted by lift)", "final AUC − text AUC" if t == "TSLA" else None)
         ax.set_ylim(-0.20, 0.30)
     save(fig, "fig_delta_vs_noise.png")

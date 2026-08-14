@@ -85,72 +85,9 @@ print(f"additions {len(adds)}  ({adds.ticker.value_counts().to_dict()})")
 """)
 
 md("""
-### The noise floor, derived
-
-Every effect in this report is judged against the sampling error of a single AUC, so it
-is worth deriving rather than asserting.
-
-AUC is the Mann–Whitney U statistic rescaled: `AUC = U / (n1*n0)`, where `n1` and `n0`
-count positive and negative days. Under the null of no discrimination, U has variance
-`n1*n0*(n1+n0+1)/12`, so
-
-$$\\mathrm{SE}(\\mathrm{AUC}) = \\sqrt{\\frac{n_1+n_0+1}{12\\,n_1 n_0}}$$
-
-That depends only on the class counts — not on the model, the features, or the number of
-predictors. It is the spread you would see by scoring the validation days at random.
-""")
-
-code("""
-def auc_se(n1, n0):
-    \"\"\"SD of AUC under H0, from the Mann-Whitney U variance.\"\"\"
-    return np.sqrt((n1 + n0 + 1) / (12 * n1 * n0))
-
-# Realised label counts. Direction = next-day close above today's close, over the same
-# 140-trading-day window, first 98 for training. Fetched live; the fallback is the same
-# figure recorded at analysis time, so the notebook still runs offline.
-FALLBACK = {"TSLA": (19, 22), "MSFT": (20, 21)}
-val_counts = {}
-try:
-    import yfinance as yf
-    for t in TICKERS:
-        d = yf.Ticker(t).history(start="2022-04-25", end="2022-12-05",
-                                 interval="1d", auto_adjust=True).reset_index()
-        d["day"] = pd.to_datetime(d["Date"]).dt.date.astype(str)
-        d = d[(d.day >= "2022-05-02") & (d.day < "2022-11-18")].reset_index(drop=True)
-        d["direction"] = (d.Close.shift(-1) > d.Close).astype(int)
-        d = d.iloc[:-1]
-        v = d.iloc[98:]
-        val_counts[t] = (int(v.direction.sum()), int(len(v) - v.direction.sum()))
-    src = "yfinance"
-except Exception as e:
-    val_counts, src = dict(FALLBACK), f"fallback ({type(e).__name__})"
-
-NOISE_SE = {t: auc_se(*val_counts[t]) for t in TICKERS}
-print(f"validation label counts ({src}):")
-for t in TICKERS:
-    n1, n0 = val_counts[t]
-    print(f"  {t}: {n1} up / {n0} down of {n1+n0} days   ->  SE(AUC) = {NOISE_SE[t]:.4f}")
-print(f"\\nperfectly balanced 21/21 reference: {auc_se(21, 21):.4f}")
-print("the realised splits are slightly *less* balanced, so the true noise floor is")
-print("marginally higher than the balanced approximation - the report uses the realised one.")
-""")
-
-md("""
-The formula is worth confirming empirically rather than trusting: draw random scores for
-the realised class counts and measure the spread of the resulting AUCs.
-""")
-
-code("""
-from sklearn.metrics import roc_auc_score
-
-rng = np.random.default_rng(0)
-print("Monte-Carlo check — random scores, no signal, 20k draws each:\\n")
-for t in TICKERS:
-    n1, n0 = val_counts[t]
-    y = np.r_[np.ones(n1), np.zeros(n0)]
-    draws = [roc_auc_score(y, rng.random(n1 + n0)) for _ in range(20000)]
-    print(f"  {t}: empirical SD {np.std(draws):.4f}   formula {NOISE_SE[t]:.4f}   "
-          f"mean AUC {np.mean(draws):.4f}")
+This notebook is **descriptive**: it reproduces every number the report states, and
+nothing more. Formal hypothesis testing — sign tests, ANOVA, multiplicity — lives in
+`stats_tests_note.ipynb` alongside it, so the two can be read independently.
 """)
 
 # ── A ───────────────────────────────────────────────────────────────────────
@@ -343,32 +280,23 @@ plt.tight_layout(); plt.show()
 """)
 
 md("""
-### Against the noise floor
+### Per-run lift
 
-A single AUC on 42 balanced validation days has a standard error of about **0.090** under
-the null. Both halves' mean lift is well under that, and most individual runs sit inside
-the band — which is the report's central point.
+Each run pairs a graph AUC with a text AUC on the same validation days, so the lift is a
+within-run contrast. Both halves land on exactly 28 of 36.
 """)
 
 code("""
 fig, axes = plt.subplots(1, 2, figsize=(14, 4.4), sharey=True)
 for ax, t in zip(axes, TICKERS):
-    se = NOISE_SE[t]
     d = runs[runs.ticker == t].delta.sort_values().reset_index(drop=True)
-    ax.axhspan(-se, se, color="gray", alpha=.18, label=f"±1 SE = ±{se:.3f}")
     ax.bar(d.index, d, color=np.where(d > 0, "tab:green", "tab:red"), alpha=.85)
-    ax.axhline(0, color="k", lw=1)
+    ax.axhline(0, color="k", lw=1.2)
     ax.axhline(d.mean(), ls="--", lw=1.4)
-    inside = int((d.abs() <= se).sum())
-    ax.set_title(f"{t} — mean {d.mean():+.3f}, {inside}/36 inside the band")
+    ax.set_title(f"{t} — mean {d.mean():+.3f}, {int((d>0).sum())}/36 beat text")
     ax.set_xlabel("run (sorted by lift)")
-    ax.legend(fontsize=8)
 axes[0].set_ylabel("final AUC − text AUC")
 plt.tight_layout(); plt.show()
-
-for t in TICKERS:
-    d = runs[runs.ticker == t].delta
-    print(f"{t}: {int((d.abs() <= NOISE_SE[t]).sum())}/36 runs inside ±{NOISE_SE[t]:.4f}")
 """)
 
 # ── C ───────────────────────────────────────────────────────────────────────
@@ -667,7 +595,7 @@ for t in TICKERS:
     m = runs[runs.ticker == t].groupby("steps").final_auc.mean()
     print(f"{t}: steps7 - steps3 = {m[7]-m[3]:+.4f}   "
           f"mean(steps5,7) - steps3 = {(m[5]+m[7])/2 - m[3]:+.4f}   "
-          f"(noise floor {NOISE_SE[t]:.3f})")
+          f"(between-run SD {runs[runs.ticker==t].final_auc.std():.3f})")
 """)
 
 # ── F ───────────────────────────────────────────────────────────────────────
@@ -721,12 +649,10 @@ verdict
 
 code("""
 gap = runs[runs.ticker == "MSFT"].delta.mean() - runs[runs.ticker == "TSLA"].delta.mean()
-t_stat, p_val = stats.ttest_ind(runs[runs.ticker == "MSFT"].delta,
-                                runs[runs.ticker == "TSLA"].delta, equal_var=False)
-mean_se = np.mean(list(NOISE_SE.values()))
+sd = runs.groupby("ticker").final_auc.std().mean()
 print(f"difference in mean lift (MSFT - TSLA): {gap:+.4f}")
-print(f"  as a fraction of the single-AUC noise floor: {abs(gap) / mean_se:.2f}")
-print(f"  Welch t = {t_stat:+.2f}, p = {p_val:.2f}")
+print(f"  against a between-run SD of {sd:.4f}, i.e. {abs(gap)/sd:.2f} of the ordinary")
+print(f"  scatter between runs within a half")
 print()
 print("Both halves beat their baseline in exactly 28 of 36 runs. Filtering the corpus to")
 print("the labelled company moved nothing that this design can resolve.")
@@ -765,9 +691,7 @@ checks = {
     "min / max lift":             per_ticker(lambda r, a: f"{r.delta.min():+.3f} / {r.delta.max():+.3f}"),
     "beat text baseline":         per_ticker(lambda r, a: f"{(r.delta > 0).sum()} / 36"),
     "mean Brier":                 per_ticker(lambda r, a: f"{r.brier_score.mean():.3f}"),
-    "noise floor SE(AUC)":        {t: f"{NOISE_SE[t]:.4f}" for t in TICKERS},
-    "runs inside noise band":     {t: f"{int((runs[runs.ticker==t].delta.abs() <= NOISE_SE[t]).sum())} / 36"
-                                   for t in TICKERS},
+    "between-run SD of AUC":      per_ticker(lambda r, a: f"{r.final_auc.std():.3f}"),
     "path: Spearman rho":         per_ticker(lambda r, a: f"{stats.spearmanr(r.path_mean_norm, r.final_auc)[0]:+.3f}"),
     "path: OLS slope":            per_ticker(lambda r, a: f"{np.polyfit(r.path_mean_norm, r.final_auc, 1)[0]:+.3f}"),
     "path: empty blocks":         per_ticker(lambda r, a: f"{int((r.path_mean_norm == 0).sum())} / 36"),
@@ -783,9 +707,8 @@ checks = {
 cross = pd.DataFrame(checks).T[TICKERS]
 
 print("cross-half quantities (single-valued):")
-print(f"  MSFT - TSLA lift gap        {gap:+.4f}  ({abs(gap)/mean_se:.2f} noise units)")
-print(f"  Welch t / p                 {t_stat:+.2f} / {p_val:.2f}")
-print(f"  win-rate rank correlation   rho {rho:+.3f} (p {p:.2f}) over {len(common)} pairs")
+print(f"  MSFT - TSLA lift gap        {gap:+.4f}")
+print(f"  win-rate rank correlation   rho {rho:+.3f} over {len(common)} pairs")
 print(f"  candidates with null rel.   {len(missing)} of {len(adds)}\\n")
 cross
 """)
@@ -798,13 +721,11 @@ independent balanced designs:
 
 - **Path-chain features do nothing** — flat dose–response in both halves
 - **No hyperparameter separates** from between-run scatter in either half
-- **Filtering the corpus changes nothing** — 28/36 both ways, lift differing by an eighth
-  of one noise unit
+- **Filtering the corpus changes nothing** — 28/36 both ways, mean lift differing by 0.010
 - **The model memorises completely** — train AUC 1.0000 with zero variance across 36 runs
 
 The remaining constraint is the estimator, not the corpus: 98 training days, 42 validation
-days, 488 features. Every effect this project is chasing is smaller than the ±0.090 noise
-floor of a single measurement.
+days, 488 features. Formal tests of every claim here are in `stats_tests_note.ipynb`.
 """)
 
 nb = {
