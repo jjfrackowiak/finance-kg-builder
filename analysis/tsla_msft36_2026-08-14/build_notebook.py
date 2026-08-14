@@ -85,9 +85,11 @@ print(f"additions {len(adds)}  ({adds.ticker.value_counts().to_dict()})")
 """)
 
 md("""
-This notebook is **descriptive**: it reproduces every number the report states, and
-nothing more. Formal hypothesis testing — sign tests, ANOVA, multiplicity — lives in
-`stats_tests_note.ipynb` alongside it, so the two can be read independently.
+This notebook reproduces every number the report states. Sections A–F and G's verdict are
+descriptive; section G collects the formal tests behind the report's summary table.
+
+A fuller treatment of the testing — multiplicity, per-addition binomials, and why ANOVA
+rather than the sampling SE of a single AUC — is in `stats_tests_note.ipynb` alongside.
 """)
 
 # ── A ───────────────────────────────────────────────────────────────────────
@@ -771,6 +773,104 @@ print("is measuring, it is not a model that had to generalise to fit.")
 """)
 
 # ── G ───────────────────────────────────────────────────────────────────────
+md("""
+## G · Which differences survive a test
+
+Everything above is descriptive. This section asks which of those differences hold up
+under a formal test, and produces the summary table in the report's section G.
+
+Each half contains 36 runs, so **the runs are the replicates** — every test uses the
+observed run-to-run scatter as its error term, not a theoretical model of how AUC is
+distributed.
+""")
+
+code("""
+# 1. Does the graph arm beat text? Paired within run, so a sign test on the 36 lifts.
+sign = {t: stats.binomtest(int((runs[runs.ticker == t].delta > 0).sum()), 36, 0.5).pvalue
+        for t in TICKERS}
+sign["pooled"] = stats.binomtest(int((runs.delta > 0).sum()), 72, 0.5).pvalue
+
+# 2. Does any hyperparameter matter? One-way ANOVA per factor; the balanced design
+#    means the other three factors are distributed identically across levels.
+anova = pd.DataFrame([
+    {"half": t, "factor": f,
+     **dict(zip(["F", "p"], stats.f_oneway(
+         *[g.final_auc.values for _, g in runs[runs.ticker == t].groupby(f)])))}
+    for t in TICKERS for f in FACTORS])
+
+# 2b. Same question without assuming normality.
+kw = pd.DataFrame([
+    {"half": t, "factor": f,
+     **dict(zip(["H", "p"], stats.kruskal(
+         *[g.final_auc.values for _, g in runs[runs.ticker == t].groupby(f)])))}
+    for t in TICKERS for f in FACTORS])
+
+# 3. Path features: correlation, and empty vs non-empty block.
+path_p = []
+for t in TICKERS:
+    s_ = runs[runs.ticker == t]
+    path_p.append(stats.spearmanr(s_.path_mean_norm, s_.final_auc)[1])
+    path_p.append(stats.ttest_ind(s_[s_.path_mean_norm == 0].final_auc,
+                                  s_[s_.path_mean_norm > 0].final_auc, equal_var=False)[1])
+
+# 4. Did filtering the corpus change the lift? Unpaired, between halves.
+corpus_p = stats.ttest_ind(runs[runs.ticker == "MSFT"].delta,
+                           runs[runs.ticker == "TSLA"].delta, equal_var=False)[1]
+
+# 5. Does the addition ranking replicate across halves?
+w = (adds.dropna(subset=["delta_auc"]).groupby(["ticker", "node", "relationship"])
+        .agg(n=("won", "size"), wins=("won", "sum")))
+w = w[w.n >= 8].assign(rate=lambda d: 100 * d.wins / d.n)
+common = (w.reset_index().pivot_table(index=["node", "relationship"],
+                                      columns="ticker", values="rate").dropna())
+rho_replic, p_replic = stats.spearmanr(common.TSLA, common.MSFT)
+
+# 6. Does the gate discriminate? Circular by construction — included as a warning.
+gate_p = min(stats.ttest_ind(
+    adds[(adds.ticker == t) & (adds.status == "accepted")].delta_auc.dropna(),
+    adds[(adds.ticker == t) & (adds.status != "accepted")].delta_auc.dropna(),
+    equal_var=False)[1] for t in TICKERS)
+
+print(f"ANOVA: {(anova.p < 0.05).sum()} of {len(anova)} significant at 0.05 "
+      f"(Bonferroni threshold {0.05/len(anova):.4f})")
+print(f"Kruskal-Wallis: {(kw.p < 0.05).sum()} of {len(kw)} significant")
+print(f"addition ranking: rho {rho_replic:+.3f} over {len(common)} pairs common to both halves")
+""")
+
+code("""
+summary = pd.DataFrame([
+    ("graph beats text — TSLA", "sign test, 28/36", f"{sign['TSLA']:.4f}", "YES"),
+    ("graph beats text — MSFT", "sign test, 28/36", f"{sign['MSFT']:.4f}", "YES"),
+    ("graph beats text — pooled", "sign test, 56/72", f"{sign['pooled']:.1e}", "YES"),
+    ("hyperparameters (8 tests)", "one-way ANOVA", f"min {anova.p.min():.3f}", "no"),
+    ("hyperparameters (8 tests)", "Kruskal-Wallis", f"min {kw.p.min():.3f}", "no"),
+    ("path features", "Spearman / Welch t", f"{min(path_p):.2f} - {max(path_p):.2f}", "no"),
+    ("corpus filtering", "Welch t", f"{corpus_p:.2f}", "no"),
+    ("addition ranking replicates", "Spearman across halves", f"{p_replic:.2f}", "no"),
+    ("gate discriminates", "Welch t", f"{gate_p:.0e}", "yes, but circular"),
+], columns=["question", "test", "p", "significant?"])
+summary.set_index("question")
+""")
+
+md("""
+**One real positive result, replicated.** The graph arm beats the text baseline 28 of 36
+times in each half independently — and the replication matters more than any p-value, since
+two halves with different labels, different corpora and independently drawn ontologies
+landed on the same count.
+
+Everything else is null, and these are reasonably well-powered nulls: each rests on two
+balanced 36-run designs that agree.
+
+Two rows need care:
+
+- **The gate result is significant and meaningless.** The gate accepts a candidate exactly
+  when its `delta_auc` clears a threshold, so testing whether accepted candidates have
+  higher `delta_auc` tests the definition of the gate, not the ontology.
+- **The within-half p-values are optimistic.** The 36 runs share validation days, and all 9
+  runs at a given lookback share one text baseline — only four distinct baselines per half —
+  so they are not independent.
+""")
+
 md("""
 ## G · The cross-ticker verdict
 
