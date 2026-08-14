@@ -28,9 +28,12 @@ TICKERS = ("TSLA", "MSFT")
 # consistently in every figure so the eye can pair panels across sections.
 COLOR = {"TSLA": ACCENT, "MSFT": "#8c5bd8"}
 SUBTITLE = {"TSLA": "TSLA — mixed articles", "MSFT": "MSFT — MSFT-only articles"}
-# SE of a single AUC on 42 balanced validation days under H0. Every effect in this
-# report is smaller than this; several figures draw it for scale.
-NOISE_SE = 0.0901
+# SE of a single AUC on the realised validation split, under H0:
+#   SE = sqrt((n1 + n0 + 1) / (12 * n1 * n0))     [Mann-Whitney U variance]
+# with the actual up/down day counts — TSLA 19/22, MSFT 20/21. A perfectly balanced
+# 21/21 split would give 0.0901, so these are marginally the more conservative figure.
+# Derived and Monte-Carlo checked in report.ipynb.
+NOISE_SE = {"TSLA": 0.0915, "MSFT": 0.0913}
 
 FACTORS = [
     ("lookback_days", "Lookback (days)", None),
@@ -279,20 +282,21 @@ def fig_acceptance(adds):
 def fig_delta_vs_noise(rows):
     """Every run's delta against the noise floor — the report's central claim."""
     fig, axes = plt.subplots(1, 2, figsize=(15.5, 5.4), facecolor=GROUND, sharey=True)
-    suptitle(fig, "Per-run lift over text baseline, against the ±1 SE noise floor of a single 42-day AUC")
+    suptitle(fig, "Per-run lift over text baseline, against the ±1 SE noise floor of a single validation AUC")
     for ax, t in zip(axes, TICKERS):
+        se = NOISE_SE[t]
         sub = sorted([r for r in rows if r["ticker"] == t], key=lambda r: r["delta"])
         d = [r["delta"] for r in sub]
         xs = np.arange(len(d))
-        ax.axhspan(-NOISE_SE, NOISE_SE, color=MUTED, alpha=0.16, zorder=0)
+        ax.axhspan(-se, se, color=MUTED, alpha=0.16, zorder=0)
         ax.bar(xs, d, color=[POS if v > 0 else NEG for v in d], alpha=0.85, width=0.72, zorder=2)
         ax.axhline(0, color=INK, lw=1.0, zorder=3)
         m = st.mean(d)
         ax.axhline(m, color=COLOR[t], ls="--", lw=1.5, zorder=4)
         ax.annotate(f"mean {m:+.3f}", (0.3, m), fontsize=11, color=COLOR[t], va="bottom",
                     family="monospace", bbox=dict(facecolor=GROUND, edgecolor="none", pad=1.5))
-        inside = sum(1 for v in d if abs(v) <= NOISE_SE)
-        style(ax, f"{SUBTITLE[t]}   ({inside}/{len(d)} runs inside the noise band)",
+        inside = sum(1 for v in d if abs(v) <= se)
+        style(ax, f"{SUBTITLE[t]}   ({inside}/{len(d)} runs inside ±{se:.3f})",
               "run (sorted by lift)", "final AUC − text AUC" if t == "TSLA" else None)
         ax.set_ylim(-0.20, 0.30)
     save(fig, "fig_delta_vs_noise.png")
