@@ -781,8 +781,7 @@ under a formal test, and produces the summary table in the report's section G.
 
 The **run is the unit of analysis** — 36 per half — so nothing rests on the precision of a
 single AUC: the ANOVA and Welch tests take their error term from the observed run-to-run
-scatter, the sign test from win counts alone. The runs are not fully independent — they
-share validation days, and nine share each text baseline — so the p-values are optimistic.
+scatter, the sign test from win counts alone.
 """)
 
 code("""
