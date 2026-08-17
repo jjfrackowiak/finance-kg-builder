@@ -825,12 +825,6 @@ common = (w.reset_index().pivot_table(index=["node", "relationship"],
                                       columns="ticker", values="rate").dropna())
 rho_replic, p_replic = stats.spearmanr(common.TSLA, common.MSFT)
 
-# 6. Does the gate discriminate? Circular by construction — included as a warning.
-gate_p = min(stats.ttest_ind(
-    adds[(adds.ticker == t) & (adds.status == "accepted")].delta_auc.dropna(),
-    adds[(adds.ticker == t) & (adds.status != "accepted")].delta_auc.dropna(),
-    equal_var=False)[1] for t in TICKERS)
-
 print(f"ANOVA: {(anova.p < 0.05).sum()} of {len(anova)} significant at 0.05 "
       f"(Bonferroni threshold {0.05/len(anova):.4f})")
 print(f"Kruskal-Wallis: {(kw.p < 0.05).sum()} of {len(kw)} significant")
@@ -847,7 +841,6 @@ summary = pd.DataFrame([
     ("path features", "Spearman / Welch t", f"{min(path_p):.2f} - {max(path_p):.2f}", "no"),
     ("corpus filtering", "Welch t", f"{corpus_p:.2f}", "no"),
     ("addition ranking replicates", "Spearman across halves", f"{p_replic:.2f}", "no"),
-    ("gate discriminates", "Welch t", f"{gate_p:.0e}", "yes, but circular"),
 ], columns=["question", "test", "p", "significant?"])
 summary.set_index("question")
 """)
@@ -861,14 +854,8 @@ landed on the same count.
 Everything else is null, and these are reasonably well-powered nulls: each rests on two
 balanced 36-run designs that agree.
 
-Two rows need care:
-
-- **The gate result is significant and meaningless.** The gate accepts a candidate exactly
-  when its `delta_auc` clears a threshold, so testing whether accepted candidates have
-  higher `delta_auc` tests the definition of the gate, not the ontology.
-- **The within-half p-values are optimistic.** The 36 runs share validation days, and all 9
-  runs at a given lookback share one text baseline — only four distinct baselines per half —
-  so they are not independent.
+One caveat: the within-half p-values are optimistic. The 36 runs share validation days,
+and all 9 runs at a given lookback share one text baseline, so they are not independent.
 """)
 
 md("""
