@@ -403,12 +403,11 @@ the text baseline. Nothing here can say whether adding a type helps at all — o
 types beat the alternatives they were proposed against.</p>
 
 <h2>F · Which differences survive a test</h2>
-<p>Everything above is descriptive. This table asks the separate question of which of those
-differences hold up under a formal test. The <b>run is the unit of analysis</b> throughout —
-36 per half — so no test here rests on the sampling error of an individual AUC. The tests
-differ in what they use instead: the ANOVA and the Welch comparisons estimate their error
-term from the observed scatter, while the sign test discards the sizes of the differences
-and counts only how often the graph arm won.</p>
+<p>Which of the differences above hold up under a formal test. The <b>run is the unit of
+analysis</b> — 36 per half — so nothing rests on the precision of a single AUC: the ANOVA and
+Welch tests take their error term from the observed run-to-run scatter, the sign test from
+win counts alone. The runs are not fully independent — they share validation days, and nine
+share each text baseline — so the p-values are optimistic.</p>
 
 <div class="scroll"><table>
 <tr><th>Question</th><th>Test</th><th>p</th><th>Significant?</th></tr>

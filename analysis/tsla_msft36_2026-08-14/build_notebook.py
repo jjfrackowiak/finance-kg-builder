@@ -779,10 +779,10 @@ md("""
 Everything above is descriptive. This section asks which of those differences hold up
 under a formal test, and produces the summary table in the report's section G.
 
-The **run is the unit of analysis** throughout — 36 per half — so no test here rests on
-the sampling error of an individual AUC. What they use instead differs: the ANOVA and the
-Welch comparisons estimate their error term from the observed scatter, while the sign test
-discards the sizes of the differences and counts only how often the graph arm won.
+The **run is the unit of analysis** — 36 per half — so nothing rests on the precision of a
+single AUC: the ANOVA and Welch tests take their error term from the observed run-to-run
+scatter, the sign test from win counts alone. The runs are not fully independent — they
+share validation days, and nine share each text baseline — so the p-values are optimistic.
 """)
 
 code("""
