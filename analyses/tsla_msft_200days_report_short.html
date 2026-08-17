@@ -1,4 +1,4 @@
-<title>TSLA + MSFT 200-day sweeps — results</title>
+<title>TSLA + MSFT 200-day sweeps — results only</title>
 <style>
   :root {
     --ground:#fbfbfa; --panel:#f4f4f1; --ink:#14161a; --ink-2:#4a5058;
@@ -421,53 +421,12 @@ win counts alone.</p>
 </table></div>
 
 
-<h2>G · Caveats</h2>
-<ul>
-<li><b>The halves differ in two ways at once</b> — ticker <em>and</em> article filtering —
-so "filtering changed nothing" is a statement about the two halves as run, not a clean
-one-factor experiment.</li>
-<li><b>42 validation days against 488 dimensions.</b> Individual AUCs are correspondingly
-imprecise, and run-to-run scatter exceeds every effect reported above.</li>
-<li><b>The per-day article selection is tie-broken arbitrarily</b> (section A).</li>
-<li><b>n = 9–12 per factor level</b> — adequate for large effects only. No effect size here
-should be read as precise.</li>
-<li><b>Two tickers, one window, one market regime</b> (May–November 2022).</li>
-</ul>
-
-<h2>H · Discussion and next steps</h2>
-<ul>
-<li><b>What the two halves jointly establish</b> is a replicated set of negatives: path
-features do nothing, no hyperparameter separates from run-to-run scatter, the addition
-ranking does not survive a change of ticker, and the model memorises its training set
-completely. A methodological finding follows — <em>a downstream-accuracy acceptance gate is
-unusable when run-to-run variability exceeds the effect size, and degrades into
-regression-to-the-maximum selection.</em> That applies to the whole class of "LLM proposes
-schema, downstream metric accepts" designs, and contrasts with
-<span class="k">arun2025finreflectkg</span>, which iterates inside a fixed schema and never
-faces it.</li>
-<li><b>The corpus explanation is closed</b> — tested directly, at full design strength, and
-it changed nothing. Worth stating positively: it removes an alternative explanation rather
-than leaving it open.</li>
-<li><b>Log the day-level feature matrix.</b> Nothing currently persists X and y, so every
-modelling question has cost a full sweep. Persisting them turns the next question into a
-notebook.</li>
-<li><b>Cut 488 features to ~20 and fold the evaluation.</b> Both are free and both attack
-the 1.0000 train AUC directly. These should come before any further spend.</li>
-<li><b>Then buy sample size.</b> Pooling cross-sectionally across tickers is the only route
-to resolving effects this small: 20 tickers × 42 validation days is roughly a twentyfold
-increase in observations.</li>
-<li><b>!!Is next-day direction the right target?</b> It is near a coin flip and may lack the
-signal to separate KG variants at any feasible sample size. Volatility direction, abnormal
-volume or |return| magnitude are better predicted from news and would leave the method
-contribution untouched.!!</li>
-</ul>
-
 <hr>
 <p class="foot">72 runs · MLflow experiment <span class="k">kg-ontology-evolution</span> ·
 TSLA chunks 01–13, 2026-08-08 → 08-09 · MSFT chunks 14–26, 2026-08-12 → 08-14 ·
 every number and figure reproducible from
 <span class="k">analysis/tsla_msft36_2026-08-14/</span>
 (<span class="k">pull_and_analyze.py</span> → <span class="k">make_figures.py</span>,
-notebook <span class="k">report.ipynb</span>)</p>
+notebook <span class="k">report.ipynb</span>) · caveats and discussion in the full version, <span class="k">tsla_msft_200days_report.html</span></p>
 
 </div>
