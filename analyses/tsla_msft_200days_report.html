@@ -402,25 +402,13 @@ AUC(base + addition) − AUC(base), but the base graph is never scored: step 0 e
 the text baseline. Nothing here can say whether adding a type helps at all — only which
 types beat the alternatives they were proposed against.</p>
 
-<h2>F · Train versus validation</h2>
-<p><span class="k">train_auc</span> is logged only for the MSFT half. This is the one place
-the halves cannot be shown side by side, and the MSFT column alone settles the question.</p>
-
-<div class="scroll"><table>
-<tr><th></th><th class="msft">MSFT, 36 runs</th><th class="tsla">TSLA</th></tr>
-<tr><td>train AUC — mean</td><td class="n"><b>1.0000</b></td><td class="n muted">not logged</td></tr>
-<tr><td>train AUC — min</td><td class="n"><b>1.0000</b></td><td class="n muted">not logged</td></tr>
-<tr><td>train AUC — max</td><td class="n"><b>1.0000</b></td><td class="n muted">not logged</td></tr>
-<tr><td>train AUC — SD</td><td class="n">0.0000</td><td class="n muted">not logged</td></tr>
-<tr><td>validation AUC — mean</td><td class="n">0.609</td><td class="n">0.617</td></tr>
-<tr><td><b>train − validation gap</b></td><td class="n neg"><b>+0.391</b></td><td class="n muted">—</td></tr>
-</table></div>
-
-<h2>G · Which differences survive a test</h2>
+<h2>F · Which differences survive a test</h2>
 <p>Everything above is descriptive. This table asks the separate question of which of those
-differences hold up under a formal test. Each half contains 36 runs, so the runs themselves
-are the replicates and every test below uses the observed run-to-run scatter as its error
-term.</p>
+differences hold up under a formal test. The <b>run is the unit of analysis</b> throughout —
+36 per half — so no test here rests on the sampling error of an individual AUC. The tests
+differ in what they use instead: the ANOVA and the Welch comparisons estimate their error
+term from the observed scatter, while the sign test discards the sizes of the differences
+and counts only how often the graph arm won.</p>
 
 <div class="scroll"><table>
 <tr><th>Question</th><th>Test</th><th>p</th><th>Significant?</th></tr>
@@ -435,22 +423,8 @@ term.</p>
 <tr><td>gate discriminates</td><td>Welch t</td><td class="n">9e−27</td><td class="muted">yes, but circular</td></tr>
 </table></div>
 
-<p><b>One real positive result, replicated.</b> The evolved graph beats a text-only baseline
-in 28 of 36 runs in each half independently — and the replication matters more than the
-p-value, since two halves with different labels, different corpora and independently drawn
-ontologies landed on the same count.</p>
 
-<p>Everything else is null, and these are reasonably well-powered nulls rather than
-uninformative ones, because each rests on two balanced 36-run designs that agree.</p>
-
-<p>Two entries need reading carefully. The <b>gate</b> result is significant and
-<em>meaningless</em>: the gate accepts a candidate precisely when its Δ clears a threshold,
-so testing whether accepted candidates have higher Δ tests the definition of the gate, not
-any property of the ontology. And the within-half p-values are <b>optimistic</b> — the 36
-runs share validation days, and all 9 runs at a given lookback share one text baseline, so
-they are not independent.</p>
-
-<h2>H · Caveats</h2>
+<h2>G · Caveats</h2>
 <ul>
 <li><b>The halves differ in two ways at once</b> — ticker <em>and</em> article filtering —
 so "filtering changed nothing" is a statement about the two halves as run, not a clean
@@ -463,7 +437,7 @@ should be read as precise.</li>
 <li><b>Two tickers, one window, one market regime</b> (May–November 2022).</li>
 </ul>
 
-<h2>I · Discussion and next steps</h2>
+<h2>H · Discussion and next steps</h2>
 <ul>
 <li><b>What the two halves jointly establish</b> is a replicated set of negatives: path
 features do nothing, no hyperparameter separates from run-to-run scatter, the addition

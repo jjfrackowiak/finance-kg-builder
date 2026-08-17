@@ -779,9 +779,10 @@ md("""
 Everything above is descriptive. This section asks which of those differences hold up
 under a formal test, and produces the summary table in the report's section G.
 
-Each half contains 36 runs, so **the runs are the replicates** — every test uses the
-observed run-to-run scatter as its error term, not a theoretical model of how AUC is
-distributed.
+The **run is the unit of analysis** throughout — 36 per half — so no test here rests on
+the sampling error of an individual AUC. What they use instead differs: the ANOVA and the
+Welch comparisons estimate their error term from the observed scatter, while the sign test
+discards the sizes of the differences and counts only how often the graph arm won.
 """)
 
 code("""

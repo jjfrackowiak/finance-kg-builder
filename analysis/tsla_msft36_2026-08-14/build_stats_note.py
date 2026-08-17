@@ -40,9 +40,11 @@ document has to carry the other's baggage.
 
 ## The design point that makes testing easy
 
-Each half contains **36 runs**, so the runs themselves are the replicates. Every test
-below uses the observed run-to-run scatter as its error term — nothing depends on a
-theoretical model of how AUC is distributed.
+Each half contains **36 runs**, and the run is the unit of analysis throughout — no test
+below rests on the sampling error of an individual AUC. They differ in what they use
+instead: the ANOVA and the Welch comparisons estimate their error term from the observed
+run-to-run scatter, while the sign test, Kruskal-Wallis and the Spearman tests refer to a
+theoretical null (binomial or rank-based) and ignore the magnitudes.
 
 That matters, because the obvious alternative is wrong. One might compare a factor effect
 against the sampling error of a single AUC (about 0.09 on a 42-day validation window,
