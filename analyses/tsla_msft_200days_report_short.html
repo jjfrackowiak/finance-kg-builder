@@ -307,16 +307,8 @@ on one ticker and the winning setting is not the winner on the other.</p>
   panel sits inside its band.</b> Error bars are each level's own SD.</figcaption>
 </figure>
 
-<p>Each figure is <b>η² (eta-squared)</b> from a one-way ANOVA — the factor's sum of squares
-divided by the total sum of squares, i.e. the proportion of the run-to-run variance in AUC
-that the factor accounts for. This is the standard effect-size measure for that quantity
-<span class="muted">(Cohen 1988; Olejnik &amp; Algina 2003)</span>. Because the design is a
-strength-2 orthogonal array the factors are uncorrelated, so the four sums of squares are
-additive and the shares partition the variance without overlap
-<span class="muted">(Lin et al. 2025)</span>.</p>
-
 <div class="scroll"><table>
-<tr><th>Share of AUC variance explained</th><th class="tsla">TSLA</th><th class="t msft">MSFT</th></tr>
+<tr><th>Share of AUC variance explained (one-way ANOVA)</th><th class="tsla">TSLA</th><th class="t msft">MSFT</th></tr>
 <tr><td>lookback_days</td><td class="n">0.073</td><td class="n t">0.106</td></tr>
 <tr><td>steps</td><td class="n">0.018</td><td class="n t">0.046</td></tr>
 <tr><td>chain_hops</td><td class="n">0.101</td><td class="n t">0.161</td></tr>
