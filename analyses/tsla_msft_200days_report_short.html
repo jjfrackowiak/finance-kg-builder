@@ -307,13 +307,13 @@ on one ticker and the winning setting is not the winner on the other.</p>
   panel sits inside its band.</b> Error bars are each level's own SD.</figcaption>
 </figure>
 
-<p>Runs vary a lot — TSLA's span 0.469 to 0.787. These figures say how much of that spread
-the settings account for. Knowing a run's hop depth accounts for a tenth of it
-<span class="k">(0.101)</span>; knowing all four settings accounts for a quarter
-<span class="k">(0.256)</span>. The remaining three quarters is variation the settings do
-not explain — chiefly the stochastic ontology proposals.
-<span class="muted">(Formally η², equivalent to the R² of a one-way model. The four are
-additive here because the balanced design leaves the factors uncorrelated.)</span></p>
+<p>Each figure is <b>η² (eta-squared)</b> from a one-way ANOVA — the factor's sum of squares
+divided by the total sum of squares, i.e. the proportion of the run-to-run variance in AUC
+that the factor accounts for. This is the standard effect-size measure for that quantity
+<span class="muted">(Cohen 1988; Olejnik &amp; Algina 2003)</span>. Because the design is a
+strength-2 orthogonal array the factors are uncorrelated, so the four sums of squares are
+additive and the shares partition the variance without overlap
+<span class="muted">(Lin et al. 2025)</span>.</p>
 
 <div class="scroll"><table>
 <tr><th>Share of AUC variance explained</th><th class="tsla">TSLA</th><th class="t msft">MSFT</th></tr>
